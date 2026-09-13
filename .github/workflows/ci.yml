@@ -219,7 +219,7 @@ jobs:
           # Ephemeral values, scoped to this job. Not secrets, and not reused.
           THOT_DB_URL: sqlite:///./data/ci-thotsecure.db
           THOT_SECRET_KEY: ci-ephemeral-key-not-a-secret-0000000000000000
-          THOT_BOOTSTRAP_API_KEY: ao_ci_ephemeral_change_me
+          THOT_BOOTSTRAP_API_KEY: thot_CI_ephemeralNotASecret00000000
         run: |
           thotsecure init-db
           thotsecure doctor
@@ -482,7 +482,7 @@ jobs:
           # Cause de l'échec constaté sur le premier tag : sans ces valeurs, la validation
           # déclarait la configuration invalide alors que le fichier était correct.
           THOT_SECRET_KEY: ci-ephemeral-not-a-secret-0000000000000000000000000000
-          THOT_BOOTSTRAP_API_KEY: ao_ci_ephemeral_change_me
+          THOT_BOOTSTRAP_API_KEY: thot_CI_ephemeralNotASecret00000000
         if: hashFiles('docker-compose.yml', 'docker-compose.yaml', 'compose.yml', 'compose.yaml', 'deploy/docker-compose.yml', 'deploy/docker-compose.yaml', 'deploy/compose.yml', 'deploy/compose.yaml') != ''
         shell: bash
         run: |
