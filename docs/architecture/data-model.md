@@ -15,17 +15,30 @@ en cas de divergence, le contrat fait foi. Pour la place de la base dans l'archi
 
 | Contexte | Moteur | Statut |
 |---|---|---|
-| MVP v0.1.0 (dev, labo, MSP de petite taille) | **SQLite** (`THOT_DB_URL=sqlite:///./data/thotsecure.db`) | implémenté |
-| Production (volume, concurrence, rétention longue) | **PostgreSQL + TimescaleDB** | cible, DDL fourni au §8 de ce document |
+| MVP v0.1.0 (dev, labo, MSP de petite taille) | **SQLite** (`THOT_DB_URL=sqlite:///./data/thotsecure.db`) | implémenté, éprouvé |
+| Production (volume, concurrence, rétention longue) | **PostgreSQL + TimescaleDB** | **adaptateur écrit** (`storage/postgres.py`), validé en CI sur TimescaleDB, **non encore éprouvé en production à grande échelle** |
 
-!!! info "Roadmap"
-    **PostgreSQL/TimescaleDB n'est pas implémenté dans le MVP v0.1.0.** Le MVP persiste en SQLite
-    derrière `THOT_DB_URL` (défaut `sqlite:///./data/thotsecure.db`, §9 du contrat). Le DDL
-    PostgreSQL du §8 ci-dessous est une **cible de portage** : il est fourni pour figer les choix de
-    types et les politiques de rétention/compression, et **reste à valider** contre
-    `src/thotsecure/storage/`. Le contrat mentionne bien « persistance SQLite (+ DDL
-    PostgreSQL/TimescaleDB) » au §2, et `thotsecure.core.config` accepte déjà une URL
-    `postgresql://` ; le chemin SQLite du MVP refuse en revanche une URL non SQLite.
+!!! info "État réel de la variante PostgreSQL"
+    **L'adaptateur existe** : `thotsecure.storage.postgres.PostgresStore` implémente le contrat
+    `thotsecure.storage.base.StoreProtocol` (le même que `Store`), et
+    `thotsecure.storage.create_store(settings)` choisit le backend d'après le schéma de
+    `THOT_DB_URL`. La suite `tests/test_storage_conformance.py` rejoue **le même corpus de tests**
+    contre SQLite et contre un serveur TimescaleDB réel, avec les deux pilotes supportés
+    (`psycopg2` puis `psycopg` 3) : c'est ce que valide le job `postgres` de la CI.
+
+    Ce qui reste ouvert, et qui doit être dit :
+
+    * **aucune campagne de charge n'a été menée** sur ce backend (les volumes du §7 restent des
+      estimations, pas des mesures) ;
+    * la **compression de chunks** peut être refusée par TimescaleDB selon la version et les
+      contraintes d'unicité de l'hypertable (voir §8.6) — l'adaptateur fonctionne alors sans
+      elle, et ne déclare pas la capacité correspondante ;
+    * les cas qui dépendent d'un serveur (rigueur du chaînage sous concurrence réelle, réservation
+      atomique des événements à rejouer) sont **testés en CI**, pas sur un poste de développement
+      sans PostgreSQL : hors CI, ils sont marqués « ignorés », jamais « réussis » ;
+    * `thotsecure doctor` et `thotsecure init-db` affichent encore le chemin de la base SQLite
+      (`settings.db_path`) : ces deux commandes doivent être adaptées pour un déploiement
+      PostgreSQL (voir §8.6, « limites connues »).
 
 ### 1.2 Trois invariants de persistance
 
@@ -35,6 +48,10 @@ en cas de divergence, le contrat fait foi. Pour la place de la base dans l'archi
    enregistrement chaîne le précédent par `prev_hash` / `hash` (contrat §3.5, §10).
 3. **Événements immuables** — un `events` inséré n'est jamais mis à jour (contrat §1). La seule
    opération de masse autorisée est la **purge par rétention** (§6 de ce document).
+
+Ces trois invariants sont **indépendants du moteur** : ils sont tenus par l'interface
+`thotsecure.storage.base.StoreProtocol` et vérifiés par la suite de conformité
+`tests/test_storage_conformance.py` sur **les deux** backends (§8.6).
 
 ### 1.3 Ce que ce document ne fige pas
 
@@ -1027,7 +1044,8 @@ COMMIT;
     événements, conservation des findings). Un rapport produit après purge ne peut donc plus
     reconstituer les preuves brutes : c'est un argument pour **exporter** avant purge (§4.7).
 
-**Compaction SQLite** (hors transaction, avec un `journal_mode=WAL`) :
+**Compaction SQLite** (hors transaction, avec un `journal_mode=WAL`) — c'est l'équivalent
+PostgreSQL qui suit :
 
 ```bash
 # 1) replier le WAL dans la base et le tronquer
@@ -1040,6 +1058,12 @@ sqlite3 ./data/thotsecure.db "VACUUM;"
 sqlite3 ./data/thotsecure.db "PRAGMA integrity_check;"
 ```
 
+**Compaction PostgreSQL** : autovacuum s'en charge ; `PostgresStore.vacuum()` exécute
+`VACUUM (ANALYZE)` hors transaction (une connexion en `autocommit`, ce que le magasin respecte —
+`VACUUM` est refusé dans un bloc transactionnel). Sur une hypertable, la récupération d'espace
+vient surtout de `drop_chunks` (§8.3) et de la compression, pas de `VACUUM`. Aucune de ces
+opérations n'est appelée sur le chemin d'une requête.
+
 !!! danger "`VACUUM` exige de l'espace disque libre"
     `VACUUM` reconstruit **intégralement** le fichier : prévoir temporairement l'équivalent de la
     taille de la base en espace libre, et ne pas le lancer pendant une ingestion de pointe
@@ -1047,12 +1071,26 @@ sqlite3 ./data/thotsecure.db "PRAGMA integrity_check;"
     disponible, le remplacement par un `VACUUM INTO` vers un nouveau fichier est le seul usage sûr
     — et c'est aussi le signe qu'il est temps de passer à PostgreSQL (§7, §8).
 
-!!! info "Roadmap"
+!!! info "Rétention selon le backend"
     Le contrat décrit la **règle** (`THOT_RETENTION_DAYS`, « purge événements », §9) et la
-    couverture de test (`tests/test_storage.py` : « CRUD, isolation tenant, purge rétention », §11),
-    mais ne décrit **aucune purge automatique planifiée** dans le MVP : le déclenchement (tâche de
-    fond, `cron`, appel opérateur) n'est pas figé → à confirmer par `src/thotsecure/storage/`. En
-    production PostgreSQL/TimescaleDB, la purge devient une politique de rétention native (§8).
+    couverture de test (« CRUD, isolation tenant, purge rétention », §11), mais ne décrit
+    **aucune purge automatique planifiée** : le déclenchement (tâche de maintenance interne,
+    `cron`, appel opérateur) reste de la responsabilité de l'exploitant. `Pipeline.purge_expired()`
+    l'appelle depuis la boucle de maintenance du service, au plus une fois par heure.
+
+    Les deux implémentations honorent la même signature `purge(retention_days,
+    audit_retention_days)` avec des moyens différents :
+
+    | Backend | Événements | Audit |
+    |---|---|---|
+    | SQLite | `DELETE ... WHERE ts < cutoff` en une transaction | `DELETE` borné à `audit_retention_days < 3650` |
+    | PostgreSQL + TimescaleDB | `drop_chunks(older_than => cutoff)` : seuls des chunks **entiers** peuvent être libérés (indispensable si les chunks sont compressés) | idem SQLite, par lots bornés indexés par `ctid` |
+    | PostgreSQL nu | `DELETE` par lots bornés (5 000 lignes), indexés par `ctid` — jamais un `DELETE` qui verrouille la table | idem |
+
+    Différence assumée : sur une hypertable, les quelques lignes anciennes d'un chunk **encore
+    actif** ne sont pas supprimées individuellement (c'est le principe même de la rétention par
+    chunks). La conséquence pratique est un dépassement de rétention d'au plus
+    `chunk_time_interval` — ici une journée.
 
 !!! note "Audit et RGPD"
     Ne jamais purger `audit_log` crée une tension assumée avec le droit à l'effacement : le journal
@@ -1140,11 +1178,19 @@ associées sont récapitulées dans [../configuration.md](../configuration.md).
 
 ## 8. Variante PostgreSQL / TimescaleDB (production)
 
-!!! info "Roadmap"
-    **Le MVP utilise SQLite** (§1.1). Ce DDL PostgreSQL/TimescaleDB est la **cible de production**
-    mentionnée au §2 du contrat (« persistance SQLite (+ DDL PostgreSQL/TimescaleDB) ») : il est
-    fourni pour figer les types, l'hypertable et les politiques, et **reste à valider** contre
-    `src/thotsecure/storage/` ainsi qu'à confirmer sur la version de TimescaleDB déployée.
+!!! info "Adaptateur écrit — ce qui est prouvé, ce qui ne l'est pas"
+    **L'adaptateur est écrit** (`src/thotsecure/storage/postgres.py`), **validé en CI sur un vrai
+    serveur TimescaleDB** (job `postgres` : image `timescale/timescaledb:latest-pg16`, les deux
+    pilotes `psycopg2` et `psycopg` 3, la suite de conformité rejouée à l'identique), et **non
+    encore éprouvé en production à grande échelle** : aucune campagne de charge n'a été menée, et
+    la compression de chunks reste à confirmer sur votre version de TimescaleDB (§8.6).
+
+    Ce qui a été testé **sans serveur** (donc à chaque exécution locale et en CI) : construction et
+    masquage du DSN, choix du backend, message d'erreur quand le pilote manque, découpage du DDL,
+    placeholders typés, sérialisation JSONB, découpage des lots, ordre « verrou puis lecture du
+    maillon » du chaînage d'audit, purge par lots bornés. Ce qui n'a **pas** pu l'être : le
+    comportement réel du serveur (verrous concurrents, `drop_chunks`, compression, plans de
+    requêtes) — d'où l'existence de la suite de conformité et du job CI.
 
 ### 8.1 Ce qui change par rapport à SQLite
 
@@ -1163,6 +1209,33 @@ associées sont récapitulées dans [../configuration.md](../configuration.md).
 | Isolation | `WHERE tenant_id = …` applicatif | idem + **RLS en option** (non implémentée dans le MVP) |
 
 ### 8.2 Tables principales (portage)
+
+!!! warning "Le DDL **livré** fait foi — cette section décrit la cible documentaire"
+    Le DDL réellement appliqué par `thotsecure init-db` (ou par `PostgresStore.init_schema()`) est
+    celui de `src/thotsecure/storage/schema.py`, découpé en constantes :
+
+    * `POSTGRES_CORE_DDL` — tables et index, **obligatoires** ;
+    * `POSTGRES_TIMESCALE_EXTENSION_DDL`, `…_HYPERTABLE_DDL`, `…_COMPRESSION_DDL`,
+      `…_RETENTION_DDL`, `…_AGGREGATES_DDL` — sections optionnelles, appliquées chacune dans sa
+      propre transaction (un échec n'entraîne que la perte de la capacité concernée) ;
+    * `POSTGRES_DDL` — concaténation complète, utilisable telle quelle avec `psql`.
+
+    Les blocs SQL de ce §8.2 à §8.5 décrivent la **cible** (identifiants `uuid`, `bigint`, table de
+    liaison `finding_events`, agrégats continus sur `findings` et `actions`). Le DDL livré en
+    diffère délibérément sur les points suivants, parce qu'il doit produire **exactement** le même
+    modèle logique que SQLite — sans quoi les deux backends ne seraient pas interchangeables :
+
+    | Point | Cible (§8.2 et suivants) | DDL livré, et pourquoi |
+    |---|---|---|
+    | Identifiants | `uuid` | `TEXT` : les identifiants du produit sont préfixés (`ev_…`, `fi_…`, `ac_…`) et le mappage ligne → modèle est partagé entre les deux backends |
+    | Horodatages | `timestamptz` | `TIMESTAMPTZ` ✅ (identique) — les valeurs restent écrites au format ISO-8601 UTC du contrat §3.1 |
+    | `risk_score` / `confidence` | `numeric(5,2)` / `numeric(3,2)` | `DOUBLE PRECISION` : parité exacte avec le `REAL` de SQLite (un `numeric` arrondirait et **casserait les curseurs de pagination**, qui portent sur `risk_score`) |
+    | `events.event_id` | `PRIMARY KEY (event_id, ts)` | `PRIMARY KEY (tenant_id, event_id, ts)` : `tenant_id` est ajouté pour que l'unicité soit **par tenant**, comme la PK globale de SQLite — TimescaleDB exige que la colonne de temps figure dans la clé |
+    | `finding_events` | table de liaison | **non créée** : le MVP stocke `event_ids` en JSONB, comme SQLite. La normaliser changerait le comportement observable des deux backends |
+    | `audit_log.seq` | `bigint GENERATED ALWAYS AS IDENTITY` | `bigint` alimenté par la séquence `audit_log_seq` : l'empreinte porte sur `seq`, qui doit donc être connu **avant** l'insertion (§8.4) |
+    | Agrégats continus | `events_hourly`, `findings_daily`, `actions_daily` | seul `events_per_hour` (sur l'hypertable) est installé : un agrégat continu sur une table ordinaire n'est pas portable d'une version de TimescaleDB à l'autre. Les deux autres restent une cible |
+    | Colonnes d'agrégat | `first_seen_event_id`, `target_type`/`target_value`, `rollback_available`… | colonnes réelles du modèle SQLite (`count`, `event_ids`, `dedup_key`, `comment`, `target` en JSONB…), qui sont celles lues et écrites par `storage/store.py` |
+    | `events.claimed_by` / `claimed_at` | absentes | ajoutées (uniquement en PostgreSQL) pour la **réservation par bail** d'un lot d'événements à rejouer, plusieurs processus pouvant écrire — impossible en SQLite, qui n'a qu'un écrivain |
 
 ```sql
 CREATE EXTENSION IF NOT EXISTS timescaledb;
@@ -1304,6 +1377,30 @@ CREATE INDEX suppressions_expiry_idx ON suppressions (tenant_id, expires_at);
 
 ### 8.3 `events` : hypertable, index, compression, agrégats
 
+!!! note "Ce qui est réellement installé pour `events`"
+    Le DDL livré (`POSTGRES_CORE_DDL` + `POSTGRES_TIMESCALE_HYPERTABLE_DDL` +
+    `…_COMPRESSION_DDL` + `…_RETENTION_DDL` + `…_AGGREGATES_DDL`) crée : la table `events` avec
+    `PRIMARY KEY (tenant_id, event_id, ts)`, les index `(tenant_id, ts DESC)`,
+    `(tenant_id, kind, ts DESC)`, l'index partiel de rejeu (`WHERE processed = FALSE`), l'index de
+    bail (`WHERE claimed_at IS NOT NULL`), l'index **GIN** sur `labels`, l'hypertable (chunks d'un
+    jour), la compression au-delà de 7 jours, la rétention native à 30 jours et l'agrégat continu
+    `events_per_hour`. Le bloc SQL ci-dessous reste la **cible documentaire** : voir le tableau des
+    écarts au §8.2.
+
+    Trois écarts fonctionnels à connaître :
+
+    * `payload` n'a **pas** de contrainte de taille : `pg_column_size(payload) <= 32768` est
+      évalué par le serveur à chaque écriture et coûte plus cher que la troncature déjà faite en
+      amont par la couche collecteur (contrat §3.1). La borne reste appliquée **avant** persistance ;
+    * l'index GIN ne porte que sur `labels` : `payload` est interrogé par `ILIKE` (recherche `q`),
+      ce qui n'utilise pas d'index — c'est le même compromis que SQLite, où `q` est un `LIKE` sur
+      du texte JSON ;
+    * la PK inclut `ts` (exigence TimescaleDB). Conséquence : un `event_id` rejoué avec un
+      **horodatage différent** produit une seconde ligne, alors qu'il serait ignoré en SQLite. Un
+      rejeu conforme (même événement, même `ts`) est bien idempotent, et c'est ce que vérifie la
+      suite de conformité. Un index d'unicité sur `(tenant_id, event_id)` seul est **impossible**
+      sur une hypertable — c'est la contrepartie assumée du partitionnement temporel.
+
 ```sql
 CREATE TABLE events (
     event_id       uuid        NOT NULL,
@@ -1412,6 +1509,70 @@ SELECT add_retention_policy('events', INTERVAL '30 days');
 
 ### 8.4 `audit_log` : chaîne de hash en PostgreSQL
 
+!!! note "Comment le chaînage est réellement rendu impossible à casser"
+    Deux écrivains concurrents pourraient lire le **même** dernier maillon et produire deux
+    enregistrements pointant sur le même `prev_hash` : la chaîne serait alors rompue, et
+    `GET /api/v1/audit/verify` la déclarerait invalide. L'adaptateur sérialise donc tout
+    `append_audit` par un **verrou consultatif de transaction** :
+
+    ```sql
+    SELECT pg_advisory_xact_lock(hashtext('thotsecure.audit_log'));
+    SELECT hash FROM audit_log ORDER BY seq DESC LIMIT 1;   -- lu SOUS le verrou
+    SELECT nextval('audit_log_seq');                       -- seq connu AVANT l'insertion
+    INSERT INTO audit_log (seq, …, prev_hash, hash) VALUES (…);
+    COMMIT;                                                -- le verrou tombe ici
+    ```
+
+    Pourquoi ce verrou plutôt que `SELECT … ORDER BY seq DESC LIMIT 1 FOR UPDATE` :
+
+    * un verrou de ligne ne protège pas le cas « journal **vide** » (rien à verrouiller) : deux
+      processus chaîneraient sur le genesis ;
+    * un verrou de ligne ne bloque pas non plus l'insertion d'un nouveau maillon, seulement la
+      réécriture de la dernière ligne ;
+    * `pg_advisory_xact_lock` est relâché automatiquement au `COMMIT` **et** au `ROLLBACK`, y compris
+      si le processus meurt brutalement — contrairement à `pg_advisory_lock` (verrou de session), qui
+      exigerait un déblocage manuel après un crash ;
+    * il ne bloque que les autres écritures d'audit, pendant la durée d'une transaction de quelques
+      dizaines de microsecondes ; les lectures d'événements et de findings ne sont jamais concernées.
+
+    Le test de conformité « écritures concurrentes » (4 threads × 10 enregistrements) vérifie que la
+    chaîne reste valide après exécution parallèle, sur les deux backends.
+
+```sql
+-- DDL réellement livré (POSTGRES_CORE_DDL), à comparer au bloc « cible » ci-dessous :
+CREATE SEQUENCE IF NOT EXISTS audit_log_seq;
+CREATE TABLE IF NOT EXISTS audit_log (
+    seq        BIGINT NOT NULL DEFAULT nextval('audit_log_seq') PRIMARY KEY,
+    ts         TIMESTAMPTZ NOT NULL,
+    tenant_id  TEXT NOT NULL,
+    actor      TEXT NOT NULL,
+    actor_role TEXT NOT NULL DEFAULT 'system',
+    action     TEXT NOT NULL,
+    target     JSONB NOT NULL DEFAULT '{}'::jsonb,
+    before     JSONB NOT NULL DEFAULT '{}'::jsonb,
+    after      JSONB NOT NULL DEFAULT '{}'::jsonb,
+    context    JSONB NOT NULL DEFAULT '{}'::jsonb,
+    prev_hash  TEXT NOT NULL,
+    hash       TEXT NOT NULL
+);
+ALTER SEQUENCE audit_log_seq OWNED BY audit_log.seq;
+CREATE INDEX IF NOT EXISTS idx_audit_tenant ON audit_log (tenant_id, seq DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_log (action, seq DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_ts     ON audit_log (ts);
+```
+
+!!! danger "Les triggers d'immuabilité du §4 ne sont **pas** installés en PostgreSQL — volontairement"
+    Un trigger `BEFORE UPDATE OR DELETE` (celui décrit ci-dessus pour la cible, ou les triggers
+    SQLite du §4) **empêcherait la rétention** : `thotsecure` purge le journal au-delà de
+    `THOT_AUDIT_RETENTION_DAYS` quand cette valeur est explicitement abaissée, et l'application
+    n'exécute par ailleurs aucun `UPDATE` sur `audit_log` (le maillon est inséré avec son empreinte
+    déjà calculée). Les triggers sont donc un durcissement **à activer en connaissance de cause**,
+    et à retirer avant toute purge :
+    ils protègent contre un bug applicatif, pas contre un adversaire disposant du rôle `superuser`
+    (qui peut les supprimer, cf. avertissement de la fin du §4).
+
+### 8.5 `finding_events` et partitionnement multi-tenant
+
 ```sql
 CREATE TABLE audit_log (
     seq        bigint      GENERATED ALWAYS AS IDENTITY,
@@ -1452,6 +1613,10 @@ FOR EACH ROW EXECUTE FUNCTION audit_log_append_only();
     vérification (`GET /api/v1/audit/verify`, §4.7) parcourt l'ensemble des enregistrements dans
     l'ordre de `seq`.
 
+    Le DDL livré retient `PRIMARY KEY (seq)` (une seule séquence pour toute la base, donc `seq` est
+    déjà globalement unique) : c'est équivalent fonctionnellement, et cela évite d'imposer un ordre
+    de colonnes dans les index. Aucune requête ne dépend de cette différence.
+
 ### 8.5 `finding_events` et partitionnement multi-tenant
 
 ```sql
@@ -1478,12 +1643,200 @@ CREATE POLICY findings_tenant_isolation ON findings
     USING (tenant_id = current_setting('thotsecure.tenant_id', true));
 ```
 
-!!! info "Roadmap"
-    La **Row Level Security** est un durcissement *en option*, non implémenté dans le MVP v0.1.0 :
-    l'isolation repose aujourd'hui sur le filtre applicatif `tenant_id` (§10 du contrat). Sa mise en
-    œuvre suppose que l'application positionne `thotsecure.tenant_id` sur chaque connexion du pool —
-    ce qui reste à concevoir et à tester (le test d'isolation de `tests/test_api.py` et
-    `tests/test_storage.py`, §11, devra couvrir les deux modes).
+!!! info "Row Level Security : durcissement optionnel, non implémenté"
+    L'isolation repose aujourd'hui sur le filtre applicatif `tenant_id` (§10 du contrat), vérifié par
+    la suite de conformité sur les deux backends. La RLS suppose que l'application positionne
+    `thotsecure.tenant_id` sur **chaque** connexion du pool — ce qui reste à concevoir et à tester,
+    et ce qui exigerait que le pool réinitialise la variable à chaque emprunt (une connexion
+    réutilisée ne doit pas hériter du tenant du précédent emprunteur). Tant que ce n'est pas fait,
+    activer la RLS telle quelle **casserait** les lectures : `current_setting(...)` renverrait une
+    chaîne vide et aucune ligne ne serait visible.
+
+### 8.6 Ce qui est implémenté, ce qui reste à valider
+
+**Implémenté et vérifié**
+
+| Élément | Preuve |
+|---|---|
+| Contrat `StoreProtocol` (51 méthodes) | `tests/test_storage_conformance.py` : la même suite passe sur SQLite **et** sur TimescaleDB |
+| Isolation multi-tenant | tests dédiés : lecture croisée, comptage croisé, révocation de clé croisée |
+| Idempotence (`event_id`, `idempotency_key`) | test d'insertion unitaire et par lots ; conflit d'idempotence mappé en `ConflictError` |
+| Pagination par curseur (événements, findings × 2 tris, actions, audit) | test qui parcourt toutes les pages et vérifie qu'aucun élément n'est perdu ni dupliqué |
+| Chaîne d'audit valide **puis** falsification détectée | falsification d'un maillon puis `AuditChain.verify()` → `valid=false`, `broken_at` exact |
+| Chaînage sous écritures concurrentes | 4 threads × 10 enregistrements, chaîne valide ensuite |
+| Purge de rétention | lots bornés, audit préservé, exceptions expirées supprimées |
+| DDL idempotent, découpé en sections | `init_schema()` rejoué ; sections optionnelles dans leur propre transaction |
+| Réservation atomique du rejeu | `claim_pending_events` : bail, non-recouvrement, reprise après expiration |
+| Masquage du DSN, `sslmode` explicite | tests hors ligne (URL, paramètre d'URL, forme `clé=valeur`, message d'erreur du pilote) |
+| Absence de pilote | message actionnable, import paresseux : `import thotsecure` et `create_store()` fonctionnent sans `psycopg` |
+
+**Reste à valider / limites connues**
+
+1. **Charge et plan de requêtes** — aucune campagne de mesure : les repères du §7 (seuils de bascule,
+   disque par profil) n'ont pas été confrontés à une base TimescaleDB réelle. Les index livrés
+   couvrent les filtres documentés, mais seul un `EXPLAIN (ANALYZE, BUFFERS)` sur votre volume
+   permettra de trancher (notamment sur le `ILIKE` de la recherche `q`, qui n'utilise pas d'index).
+2. **Compression de chunks** — refusée par certaines versions/configurations de TimescaleDB lorsque
+   la clé primaire contient des colonnes absentes de `compress_segmentby` (ici `event_id` et `ts`
+   dans la PK, `tenant_id` seul en segmentation). L'adaptateur traite ce refus comme non fatal : il
+   journalise un avertissement, n'annonce pas la capacité `compression`, et continue avec la
+   rétention par `drop_chunks`. **À vérifier sur votre instance** avec
+   `SELECT compress_chunk(c) FROM show_chunks('events') c LIMIT 1;` — un diagnostic non bloquant le
+   fait à chaque exécution de la CI.
+3. **`thotsecure doctor` et `thotsecure init-db`** — ces commandes affichent `settings.db_path`, qui
+   lève une erreur si `THOT_DB_URL` n'est pas SQLite. Un déploiement PostgreSQL doit donc vérifier la
+   base autrement : `/readyz`, `store.health()` ou l'extrait Python du §8.7. Le correctif consiste à
+   construire le magasin via `create_store(settings)` et à afficher `store_location(store)` (voir
+   [deployment.md](../operations/deployment.md)).
+4. **Fenêtre de rejeu** — `pending_events()` protège contre deux lectures **simultanées**
+   (`FOR UPDATE SKIP LOCKED`) mais pas contre un second processus qui relirait le même lot après le
+   `COMMIT` : `mark_events_processed` reste l'arbitre (son `UPDATE … WHERE processed = FALSE` ne
+   transitionne une ligne qu'une fois), et un rejeu strictement multi-nœuds doit utiliser
+   `claim_pending_events` (bail). Le pipeline applicatif tolère ce recouvrement (il revérifie
+   l'existence du finding avant d'agir), mais un collecteur externe ne doit pas s'appuyer sur
+   `pending_events` seul.
+5. **Row Level Security** — non implémentée (§8.5).
+6. **Semantique de `q`** — `ILIKE` (insensible à la casse) en PostgreSQL, `LIKE` (sensible) en
+   SQLite : la sémantique exacte n'est pas figée par le contrat (§4.3). À trancher lors de la
+   prochaine revue du contrat, faute de quoi la même recherche ne renverra pas les mêmes résultats
+   selon le backend.
+
+### 8.7 Migrer de SQLite vers PostgreSQL : procédure vérifiable
+
+> **Principe** : la migration se fait **par l'interface**, pas par un `mysqldump`-like : les deux
+> magasins implémentent le même contrat, donc le même script fonctionne dans les deux sens, et la
+> chaîne d'audit est vérifiée **avant** et **après**.
+
+**Étape 0 — prérequis**
+
+```bash
+pip install "thotsecure[postgres]"          # extra optionnel (psycopg 3)
+# Base et rôle dédiés (jamais le superutilisateur pour l'application) :
+psql -c "CREATE ROLE thot LOGIN PASSWORD '…';"
+psql -c "CREATE DATABASE thotsecure OWNER thot;"
+# TimescaleDB : le job d'installation du paquet timescaledb doit avoir été exécuté sur cette base.
+```
+
+Puis `THOT_DB_URL=postgresql://thot:…@hote:5432/thotsecure` dans l'environnement (le `sslmode` est
+ajouté automatiquement : `prefer` en dev, `require` en production).
+
+**Étape 1 — geler les écritures**
+
+```bash
+systemctl stop thotsecure        # ou: docker compose stop thotsecure
+sqlite3 ./data/thotsecure.db "PRAGMA wal_checkpoint(TRUNCATE);"
+```
+
+Une copie à chaud est possible (`VACUUM INTO`) mais l'import d'événements écrits **pendant** la
+copie produirait une base cible en avance sur son journal d'audit : geler est plus simple à
+justifier.
+
+**Étape 2 — importer, puis vérifier** (script indépendant de la CLI, exécutable sur les deux
+moteurs) :
+
+```python
+"""Migration SQLite → PostgreSQL, par l'interface de stockage (script d'exploitation)."""
+from thotsecure.audit.chain import AuditChain
+from thotsecure.core.config import Settings
+from thotsecure.storage import create_store
+
+SOURCE = Settings(root_dir=".", db_url="sqlite:///./data/thotsecure.db")
+TARGET = Settings(root_dir=".", db_url="postgresql://thot:…@hote:5432/thotsecure", env="prod")
+
+# ``create_store`` applique le schéma de chaque côté (idempotent).
+source, target = create_store(SOURCE), create_store(TARGET)
+
+
+def pages(fetch, *args, page_size=500, **kwargs):
+    """Parcourt toutes les pages d'une lecture à curseur (aucun élément oublié)."""
+    cursor = None
+    while True:
+        items, cursor = fetch(*args, limit=page_size, cursor=cursor, **kwargs)
+        for item in items:
+            yield item
+        if cursor is None:
+            return
+
+
+# 1. Tenants d'abord : tout le reste porte une clé étrangère vers eux.
+for tenant in source.list_tenants():
+    target.upsert_tenant(tenant)
+
+# 2. Données métier, tenant par tenant, par pages complètes.
+for tenant in source.list_tenants():
+    tid = tenant.tenant_id
+    target.insert_events(list(pages(source.query_events, tid)))
+    for finding in pages(source.list_findings, tid):
+        target.insert_finding(finding)
+    for action in pages(source.list_actions, tid):
+        target.insert_action(action)
+    for key in source.list_api_keys(tid):
+        target.insert_api_key(key)
+    for suppression in source.list_suppressions(tid):
+        target.add_suppression(
+            tenant_id=tid,
+            rule_id=suppression["rule_id"],
+            dedup_key=suppression["dedup_key"],
+            reason=suppression["reason"],
+            expires_at=suppression["expires_at"],
+            created_by=suppression["created_by"],
+        )
+
+# 3. Journal d'audit : RÉÉCRIT dans l'ordre des seq.
+#    La chaîne reste valide (les empreintes sont recalculées de façon cohérente), mais les
+#    valeurs de seq et de hash CHANGENT : un export SIEM archivé avant la migration n'est plus
+#    comparable au hash courant. Si cette comparaison compte, conservez l'ancien export hors
+#    ligne et documentez la rupture d'ancre (voir §9).
+for record in source.iter_audit():
+    target.append_audit(
+        tenant_id=record.tenant_id,
+        actor=record.actor,
+        actor_role=record.actor_role,
+        action=record.action,
+        target=record.target,
+        before=record.before,
+        after=record.after,
+        context=record.context,
+        ts=record.ts,
+    )
+
+# 4. Vérification : chaîne valide des deux côtés, et compteurs identiques.
+before, after = AuditChain(source).verify(), AuditChain(target).verify()
+assert before.valid and after.valid, (before.reason, after.reason)
+assert after.records == before.records, (after.records, before.records)
+for tenant in source.list_tenants():
+    tid = tenant.tenant_id
+    assert target.count_events(tid) == source.count_events(tid), tid
+    assert target.count_audit(tid) == source.count_audit(tid), tid
+    assert (
+        target.count_findings(tid)["by_status"] == source.count_findings(tid)["by_status"]
+    ), tid
+    assert target.actions_by_status(tid) == source.actions_by_status(tid), tid
+print(f"migration vérifiée : {after.records} maillons d'audit, chaîne valide")
+```
+
+**Étape 3 — basculer et contrôler**
+
+1. `THOT_DB_URL` pointe sur PostgreSQL, `THOT_SECRET_KEY` **inchangée** (sans elle, les empreintes
+   `scrypt` des clés API importées ne sont plus vérifiables — voir
+   [deployment.md](../operations/deployment.md)).
+2. `GET /readyz` doit répondre `200` (la sonde interroge réellement la base via `health()`).
+3. Vérifier la chaîne d'audit **sur la cible** : l'extrait ci-dessus (`AuditChain(target).verify()`)
+   ou `GET /api/v1/audit/verify` → `{"valid":true,"records":n,"broken_at":null}`.
+4. Comparer les compteurs d'un tenant témoin avant/après (`GET /api/v1/stats/overview`).
+5. **Conserver la base SQLite** hors ligne jusqu'à la prochaine sauvegarde complète : c'est la seule
+   ancre externe de l'ancienne chaîne d'audit.
+6. Après import, la séquence `audit_log_seq` est avancée par les insertions : ne jamais rejouer le
+   script sur la même base cible sans l'avoir vidée au préalable (`reset_database()`).
+
+!!! warning "Ce que cette procédure ne couvre pas"
+    * les **rollbacks d'actions en cours** (`status = 'executing'`) : à terminer ou à réconcilier
+      **avant** la bascule, sinon le nœud PostgreSQL n'aura aucune trace de l'effet réel ;
+    * les **artefacts hors base** (quarantaine, état des collecteurs de `tail`, tickets) qui vivent
+      sous `THOT_DATA_DIR` : ils doivent être copiés séparément ;
+    * le **retour arrière** : la migration n'est pas réversible automatiquement. Le retour se fait en
+      repointant `THOT_DB_URL` sur la base SQLite conservée à l'étape 3.5, ce qui **perd** les
+      écritures effectuées depuis la bascule.
 
 ---
 
@@ -1537,16 +1890,16 @@ export CEF. `tests/test_storage.py` couvre de son côté CRUD, isolation tenant 
 | Versionnement des données | `events.schema_version` (§3.1) : seul champ de version **porté par une ligne** |
 | Versionnement du schéma | non figé par le contrat (aucune table de suivi de version n'y est définie) |
 | Outil de migration | non figé par le contrat (aucune dépendance de migration n'apparaît au §2 ni au §9) |
-| Migration de moteur SQLite → PostgreSQL | portage par DDL (§8), à valider |
+| Migration de moteur SQLite → PostgreSQL | **procédure scriptée et vérifiable** (§8.7) : import par l'interface, chaîne d'audit comparée avant/après |
 
-!!! info "Roadmap"
-    Aucun outillage de migration n'est arrêté dans le MVP v0.1.0 : ni table de version de schéma, ni
-    chaîne de migrations, ni commande `upgrade`. La commande contractualisée est `thotsecure init-db`
-    (§8), et la purge de rétention est couverte par `tests/test_storage.py` (§11). L'outillage retenu
-    (migrations idempotentes, rétro-compatibilité, stratégie de changement de `schema_version`) est
-    donc **à figer**, et l'état réel → à confirmer par `src/thotsecure/storage/`. Les procédures de
-    déploiement et de mise à jour sont décrites dans
-    [../operations/deployment.md](../operations/deployment.md).
+!!! info "Outillage de migration"
+    Les deux moteurs partagent désormais le même contrat (`storage.base.StoreProtocol`), ce qui
+    permet d'écrire la migration **une seule fois**, contre l'interface : c'est la procédure du §8.7.
+    Elle reste manuelle (script d'exploitation, pas de commande `thotsecure migrate`) : le
+    déclenchement, la fenêtre d'arrêt et la vérification des compteurs sont des décisions
+    d'exploitation, et une commande « magique » donnerait une fausse impression de réversibilité.
+    Voir aussi [../operations/deployment.md](../operations/deployment.md) pour le dimensionnement,
+    la sauvegarde et la supervision du backend PostgreSQL.
 
 !!! tip "Règles de compatibilité à respecter dès maintenant"
     * Une nouvelle colonne est **nullable** ou dotée d'un `DEFAULT` : le §5 doit rester rejouable sur

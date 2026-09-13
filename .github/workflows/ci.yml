@@ -240,6 +240,125 @@ jobs:
           PY
 
   # ---------------------------------------------------------------------------
+  # PostgreSQL / TimescaleDB. SQLite reste le backend par défaut : ce job prouve
+  # que le second backend existe réellement, en rejouant **la même** suite de
+  # conformité (tests/test_storage_conformance.py) contre un vrai serveur
+  # TimescaleDB, puis avec chacun des deux pilotes supportés :
+  #   * psycopg2 → insertion par lots via `execute_values` ;
+  #   * psycopg 3 → insertion par lots via `executemany`.
+  # Aucune configuration préalable n'est nécessaire : le service est éphémère, et
+  # ses identifiants sont jetables (ce ne sont pas des secrets du dépôt).
+  # ---------------------------------------------------------------------------
+  postgres:
+    name: PostgreSQL / TimescaleDB
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      timescaledb:
+        image: timescale/timescaledb:latest-pg16
+        env:
+          POSTGRES_USER: thot
+          POSTGRES_PASSWORD: thot_ci_password
+          POSTGRES_DB: thotsecure_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U thot -d thotsecure_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      # C'est la SEULE variable qui active les cas PostgreSQL : sans elle, la
+      # suite de conformité les marque « ignorés » — jamais « en échec » — ce qui
+      # permet de l'exécuter sur un poste sans serveur, et de ne pas confondre une
+      # absence de base avec une régression du code.
+      THOT_TEST_POSTGRES_DSN: postgresql://thot:thot_ci_password@127.0.0.1:5432/thotsecure_ci
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install package
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f pyproject.toml ]; then
+            python -m pip install -e .
+          else
+            echo "::notice::No Python packaging metadata yet — running from the source tree."
+          fi
+
+      # --- Pilote 1 : psycopg2 (execute_values) ------------------------------
+      - name: Install psycopg2
+        run: python -m pip install psycopg2-binary
+
+      - name: Conformance suite (psycopg2 / execute_values)
+        run: python -m unittest tests.test_storage_conformance -v
+
+      - name: PostgreSQL offline tests (DSN, DDL, lots, verrou d'audit)
+        run: python -m unittest tests.test_storage_postgres -v
+
+      # --- Pilote 2 : psycopg 3 (executemany) --------------------------------
+      # psycopg2 reste installé : c'est bien le pilote *préféré* du code
+      # (psycopg 3) qui doit être exercé ici, sur la même base.
+      - name: Install psycopg 3
+        run: python -m pip install "psycopg[binary]"
+
+      - name: Conformance suite (psycopg 3 / executemany)
+        run: python -m unittest tests.test_storage_conformance -v
+
+      # --- Extra documenté : `pip install "thotsecure[postgres]"` ------------
+      # Vérifie que l'installation documentée résout réellement : une extra qui
+      # ne s'installe pas rendrait la procédure de migration inapplicable.
+      - name: Install the documented postgres extra
+        run: python -m pip install -e ".[postgres]"
+
+      # --- Diagnostic TimescaleDB (non bloquant) -----------------------------
+      # La compression est une optimisation d'exploitation : l'adaptateur sait
+      # fonctionner sans elle (il ne déclare alors pas la capacité « compression »).
+      # Ce contrôle rend donc visible, à chaque exécution, si la version déployée
+      # accepte de compresser une hypertable dont la clé primaire contient
+      # event_id — question à laquelle aucune réponse hors ligne n'est possible.
+      - name: TimescaleDB compression diagnostic
+        continue-on-error: true
+        run: |
+          python - <<'PY'
+          import os
+
+          import psycopg
+
+          dsn = os.environ["THOT_TEST_POSTGRES_DSN"]
+          with psycopg.connect(dsn, autocommit=True) as conn:
+              version = conn.execute(
+                  "SELECT extversion FROM pg_extension WHERE extname = 'timescaledb'"
+              ).fetchone()
+              print(f"::notice::TimescaleDB {version[0] if version else 'absent'}")
+              chunks = conn.execute("SELECT count(*) FROM show_chunks('events')").fetchone()[0]
+              print(f"::notice::chunks présents après la suite de tests : {chunks}")
+              if not chunks:
+                  print("::notice::aucun chunk à compresser — diagnostic non concluant")
+              else:
+                  try:
+                      conn.execute(
+                          "ALTER TABLE events SET (timescaledb.compress, "
+                          "timescaledb.compress_segmentby = 'tenant_id', "
+                          "timescaledb.compress_orderby = 'ts DESC')"
+                      )
+                      conn.execute("SELECT compress_chunk(c) FROM show_chunks('events') c LIMIT 1")
+                      print("::notice::compression d'un chunk acceptée par cette version")
+                  except Exception as exc:
+                      print(
+                          f"::warning::compression refusée : {exc} — la rétention par "
+                          "drop_chunks reste valide ; ajustez compress_segmentby ou retirez "
+                          "event_id de la clé primaire d'events"
+                      )
+          PY
+
+  # ---------------------------------------------------------------------------
   # Web dashboard. Optional by design: the embedded Jinja2 console in
   # src/thotsecure/ui/ must keep working with no Node toolchain at all.
   # ---------------------------------------------------------------------------
@@ -353,6 +472,17 @@ jobs:
         run: docker image inspect thotsecure:ci --format '{{ .Id }} size={{ .Size }}'
 
       - name: Validate Compose configuration
+        env:
+          # `docker-compose.yml` déclare ses secrets avec `${VAR:?message}`, ce qui fait
+          # ÉCHOUER `docker compose config` quand ils sont absents. C'est voulu : un
+          # déploiement ne doit jamais démarrer avec une clé de signature par défaut.
+          # La CI fournit donc des valeurs jetables, locales à cette étape : ce contrôle
+          # vérifie la STRUCTURE du fichier, pas la présence d'un vrai secret.
+          #
+          # Cause de l'échec constaté sur le premier tag : sans ces valeurs, la validation
+          # déclarait la configuration invalide alors que le fichier était correct.
+          THOT_SECRET_KEY: ci-ephemeral-not-a-secret-0000000000000000000000000000
+          THOT_BOOTSTRAP_API_KEY: ao_ci_ephemeral_change_me
         if: hashFiles('docker-compose.yml', 'docker-compose.yaml', 'compose.yml', 'compose.yaml', 'deploy/docker-compose.yml', 'deploy/docker-compose.yaml', 'deploy/compose.yml', 'deploy/compose.yaml') != ''
         shell: bash
         run: |

@@ -26,8 +26,15 @@ Référence normative : [`docs/architecture/api-contract.md`](../architecture/ap
 * **Conséquence directe** : jamais de `replicas: 2`, jamais de `docker compose up --scale thotsecure=2`, jamais deux nœuds partageant le même fichier sur un volume réseau.
 * Un déploiement à plusieurs instances derrière un répartiteur produirait des verrous d'écriture, des files d'attente et des erreurs `500 internal_error` — pas une haute disponibilité.
 
-!!! info "Roadmap"
-    La haute disponibilité **réelle** passe par PostgreSQL/TimescaleDB (`THOT_DB_URL` non-SQLite, documenté mais hors périmètre du MVP) puis par plusieurs réplicas sans état partagé. Tant que ce n'est pas livré : **une réplique**.
+!!! info "PostgreSQL : la voie de la haute disponibilité — et son état réel"
+    La haute disponibilité **réelle** passe par PostgreSQL/TimescaleDB (`THOT_DB_URL` non-SQLite),
+    puis par plusieurs réplicas sans état partagé : **l'adaptateur est écrit et validé en CI** sur un
+    serveur TimescaleDB, avec les deux backends exercés par la même suite de conformité
+    (`tests/test_storage_conformance.py`). Il n'a en revanche **pas encore été éprouvé en production
+    à grande échelle** : aucune campagne de charge n'a été menée, et les repères de dimensionnement
+    de la §2.2 sont des estimations. Tant que le basculement n'a pas été répété sur votre
+    infrastructure : **une réplique** suffit, et le passage à plusieurs instances se décide avec la
+    §3.3 en main.
 
 ### 1.2 Autonomie et `dry_run` : des paramètres de déploiement de premier ordre
 
@@ -43,6 +50,44 @@ Le `mode` et le `dry_run` sont aussi surchargeables **par tenant** via `PATCH /a
 Voir aussi [`../configuration.md`](../configuration.md) pour la référence complète des variables et [`../architecture/threat-model.md`](../architecture/threat-model.md) pour l'analyse des risques liés à l'automatisation.
 
 ---
+
+### 1.3 Choisir le backend
+
+| Critère | SQLite (défaut) | PostgreSQL + TimescaleDB |
+|---|---|---|
+| Installation | aucune dépendance | extra optionnel : `pip install "thotsecure[postgres]"` (psycopg 3 ; `psycopg2` accepté en repli) |
+| Débit d'ingestion | quelques centaines d'événements/s, **un seul écrivain** | plusieurs écrivains concurrents, partitionnement par le temps |
+| Instances applicatives | `replicas: 1` obligatoire | plusieurs réplicas possibles (le magasin est sans état) |
+| Rétention | purge applicative + `VACUUM` | politique de rétention native (`drop_chunks`) en plus de la purge applicative |
+| Compression | aucune | compression des chunks anciens (si la version de TimescaleDB l'accepte : voir `docs/architecture/data-model.md` §8.6) |
+| Sauvegarde | copie de fichier / `VACUUM INTO` | `pg_dump` ou `pg_basebackup` (§4.6) |
+| RPO / RTO | minutes à heures, dépend de la fréquence de copie | RPO ≈ 0 avec une réplique en streaming (§3.3), RTO de quelques minutes à la main |
+
+Le choix est **explicite** : `create_store()` refuse un schéma non supporté plutôt que de retomber
+silencieusement sur SQLite — un exploitant ne doit jamais croire écrire dans sa base de production
+alors que les données partent dans un fichier local.
+
+!!! warning "Trois lignes à adapter avant un déploiement PostgreSQL"
+    `thotsecure doctor` et `thotsecure init-db` affichent `settings.db_path`, dont la résolution
+    **lève une erreur** quand `THOT_DB_URL` n'est pas SQLite. De plus, `build_service()` construit
+    encore le magasin SQLite directement. Les lignes à changer sont les suivantes (elles ne
+    modifient aucun comportement SQLite) :
+
+    ```diff
+    --- a/src/thotsecure/service.py
+    +++ b/src/thotsecure/service.py
+    -from .storage.store import Store
+    +from .storage import create_store
+    @@
+    -    store = Store(settings.db_path)
+    +    store = create_store(settings)
+    ```
+
+    Côté CLI, remplacez `str(settings.db_path)` (et `settings.db_path.exists()`) par
+    `storage.store_location(store)` : la fonction rend le chemin du fichier SQLite **ou** le DSN
+    PostgreSQL masqué, sans jamais supposer le moteur — et sans jamais afficher de mot de passe.
+    En attendant, vérifiez une base PostgreSQL par `GET /readyz`, par `store.health()` ou par
+    l'extrait Python de [`../architecture/data-model.md`](../architecture/data-model.md) §8.7.
 
 ## 2. Dimensionnement
 
@@ -82,6 +127,85 @@ Toujours dimensionner **le total mesuré, jamais la seule valeur brute** :
 * augmenter la rétention au-delà de 30 jours se paie en IOPS de purge autant qu'en gigaoctets ;
 * `THOT_RATE_LIMIT_PER_MIN` (défaut 600) borne l'abus d'ingestion, pas le volume légitime : c'est le volume légitime qu'il faut dimensionner.
 
+### 2.2 Dimensionnement TimescaleDB
+
+!!! warning "Toujours des ordres de grandeur, jamais des mesures"
+    Les chiffres ci-dessous viennent des hypothèses de la §2.1 et des ordres de grandeur
+    communément observés sur TimescaleDB. **Aucune campagne de charge n'a été menée sur ce
+    backend** : mesurez `hypertable_size('events')` sur votre instance avant de dimensionner.
+
+**Découpage en chunks et compression**
+
+| Réglage | Valeur livrée | Conséquence pratique |
+|---|---|---|
+| `chunk_time_interval` | `1 day` | un chunk par jour et par hypertable : la granularité de la rétention par `drop_chunks` **et** de la compression |
+| `compress_segmentby` | `tenant_id` | un segment par tenant : une requête mono-tenant ne décompresse que son segment |
+| `compress_orderby` | `ts DESC` | lectures récentes plus rapides dans un chunk compressé |
+| `add_compression_policy` | au-delà de **7 jours** | un chunk compressé devient **non modifiable** : c'est cohérent avec l'immuabilité des événements (§1 du modèle de données), mais interdit toute correction de données au-delà de la fenêtre |
+| `add_retention_policy` | **30 jours** | aligné sur `THOT_RETENTION_DAYS` par défaut ; à ajuster si vous changez cette variable (la purge applicative, elle, suit toujours la configuration) |
+
+La compression divise typiquement le stockage des événements par 5 à 10 selon la redondance des
+`labels`/`payload`. Elle n'est **pas garantie** : certaines versions de TimescaleDB refusent de
+compresser une hypertable dont la clé primaire contient des colonnes absentes de
+`compress_segmentby`. L'adaptateur applique la compression dans sa propre transaction : si elle est
+refusée, il journalise un avertissement, n'annonce pas la capacité `compression`, et continue (la
+rétention par chunks reste valide). Vérifiez-le sur votre instance :
+
+```sql
+SELECT extversion FROM pg_extension WHERE extname = 'timescaledb';
+-- Doit réussir, sinon ajustez compress_segmentby ou renoncez à la compression :
+SELECT compress_chunk(c) FROM show_chunks('events') c LIMIT 1;
+```
+
+**Formule de disque (à remplacer par vos mesures)**
+
+```text
+événements/jour × 1 Kio                              (avant compression)
+÷ 5 à 10                                             (chunks de plus de 7 jours compressés)
+× 30 jours de rétention
++ index (GIN inclus) et surcoût de pages             ≈ ×1,2 à ×1,4
++ findings et audit_log, non purgés                  voir §2.1
++ WAL, 2 à 4 sauvegardes en rotation                 → prévoir ×2 en pratique
+```
+
+**Réglages serveur qui comptent le plus**
+
+| Paramètre | Point de départ | Pourquoi |
+|---|---|---|
+| `shared_buffers` | 25 % de la RAM | la base travaille surtout sur des lectures récentes (24 h / 7 j) |
+| `work_mem` | 64–256 Mo | `drop_chunks` et la compression trient de gros chunks |
+| `maintenance_work_mem` | 512 Mo–1 Gio | compression et autovacuum |
+| `max_connections` | `≥ max_size du pool applicatif + marge` | le pool maison **bloque** au-delà (`pool saturé`) plutôt que d'écraser le serveur : mieux vaut le dimensionner |
+| `statement_timeout` | 60 s (posé par l'adaptateur) | une requête qui dérape est interrompue par le serveur, au lieu de tenir des verrous |
+| `checkpoint_timeout` / `max_wal_size` | 15 min / 4–8 Go | l'ingestion par lots produit de gros pics de WAL |
+
+**À surveiller (requêtes utiles)**
+
+```sql
+-- Volumétrie de l'hypertable et des index
+SELECT pg_size_pretty(hypertable_size('events'));
+-- Nombre de chunks et état de compression (compressés / non compressés)
+SELECT count(*) FILTER (WHERE is_compressed) AS compressés, count(*) AS total
+FROM timescaledb_information.chunks WHERE hypertable_name = 'events';
+-- Derniers jobs (rétention, compression, agrégats continus) et leurs échecs
+SELECT job_id, proc_name, last_run_status, last_successful_finish
+FROM timescaledb_information.job_stats ORDER BY job_id;
+-- Connexions et requêtes longues
+SELECT state, count(*) FROM pg_stat_activity GROUP BY state;
+SELECT pid, now() - query_start AS durée, left(query, 80) FROM pg_stat_activity
+WHERE state <> 'idle' ORDER BY durée DESC LIMIT 10;
+-- Fraîcheur de l'agrégat continu alimentant le tableau de bord
+SELECT * FROM timescaledb_information.continuous_aggregates;
+```
+
+!!! note "Deux rétentions qui coexistent"
+    La politique TimescaleDB (30 jours, par chunks entiers) et la purge applicative
+    (`purge(retention_days=…)`, exacte à la ligne près mais par lots bornés) visent la même donnée.
+    C'est voulu : si un opérateur abaisse `THOT_RETENTION_DAYS`, la purge applicative est le
+    mécanisme qui s'applique réellement ; la politique native garantit, elle, qu'un service arrêté
+    pendant deux mois ne se retrouve pas avec une hypertable qui grossit sans fin. En cas de
+    divergence, **alarmez sur le plus court des deux seuils**.
+
 ---
 
 ## 3. Haute disponibilité
@@ -113,8 +237,56 @@ THOT_NATS_URL: nats://127.0.0.1:4222
 * `sqlite` : durable localement, cohérent avec le mono-nœud.
 * `nats` : découple collecteurs et traitement ; c'est la brique qui permet, plus tard, de déplacer l'ingestion hors du nœud applicatif.
 
-!!! info "Roadmap"
-    La **HA active** (PostgreSQL + réplicas, bascule automatique, plusieurs écrivains) n'est pas dans le MVP v0.1.0 : SQLite impose un écrivain unique. Voir [`../roadmap.md`](../roadmap.md).
+!!! info "Ce que la HA active demande encore"
+    La **bascule automatique** (et la conscience du rôle primaire/secondaire côté application) n'est
+    pas implémentée : l'adaptateur PostgreSQL ouvre des connexions sur **un** DSN, sans réessayer sur
+    un second hôte. Une bascule reste donc une opération d'exploitation (voir §3.3).
+
+### 3.3 Réplication minimale (PostgreSQL)
+
+L'objectif de cette section n'est pas la HA automatique, mais **le RPO** : ne pas perdre les
+écritures des dernières minutes en cas de perte du nœud primaire.
+
+```conf
+# postgresql.conf du primaire
+wal_level = replica
+max_wal_senders = 5
+wal_keep_size = 1GB
+# RPO ≈ 0 au prix de la latence d'écriture (à mesurer avant d'activer) :
+synchronous_standby_names = 'thot_standby'
+synchronous_commit = remote_apply      # 'on' est moins coûteux, 'off' accepte une perte
+```
+
+```bash
+# Sur le secondaire, une seule fois :
+pg_basebackup -h primaire -D /var/lib/postgresql/16/main -U replicator -Fp -Xs -P -R
+# -R écrit primary_conninfo et standby.signal : le secondaire démarre alors en lecture seule.
+```
+
+| Ce que ça apporte | Ce que ça n'apporte pas |
+|---|---|
+| RPO ≈ 0 avec `synchronous_commit = remote_apply` | bascule automatique (à faire à la main) |
+| un secondaire déjà chaud pour un test de restauration | continuité de service pendant la bascule |
+| réplication vérifiable (`pg_stat_replication`) | répartition de charge applicative (le secondaire est en lecture seule) |
+
+**Bascule manuelle, côté Thot Secure** — l'application est sans état, l'opération est donc
+volontairement simple :
+
+1. promouvoir le secondaire : `pg_ctl promote -D /var/lib/postgresql/16/main` ;
+2. repointer `THOT_DB_URL` sur le nouveau primaire (DNS, VIP, ou modification du secret) ;
+3. redémarrer `thotsecure serve` : le pool rouvre ses connexions (il n'y a **pas** de reprise
+   transparente d'une connexion coupée — c'est le pool qui la remplace, et `health()` qui le signale) ;
+4. vérifier `GET /readyz` → `200`, puis la chaîne d'audit : `GET /api/v1/audit/verify` doit rester
+   `valid: true`. **Un `valid: false` après bascule signifie que le secondaire a reçu des écritures
+   incomplètes** : isolez la base et traitez-le comme un incident de sécurité (runbook, incident 3).
+
+!!! warning "Le chaînage d'audit et la bascule"
+    `append_audit` sérialise les écrivains par un verrou consultatif de transaction
+    (`pg_advisory_xact_lock`). Ce verrou est **local au serveur primaire** : il n'est pas répliqué.
+    C'est sans risque — un secondaire promu n'a, par construction, reçu aucun maître d'audit dont le
+    `prev_hash` aurait été calculé par un autre écrivain en cours — mais cela interdit de faire
+    écrire **deux primaires** en parallèle (réplication bidirectionnelle, multi-maître) : la chaîne
+    d'audit se romprait. Un seul primaire accepte des écritures.
 
 ---
 
@@ -125,6 +297,7 @@ THOT_NATS_URL: nats://127.0.0.1:4222
 | Élément | Emplacement par défaut | Méthode |
 |---|---|---|
 | **Base** | `data/thotsecure.db` (`THOT_DB_URL`) | instantané cohérent (ci-dessous) |
+| **Base (PostgreSQL/TimescaleDB)** | le serveur PostgreSQL (`THOT_DB_URL=postgresql://…`) | `pg_dump` **ou** `pg_basebackup` + archivage WAL (§4.6) |
 | **Configuration** | `config/targets.yaml` (`THOT_TARGETS_FILE`) | copie de fichier |
 | **Règles** | `rules/` (`THOT_RULES_DIR`) | copie de fichier (idéalement versionnée) |
 | **Politiques** | `policies/` (`THOT_POLICIES_DIR`) | copie de fichier |
@@ -245,7 +418,93 @@ Estimations à valider par un exercice réel (elles dépendent de votre fréquen
 | Compromission du nœud | dernière sauvegarde **antérieure** à la compromission | 4–24 h | forensic + rotation de `THOT_SECRET_KEY` (§5) |
 | Perte du site | dernière sauvegarde hors site | > 4 h | plan de continuité (hors périmètre MVP) |
 
----
+### 4.6 Sauvegarde PostgreSQL / TimescaleDB
+
+Deux méthodes, à choisir selon le RPO visé (elles se combinent : `pg_basebackup` pour le socle,
+`pg_dump` pour un export logique portable et relisible).
+
+**Option A — `pg_dump` (logique, portable, suffisant jusqu'à quelques dizaines de Go)**
+
+```bash
+# Base complète, format custom (compressé, restaurable sélectivement)
+pg_dump -Fc -d thotsecure -f backup/thotsecure-$(date -u +%Y%m%dT%H%M%SZ).dump
+
+# Rôles et mots de passe (à stocker séparément de la base !)
+pg_dumpall --roles-only -f backup/roles-$(date -u +%Y%m%dT%H%M%SZ).sql
+
+# Empreinte d'intégrité, puis chiffrement (identique à la §4.3)
+sha256sum backup/*.dump > backup/thotsecure.sha256
+```
+
+```bash
+# Restauration dans une base NEUVE (jamais dans une base en service)
+psql -c "CREATE DATABASE thotsecure_restore OWNER thot;"
+psql -d thotsecure_restore -c "CREATE EXTENSION IF NOT EXISTS timescaledb;"
+psql -d thotsecure_restore -c "SELECT timescaledb_pre_restore();"
+pg_restore -d thotsecure_restore --no-owner --role=thot backup/thotsecure-….dump
+psql -d thotsecure_restore -c "SELECT timescaledb_post_restore();"
+```
+
+!!! warning "L'extension doit exister **avant** la restauration"
+    Un `pg_dump` d'une hypertable contient les chunks sous forme de tables ; sans l'extension
+    `timescaledb` déjà créée, la restauration échoue ou produit des tables ordinaires. Les appels
+    `timescaledb_pre_restore()` / `timescaledb_post_restore()` désactivent temporairement la
+    gestion des chunks pendant l'import : ce sont eux qui font passer une restauration de plusieurs
+    dizaines de Go de « plusieurs heures » à « quelques dizaines de minutes ».
+
+**Option B — `pg_basebackup` + archivage WAL (physique, restauration à un instant précis)**
+
+```conf
+# postgresql.conf du primaire
+archive_mode = on
+archive_command = 'test ! -f /srv/wal/%f && cp %p /srv/wal/%f'   # à durcir : vérifié, hors site
+```
+
+```bash
+pg_basebackup -h primaire -D /srv/backup/base -Ft -z -Xs -P
+```
+
+C'est la seule méthode qui permet la **restauration à un instant précis** — indispensable face au
+scénario « une purge trop agressive a supprimé 25 jours d'événements » (§4.5, ligne « erreur de
+manipulation ») : `recovery_target_time = '2026-09-13 08:00:00+00'`.
+
+| Méthode | RPO | RTO indicatif | Usage |
+|---|---|---|---|
+| `pg_dump` quotidien | 24 h | minutes à dizaines de minutes | développement, labo, petite instance |
+| `pg_dump` + `pg_basebackup` quotidien | 24 h | dizaines de minutes | socle recommandé |
+| `pg_basebackup` + archivage WAL continu | quelques minutes | minutes | production, avec possibilité de PITR |
+
+**Vérification obligatoire après restauration** (§4.4, adaptée) :
+
+1. lancer `/readyz` **contre la base restaurée** → `200` (la sonde appelle `health()`, qui exécute un
+   vrai `SELECT 1`) ;
+2. comparer les volumes : `SELECT count(*) FROM events;`, `SELECT count(*) FROM findings;`,
+   `SELECT count(*) FROM audit_log;` — et, si vous les avez relevés avant l'incident, les mêmes
+   compteurs sur la base d'origine ;
+3. vérifier la chaîne d'audit : `GET /api/v1/audit/verify` doit répondre
+   `{"valid":true,"records":n,"broken_at":null}`. En exploitation dégradée (API arrêtée), utilisez
+   l'extrait Python de [`../architecture/data-model.md`](../architecture/data-model.md) §8.7 :
+   `AuditChain(store).verify()` ;
+4. vérifier les jobs TimescaleDB : `SELECT job_id, last_run_status FROM
+   timescaledb_information.job_stats;` — les politiques de rétention et de compression doivent être
+   présentes et en succès après restauration (`pg_dumpall` ne les transporte pas : ce sont des
+   métadonnées de l'extension) ;
+5. consigner date, version de TimescaleDB, RPO constaté et durée — **ce test n'est pas facultatif :
+   la chaîne d'audit restaurée est votre seule preuve en cas d'incident**.
+
+!!! danger "Ce qui n'a pas été testé"
+    Les commandes ci-dessus sont la documentation officielle de PostgreSQL et TimescaleDB, mais elles
+    **n'ont pas été exécutées dans la CI d'Thot Secure** (le job `postgres` exécute la suite de
+    conformité, pas une restauration). Le test de restauration est donc à faire, puis à répéter
+    trimestriellement, sur **votre** infrastructure avant de considérer la procédure comme acquise.
+
+Ce sont **deux procédures distinctes**, à ne pas confondre.
+
+| Clé | Fréquence recommandée | Impact | Procédure |
+|---|---|---|---|
+| Clé API d'un usage (CI, intégration, astreinte) | 90 jours, ou immédiatement en cas de doute | l'appelant doit être redéployé avec la nouvelle clé | créer la nouvelle clé, redéployer, **révoquer l'ancienne** (§5.1) |
+| `THOT_BOOTSTRAP_API_KEY` (clé admin initiale) | **à la première mise en production**, puis jamais laissée par défaut | accès admin total au tenant | remplacer la valeur, créer des clés nominatives, révoquer la clé d'amorçage si possible (§5.2) |
+| `THOT_SECRET_KEY` (pepper + signature) | rare — seulement sur suspicion de compromission | **toutes** les clés API peuvent devenir invalides | fenêtre de maintenance, régénération, recréation des clés (§5.3) |
 
 ## 5. Rotation des clés API et de `THOT_SECRET_KEY`
 
@@ -406,6 +665,9 @@ Les trois sont **publiques** (§4.1) : ne les exposez pas plus largement que né
 | Audit — retard de séquence | écart entre le dernier `seq` et le débit attendu | retard croissant sur 10 minutes | écritures concurrentes/verrous → runbook 3 / 5 |
 | Ressources — disque | espace libre, taille de la base et du **WAL SQLite** | < 20 % libre, ou WAL en croissance continue | purger, archiver, agrandir → runbook 5 |
 | Ressources — rétention | purge `THOT_RETENTION_DAYS` en échec ou absente | 2 exécutions manquées | corriger la purge, sinon saturation disque → runbook 5 |
+| Ressources — chunks *(PostgreSQL)* | `timescaledb_information.chunks` : chunk non compressé de plus de 7 jours | 2 jours consécutifs | compression refusée ou en échec → §2.2 |
+| Ressources — jobs *(PostgreSQL)* | `timescaledb_information.job_stats` : `last_run_status` | 2 exécutions `failed` (compression, rétention, agrégats continus) | rejouer à la main (`compress_chunk`, `add_retention_policy`) → §2.2 |
+| Base — pool épuisé *(PostgreSQL)* | log `pool de connexions PostgreSQL saturé`, ou `/readyz` en `503` | toute occurrence | augmenter le `max_size` du pool ou `max_connections` → §2.2 |
 | Bus | `THOT_BUS=nats` : `/readyz` `503`, logs bus, débit nul | indisponibilité > 2 minutes | bascule temporaire → **runbook 4** |
 
 ### 8.4 Journaux
@@ -479,6 +741,9 @@ Pour chaque alerte, la conduite à tenir est décrite dans [`runbook.md`](runboo
 - [ ] TLS actif : `THOT_TLS_ENABLED=true` ou terminaison par un reverse-proxy
 - [ ] `/metrics` restreint au réseau interne
 - [ ] `THOT_RETENTION_DAYS` fixée selon la volumétrie et les obligations de conservation, purge surveillée
+- [ ] *(PostgreSQL)* rôle dédié non `superuser`, `sslmode=require` (posé par défaut en `THOT_ENV=prod`), extension `timescaledb` créée **avant** toute restauration
+- [ ] *(PostgreSQL)* `max_size` du pool ≤ `max_connections` − marge, et politique de rétention TimescaleDB alignée sur `THOT_RETENTION_DAYS`
+- [ ] *(PostgreSQL)* sauvegarde `pg_dump`/`pg_basebackup` **testée** : restauration dans une base neuve, `/readyz` → `200`, chaîne d'audit `valid: true`
 - [ ] `config/targets.yaml` relu : périmètre exact, cibles protégées cohérentes avec l'infrastructure propre
 - [ ] Sauvegarde chiffrée **testée** (restauration + `thotsecure doctor` + `thotsecure audit verify`)
 - [ ] `thotsecure audit verify` retourne une chaîne valide (code `0`)

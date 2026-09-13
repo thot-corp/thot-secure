@@ -21,10 +21,10 @@ import json
 import sqlite3
 import threading
 from collections.abc import Iterable, Iterator, Sequence
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from datetime import timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from ..audit.hashchain import GENESIS_HASH, record_fingerprint
 from ..core.errors import ConflictError, NotFoundError, StorageError
@@ -33,7 +33,6 @@ from ..core.models import (
     Action,
     ApiKeyRecord,
     AuditRecord,
-    AuditVerifyResult,
     CollectorStatus,
     Event,
     EventSource,
@@ -43,6 +42,7 @@ from ..core.models import (
     Tenant,
 )
 from ..core.util import iso_z, new_id, now_iso, parse_dt, safe_float, safe_int, utcnow
+from .base import StoreProtocol
 from .schema import SCHEMA_VERSION, SQLITE_DDL
 
 log = get_logger("storage.sqlite")
@@ -50,6 +50,13 @@ log = get_logger("storage.sqlite")
 #: Limites dures : une requête ne doit jamais pouvoir épuiser la mémoire du serveur.
 MAX_PAGE_SIZE = 500
 DEFAULT_PAGE_SIZE = 100
+
+#: SQLite n'apporte **aucune** capacité optionnelle du contrat ``storage.base`` : pas de
+#: compression de chunks, pas d'agrégats continus, pas de rétention native, pas de réservation
+#: atomique multi-processus (un seul écrivain de toute façon). Les appelants qui testent
+#: ``supports_backend_features()`` obtiennent donc un ensemble vide et prennent le chemin de
+#: repli — c'est exactement ce que fait l'API pour les statistiques.
+SQLITE_BACKEND_FEATURES: frozenset[str] = frozenset()
 
 
 def _encode_cursor(primary: Any, identifier: str) -> str:
@@ -81,12 +88,20 @@ def _loads(value: Any, default: Any) -> Any:
 class Store:
     """Accès aux données. Une instance par processus ; connexions par thread."""
 
+    #: Nom du backend exposé par ``storage.base.StoreProtocol``.
+    backend_name: ClassVar[str] = "sqlite"
+
     def __init__(self, db_path: str | Path, *, timeout: float = 30.0) -> None:
         self.db_path = Path(db_path)
         self.timeout = timeout
         self._local = threading.local()
         self._write_lock = threading.RLock()
         self._closed = False
+        #: Toutes les connexions ouvertes, tous threads confondus : ``close()`` doit libérer les
+        #: descripteurs de fichier de **tous** les threads, sinon la base reste verrouillée après
+        #: l'arrêt du service (Windows refuse alors de supprimer ou de déplacer le fichier).
+        self._connections: set[sqlite3.Connection] = set()
+        self._registry_lock = threading.Lock()
 
     # ----------------------------------------------------------------------------------
     # Connexion
@@ -104,6 +119,8 @@ class Store:
         connection.execute("PRAGMA synchronous=NORMAL")
         connection.execute("PRAGMA foreign_keys=ON")
         connection.execute("PRAGMA busy_timeout=5000")
+        with self._registry_lock:
+            self._connections.add(connection)
         return connection
 
     @property
@@ -126,10 +143,18 @@ class Store:
         log.info("schéma initialisé", extra={"db": str(self.db_path), "schema_version": SCHEMA_VERSION})
 
     def close(self) -> None:
-        conn = getattr(self._local, "conn", None)
-        if conn is not None:
-            conn.close()
-            self._local.conn = None
+        """Ferme **toutes** les connexions (tous threads confondus) et marque le magasin fermé.
+
+        Un service qui s'arrête doit rendre les descripteurs de fichier qu'il détient : sans cela,
+        la base reste verrouillée et une sauvegarde ou un remplacement de fichier échoue. Les
+        connexions des threads de travail sont donc suivies et fermées ici.
+        """
+        with self._registry_lock:
+            connections, self._connections = self._connections, set()
+        for connection in connections:
+            with suppress(sqlite3.Error):
+                connection.close()
+        self._local.conn = None
         self._closed = True
 
     @contextmanager
@@ -147,9 +172,15 @@ class Store:
                 conn.execute("COMMIT")
 
     def health(self) -> bool:
+        """Vérifie réellement que la base répond (``SELECT 1``), sans jamais lever.
+
+        Retourne ``False`` si la base est injoignable, verrouillée ou si le magasin est fermé :
+        ``/readyz`` et ``thotsecure doctor`` s'appuient dessus, et un diagnostic qui lève une
+        exception n'est pas un diagnostic.
+        """
         try:
             self.connection.execute("SELECT 1").fetchone()
-        except sqlite3.Error:
+        except (sqlite3.Error, StorageError):
             return False
         return True
 
@@ -265,25 +296,38 @@ class Store:
     # ----------------------------------------------------------------------------------
 
     def insert_api_key(self, record: ApiKeyRecord) -> ApiKeyRecord:
-        with self._write_lock:
-            self.connection.execute(
-                """
-                INSERT INTO api_keys (key_id, tenant_id, label, role, key_hash, key_prefix,
-                                      created_at, last_used_at, revoked_at)
-                VALUES (?,?,?,?,?,?,?,?,?)
-                """,
-                (
-                    record.key_id,
-                    record.tenant_id,
-                    record.label,
-                    record.role,
-                    record.key_hash,
-                    record.key_prefix,
-                    iso_z(record.created_at),
-                    iso_z(record.last_used_at) if record.last_used_at else None,
-                    iso_z(record.revoked_at) if record.revoked_at else None,
-                ),
-            )
+        """Insère une clé API **hachée** (``key_hash`` scrypt ; la clé en clair n'est jamais
+        persistée).
+
+        L'erreur d'intégrité est traduite en ``ConflictError`` (409) plutôt que laissée remonter
+        brute : c'est le même contrat que l'implémentation PostgreSQL, et une collision de clé est
+        un conflit métier, pas une panne interne.
+        """
+        try:
+            with self._write_lock:
+                self.connection.execute(
+                    """
+                    INSERT INTO api_keys (key_id, tenant_id, label, role, key_hash, key_prefix,
+                                          created_at, last_used_at, revoked_at)
+                    VALUES (?,?,?,?,?,?,?,?,?)
+                    """,
+                    (
+                        record.key_id,
+                        record.tenant_id,
+                        record.label,
+                        record.role,
+                        record.key_hash,
+                        record.key_prefix,
+                        iso_z(record.created_at),
+                        iso_z(record.last_used_at) if record.last_used_at else None,
+                        iso_z(record.revoked_at) if record.revoked_at else None,
+                    ),
+                )
+        except sqlite3.IntegrityError as exc:
+            raise ConflictError(
+                "clé API déjà enregistrée (key_id ou empreinte en doublon)",
+                details={"key_id": record.key_id},
+            ) from exc
         return record
 
     def get_api_key(self, key_id: str) -> ApiKeyRecord | None:
@@ -1350,10 +1394,29 @@ class Store:
         with self._write_lock:
             self.connection.execute("VACUUM")
 
+    def supports_backend_features(self) -> frozenset[str]:
+        """Capacités optionnelles du backend — voir ``storage.base``.
+
+        SQLite n'en apporte aucune : la rétention est applicative, il n'y a ni compression ni
+        agrégat continu. L'ensemble est donc **toujours** vide, ce qui laisse la couche
+        appelante emprunter le chemin de repli (calcul des statistiques par requêtes).
+        """
+        return SQLITE_BACKEND_FEATURES
+
 
 def _chunks(items: list[Any], size: int) -> Iterable[list[Any]]:
     for index in range(0, len(items), size):
         yield items[index : index + size]
 
 
-__all__ = ["DEFAULT_PAGE_SIZE", "MAX_PAGE_SIZE", "Store"]
+# ``Store`` est l'implémentation de référence du contrat : on l'enregistre comme sous-classe
+# virtuelle de l'ABC plutôt que de l'y faire hériter (aucun risque de casser l'héritage, la
+# signature ou l'ordre d'initialisation du magasin historique).
+StoreProtocol.register(Store)
+
+__all__ = [
+    "DEFAULT_PAGE_SIZE",
+    "MAX_PAGE_SIZE",
+    "SQLITE_BACKEND_FEATURES",
+    "Store",
+]

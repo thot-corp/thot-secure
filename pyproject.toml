@@ -46,9 +46,39 @@ dependencies = [
   "pydantic-settings>=2.2",
   "PyYAML>=6.0",
   "Jinja2>=3.1",
+  # REQUIS par la console embarquée, et c'est une dépendance de *runtime*, pas de confort :
+  # les formulaires de connexion, de déconnexion, d'approbation et de vérification d'audit
+  # utilisent `Form(...)`, et FastAPI lève une RuntimeError à l'import si ce paquet est
+  # absent — donc `import thotsecure.main` échoue, donc TOUTE l'API est inutilisable.
+  #
+  # Il était installé sur la machine de développement mais absent de ce fichier : en CI, sur
+  # une installation propre, `tests/test_api.py` ne pouvait pas être importé et la suite
+  # s'arrêtait à 76 tests sur 378. Un paquet utilisé et non déclaré est une dépendance
+  # fantôme : elle fonctionne chez celui qui l'a installée par accident, et casse partout
+  # ailleurs. `tests/test_dependencies_declared.py` empêche désormais ce cas de repasser.
+  "python-multipart>=0.0.9",
 ]
 
 [project.optional-dependencies]
+# Backend PostgreSQL / TimescaleDB : optionnel, et il doit le rester. SQLite fonctionne sans
+# aucune dépendance ; ce n'est qu'en choisissant `THOT_DB_URL=postgresql://…` que le pilote
+# devient nécessaire. `psycopg[binary]` (v3) est recommandé ; l'adaptateur accepte aussi
+# `psycopg2` déjà présent sur la plupart des distributions, d'où les deux entrées séparées.
+postgres = [
+  "psycopg[binary]>=3.1",
+]
+postgres-psycopg2 = [
+  "psycopg2-binary>=2.9",
+]
+# Contrôle de la taille de clé des certificats TLS (`cryptography`). Facultatif par
+# conception : le collecteur `tls_cert` importe ce paquet **paresseusement** et se contente de
+# ne pas évaluer la force de la clé s'il est absent — expiration, protocoles obsolètes et
+# chaîne de certification sont contrôlés avec la seule bibliothèque standard. L'extra existe
+# pour que la fonctionnalité soit découvrable : sans lui, elle restait invisible et jamais
+# installée, donc jamais exercée.
+tls = [
+  "cryptography>=42",
+]
 dev = [
   "pytest>=8.0",
   "pytest-cov>=5.0",
@@ -105,6 +135,18 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S", "E501"]
 "sdks/*" = ["S"]
+# Scripts d'exemple : ils sont autonomes, destinés à être copiés, et contiennent une
+# documentation inline volontairement détaillée (commandes complètes, explications en
+# français dans les docstrings). La longueur de ligne y est donc assouplie — et SEULEMENT
+# cela : ruff continue de les relire pour tout le reste, la CI les compile et leurs propres
+# modes hors ligne les exécutent.
+#
+# Constat à l'origine de cette exception : une étape GitHub Actions n'affiche que les
+# **10 premières annotations d'erreur**. Trois lignes trop longues apparaissaient, alors que
+# le fichier en comptait 35 : corriger les trois visibles n'aurait rien débloqué, la CI aurait
+# échoué sur les 32 suivantes. On corrige la règle, pas le symptôme.
+"examples/*" = ["E501"]
+"examples/**" = ["E501"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["thotsecure"]
