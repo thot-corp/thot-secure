@@ -13,6 +13,7 @@ import sys
 import tempfile
 import unittest
 from datetime import UTC, datetime
+from typing import Any, ClassVar
 
 _SDK_ROOT = pathlib.Path(__file__).resolve().parents[1]
 if str(_SDK_ROOT) not in sys.path:
@@ -415,7 +416,9 @@ class TestUtilities(unittest.TestCase):
 
 
 class TestModels(unittest.TestCase):
-    CONTRACT_EVENT = {
+    #: Exemples de contrat partagés par les tests. `ClassVar` : constante de test, jamais mutée
+    #: (et un dict littéral nu serait un défaut de classe mutable).
+    CONTRACT_EVENT: ClassVar[dict[str, Any]] = {
         "event_id": "e6f0f0c4-4f0a-4a4f-9c9a-2b0f1f6b7a11",
         "schema_version": "1",
         "tenant_id": "acme",
@@ -428,7 +431,7 @@ class TestModels(unittest.TestCase):
         "raw_ref": None,
     }
 
-    CONTRACT_FINDING = {
+    CONTRACT_FINDING: ClassVar[dict[str, Any]] = {
         "finding_id": "f1c2",
         "tenant_id": "acme",
         "rule_id": "AO-WEB-001",

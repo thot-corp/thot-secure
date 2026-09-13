@@ -171,7 +171,10 @@ class TlsCertCollector(Collector):
                         "protocol": info.protocol,
                     },
                     payload={
-                        "explanation": "Protocole TLS obsolète négocié : chiffrement considéré comme cassé.",
+                        "explanation": (
+                            "Protocole TLS obsolète négocié : "
+                            "chiffrement considéré comme cassé."
+                        ),
                         **info.to_dict(),
                     },
                     severity_hint="high",
@@ -209,7 +212,10 @@ class TlsCertCollector(Collector):
                     source_host=host,
                     labels={"check": "cert_weak_key", "host": host, "port": port},
                     payload={
-                        "explanation": f"Clé de {key_info} bits : inférieure au minimum recommandé de {MIN_RSA_BITS}.",
+                        "explanation": (
+                            f"Clé de {key_info} bits : inférieure au minimum recommandé "
+                            f"de {MIN_RSA_BITS}."
+                        ),
                         **info.to_dict(),
                     },
                     severity_hint="medium",
@@ -222,9 +228,11 @@ class TlsCertCollector(Collector):
         """Vérification stricte en parallèle : retourne la raison de l'échec, ou ``None``."""
         context = ssl.create_default_context()
         try:
-            with socket.create_connection((host, port), timeout=timeout) as raw:
-                with context.wrap_socket(raw, server_hostname=host):
-                    return None
+            with (
+                socket.create_connection((host, port), timeout=timeout) as raw,
+                context.wrap_socket(raw, server_hostname=host),
+            ):
+                return None
         except ssl.SSLCertVerificationError as exc:
             return f"{exc.verify_message} (code {exc.verify_code})"
         except (ssl.SSLError, OSError):

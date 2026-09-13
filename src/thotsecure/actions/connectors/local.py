@@ -121,7 +121,8 @@ class NginxLocalConnector(Connector):
             for entry in sorted(rate_entries, key=lambda item: item["id"]):
                 zone = f"thotsecure_{entry['id'][:8]}"
                 blocks.append(
-                    f"# {entry.get('note') or 'rate limit'} — expire {entry.get('expires_at') or 'jamais'}"
+                    f"# {entry.get('note') or 'rate limit'} — "
+                    f"expire {entry.get('expires_at') or 'jamais'}"
                 )
                 blocks.append(
                     f"limit_req_zone $binary_remote_addr zone={zone}:10m "
@@ -133,7 +134,8 @@ class NginxLocalConnector(Connector):
             blocks.append("# --- Adresses bloquées ---")
             for entry in sorted(deny_entries, key=lambda item: item["ip"]):
                 blocks.append(
-                    f"# motif: {entry.get('note') or 'n/a'} — expire {entry.get('expires_at') or 'jamais'}"
+                    f"# motif: {entry.get('note') or 'n/a'} — "
+                    f"expire {entry.get('expires_at') or 'jamais'}"
                 )
                 blocks.append(f"deny {entry['ip']};")
             blocks.append("")

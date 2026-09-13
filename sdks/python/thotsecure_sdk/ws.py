@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import contextlib
 import hashlib
 import json
 import logging
@@ -205,7 +206,7 @@ def read_frame(
     elif length == 127:
         length = struct.unpack("!Q", _read_exact(recv, 8))[0]
     if length > max_payload:
-        raise WebSocketError("trame trop volumineuse : %d octets (max %d)" % (length, max_payload))
+        raise WebSocketError(f"trame trop volumineuse : {length} octets (max {max_payload})")
 
     key = _read_exact(recv, 4) if masked else b""
     payload = _read_exact(recv, length) if length else b""
@@ -220,7 +221,7 @@ def _read_exact(recv: Callable[[int], bytes], count: int) -> bytes:
     while len(chunks) < count:
         chunk = recv(count - len(chunks))
         if not chunk:
-            raise WebSocketError("connexion fermée par le serveur (%d/%d octets lus)" % (len(chunks), count))
+            raise WebSocketError(f"connexion fermée par le serveur ({len(chunks)}/{count} octets lus)")
         chunks.extend(chunk)
     return bytes(chunks)
 
@@ -327,7 +328,7 @@ class WebSocketConnection:
         if parts.query:
             path += "?" + parts.query
         default_port = 443 if parts.scheme == "wss" else 80
-        host_header = host if port == default_port else "%s:%d" % (host, port)
+        host_header = host if port == default_port else f"{host}:{port}"
 
         lines = [
             f"GET {path} HTTP/1.1",
@@ -465,14 +466,11 @@ class WebSocketConnection:
         """Ferme proprement la connexion (Close frame puis ``shutdown``)."""
         if self._sock is None:
             return
-        try:
+        with contextlib.suppress(Exception):  # pragma: no cover - fermeture best effort
             self.send_close()
-        except Exception:  # pragma: no cover - fermeture best effort
-            pass
         try:
-            self._sock.close()
-        except Exception:  # pragma: no cover
-            pass
+            with contextlib.suppress(Exception):  # pragma: no cover
+                self._sock.close()
         finally:
             self._sock = None
             self._reader = None

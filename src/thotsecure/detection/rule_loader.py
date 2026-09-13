@@ -489,7 +489,7 @@ class _ConditionParser:
             self._next()
             inner = self._parse_unary()
             return MatchSpec(not_=[*inner.all, *inner.any, *inner.not_])
-        if token == "(":
+        if token == "(":  # noqa: S105 - jeton de lexer Sigma, pas un secret
             self._next()
             inner = self._parse_or()
             if self._peek() != ")":

@@ -88,7 +88,10 @@ def load_playbooks_from_dir(
                     RuleDiagnostic(
                         path=str(file_path),
                         rule_id=playbook.name,
-                        error=f"nom de playbook en double (déjà défini dans {playbooks[playbook.name].path})",
+                        error=(
+                            "nom de playbook en double (déjà défini dans "
+                            f"{playbooks[playbook.name].path})"
+                        ),
                     )
                 )
                 continue
@@ -159,9 +162,12 @@ def validate_playbook(playbook: Playbook, *, known_connectors: set[str] | None =
     for name, spec in playbook.params.items():
         if spec.required and spec.default is not None:
             problems.append(f"paramètre '{name}': required=true et default sont contradictoires")
-        if spec.type in {"integer", "duration"} and spec.default is not None:
-            if not isinstance(spec.default, int):
-                problems.append(f"paramètre '{name}': default doit être un entier")
+        if (
+            spec.type in {"integer", "duration"}
+            and spec.default is not None
+            and not isinstance(spec.default, int)
+        ):
+            problems.append(f"paramètre '{name}': default doit être un entier")
         if spec.min is not None and spec.max is not None and spec.min > spec.max:
             problems.append(f"paramètre '{name}': min > max")
 

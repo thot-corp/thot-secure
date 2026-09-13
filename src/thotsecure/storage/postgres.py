@@ -1267,7 +1267,7 @@ class PostgresStore:
         du **même** événement (même identifiant, même horodatage) est ignoré, sans erreur.
         """
         sql = (
-            f"INSERT INTO events {self.EVENT_COLUMNS} VALUES {self.EVENT_ROW_TEMPLATE} "
+            f"INSERT INTO events {self.EVENT_COLUMNS} VALUES {self.EVENT_ROW_TEMPLATE} "  # noqa: S608 - colonnes internes, valeurs liées
             "ON CONFLICT DO NOTHING RETURNING event_id"
         )
         rows = self._fetchall(sql, self._event_row(event, now_iso()))
@@ -1296,7 +1296,7 @@ class PostgresStore:
         try:
             if self.driver.supports_execute_values:
                 sql = (
-                    f"INSERT INTO events {self.EVENT_COLUMNS} VALUES %s "
+                    f"INSERT INTO events {self.EVENT_COLUMNS} VALUES %s "  # noqa: S608 - colonnes internes, valeurs liées
                     "ON CONFLICT DO NOTHING RETURNING 1"
                 )
                 result = self.driver.execute_values(
@@ -1309,7 +1309,7 @@ class PostgresStore:
                 )
                 return len(result or [])
             sql = (
-                f"INSERT INTO events {self.EVENT_COLUMNS} VALUES {self.EVENT_ROW_TEMPLATE} "
+                f"INSERT INTO events {self.EVENT_COLUMNS} VALUES {self.EVENT_ROW_TEMPLATE} "  # noqa: S608 - gabarit interne, valeurs liées
                 "ON CONFLICT DO NOTHING"
             )
             cursor.executemany(sql, batch)
@@ -1435,12 +1435,17 @@ class PostgresStore:
         (``claimed_at`` plus vieux que ``lease_seconds``) redevient réclamable : un worker tué ne
         bloque jamais définitivement un événement.
 
+        :param lease_seconds: durée du bail. ``0`` est **accepté et significatif** : il rend les
+            réservations existantes immédiatement réclamables, ce qui est la façon de dire « le
+            worker précédent est mort ». Le borner à 1 seconde changerait silencieusement ce
+            comportement, et un opérateur qui veut forcer un rejeu immédiat ne pourrait plus le
+            faire.
         :param worker: identifiant du réclamant (nom d'hôte, PID, nom de réplica) — apparaît dans
             la colonne ``claimed_by`` pour le diagnostic.
         :returns: les événements réservés pour ce worker.
         """
         limit = max(1, int(limit))
-        lease = max(1, int(lease_seconds))
+        lease = max(0, int(lease_seconds))
         claimant = worker or f"{self.backend_name}:{new_id('w_')[:12]}"
         sql = """
             UPDATE events SET claimed_by = %s, claimed_at = now()
@@ -1471,7 +1476,7 @@ class PostgresStore:
         with self._guard("marquage des événements traités"), self.transaction() as connection:
             for batch in chunked(list(event_ids), 400):
                 sql = (
-                    "UPDATE events SET processed = TRUE, processed_at = %s::timestamptz, "
+                    "UPDATE events SET processed = TRUE, processed_at = %s::timestamptz, "  # noqa: S608 - placeholders liés
                     "claimed_by = NULL, claimed_at = NULL "
                     f"WHERE event_id IN ({placeholders(len(batch))}) AND processed = FALSE"
                 )
@@ -1987,52 +1992,51 @@ class PostgresStore:
         before = before or {}
         after = after or {}
         context = context or {}
-        with self._guard("ajout d'un enregistrement d'audit"):
-            with self.transaction() as connection:
-                self._execute_on(connection, AUDIT_CHAIN_LOCK_SQL)
-                row = self._fetchone_on(connection, AUDIT_TAIL_SQL)
-                prev_hash = row["hash"] if row else GENESIS_HASH
-                seq = safe_int(self._scalar_on(connection, AUDIT_SEQ_SQL), 0)
-                if seq <= 0:
-                    raise StorageError(
-                        "séquence d'audit indisponible (audit_log_seq) : exécutez init_schema()",
-                        details={"dsn": self.safe_dsn},
-                    )
-                digest = record_fingerprint(
-                    seq=seq,
-                    ts=stamp,
-                    tenant_id=tenant_id,
-                    actor=actor,
-                    actor_role=actor_role,
-                    action=action,
-                    target=target,
-                    before=before,
-                    after=after,
-                    prev_hash=prev_hash,
+        with self._guard("ajout d'un enregistrement d'audit"), self.transaction() as connection:
+            self._execute_on(connection, AUDIT_CHAIN_LOCK_SQL)
+            row = self._fetchone_on(connection, AUDIT_TAIL_SQL)
+            prev_hash = row["hash"] if row else GENESIS_HASH
+            seq = safe_int(self._scalar_on(connection, AUDIT_SEQ_SQL), 0)
+            if seq <= 0:
+                raise StorageError(
+                    "séquence d'audit indisponible (audit_log_seq) : exécutez init_schema()",
+                    details={"dsn": self.safe_dsn},
                 )
-                self._execute_on(
-                    connection,
-                    """
+            digest = record_fingerprint(
+                seq=seq,
+                ts=stamp,
+                tenant_id=tenant_id,
+                actor=actor,
+                actor_role=actor_role,
+                action=action,
+                target=target,
+                before=before,
+                after=after,
+                prev_hash=prev_hash,
+            )
+            self._execute_on(
+                connection,
+                """
                     INSERT INTO audit_log (seq, ts, tenant_id, actor, actor_role, action,
                                            target, before, after, context, prev_hash, hash)
                     VALUES (%s,%s::timestamptz,%s,%s,%s,%s,%s::jsonb,%s::jsonb,%s::jsonb,
                             %s::jsonb,%s,%s)
                     """,
-                    (
-                        seq,
-                        stamp,
-                        tenant_id,
-                        actor,
-                        actor_role,
-                        action,
-                        json_document(target),
-                        json_document(before),
-                        json_document(after),
-                        json_document(context),
-                        prev_hash,
-                        digest,
-                    ),
-                )
+                (
+                    seq,
+                    stamp,
+                    tenant_id,
+                    actor,
+                    actor_role,
+                    action,
+                    json_document(target),
+                    json_document(before),
+                    json_document(after),
+                    json_document(context),
+                    prev_hash,
+                    digest,
+                ),
+            )
         return AuditRecord(
             seq=seq,
             ts=parse_dt(stamp) or utcnow(),

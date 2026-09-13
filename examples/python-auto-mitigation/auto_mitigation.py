@@ -202,7 +202,7 @@ class ApiError(RuntimeError):
     """Réponse HTTP d'erreur normalisée (§4.6) : ``{"error": {"code", "message", "details"}}``."""
 
     def __init__(self, status: int, code: str, message: str, details: Any = None) -> None:
-        super().__init__("HTTP %d · %s · %s" % (status, code or "error", message))
+        super().__init__(f"HTTP {status} · {code or 'error'} · {message}")
         self.status = int(status)
         self.code = code
         self.message = message
@@ -254,9 +254,18 @@ def http_request(
     if api_key:
         headers["X-API-Key"] = api_key
 
-    request = urlrequest.Request(url, data=data, headers=headers, method=method.upper())
+    # S310 : `urlopen` ouvrirait n'importe quel schéma (`file:`, `ftp:`, `data:`…) alors que
+    # cette URL vient de la ligne de commande. Les deux `# noqa: S310` ci-dessous pointent sur
+    # ce contrôle, seule barrière avant la connexion.
+    scheme = urlparse.urlparse(url).scheme.lower()
+    if scheme not in ("http", "https"):
+        raise TransportError(
+            f"schéma d'URL refusé : {scheme or '(absent)'} — seuls http et https sont acceptés."
+        )
+
+    request = urlrequest.Request(url, data=data, headers=headers, method=method.upper())  # noqa: S310
     try:
-        with urlrequest.urlopen(request, timeout=timeout) as response:
+        with urlrequest.urlopen(request, timeout=timeout) as response:  # noqa: S310
             raw = response.read()
             return response.status, _decode(raw), _text(raw), response.headers
     except urlerror.HTTPError as exc:
@@ -575,9 +584,12 @@ def load_sdk_client() -> Any | None:
         if path.is_dir() and str(path) not in sys.path:
             sys.path.insert(0, str(path))
     for module_name in ("thotsecure_sdk", "thotsecure_sdk"):
-        try:
+        # Un nom de module absent n'est pas une erreur : on passe au suivant, et l'absence
+        # totale laisse le client embarqué prendre le relais (voir `sdk_search_paths`).
+        module = None
+        with _contextlib.suppress(Exception):
             module = __import__(module_name, fromlist=["*"])
-        except Exception:
+        if module is None:
             continue
         for attribute in ("ThotSecureClient", "ThotSecureClient"):
             client_class = getattr(module, attribute, None)
@@ -741,7 +753,7 @@ def format_finding_line(finding: Mapping[str, Any]) -> str:
     """Ligne de synthèse d'un finding (sévérité, score, règle, titre, cible)."""
     labels = finding.get("labels") if isinstance(finding.get("labels"), Mapping) else {}
     target = extract_target(finding) or labels.get("src_ip") or "?"
-    return "#%-3s %-8s risque %-6s %-12s %s (cible : %s)" % (
+    return "#{:<3} {:<8} risque {:<6} {:<12} {} (cible : {})".format(
         _short_id(finding.get("finding_id")),
         finding.get("severity") or "?",
         _format_score(finding.get("risk_score")),
@@ -861,7 +873,7 @@ def print_plan(action: Mapping[str, Any], *, live: bool) -> None:
         )
     elif plan_dry_run:
         print(
-            "    ℹ Plan construit en simulation (--live non demandé) : l'exécution sera une\n"
+            "    i Plan construit en simulation (--live non demandé) : l'exécution sera une\n"
             "      répétition à blanc. Ajoutez --live pour une contre-mesure réelle."
         )
 
@@ -976,7 +988,7 @@ def select_finding(
         return None
     index = max(0, int(args.index) - 1)
     if index >= len(findings):
-        warn("--index %d hors bornes : %d finding(s) disponible(s)." % (args.index, len(findings)))
+        warn(f"--index {args.index} hors bornes : {len(findings)} finding(s) disponible(s).")
         return None
     return findings[index]
 

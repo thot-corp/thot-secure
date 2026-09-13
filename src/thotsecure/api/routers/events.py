@@ -15,6 +15,8 @@ from ..deps import PrincipalDep, ServiceDep, client_identifier, require
 router = APIRouter(prefix="/api/v1/events", tags=["événements"])
 
 
+# ``Body(...)`` en valeur par défaut : FastAPI lit cet appel pour construire le schéma de la
+# requête (patron imposé par le framework ; signature gelée par le contrat d'API).
 @router.post(
     "",
     status_code=status.HTTP_202_ACCEPTED,
@@ -25,7 +27,7 @@ def ingest_events(
     request: Request,
     service: ServiceDep,
     principal: PrincipalDep,
-    payload: Any = Body(
+    payload: Any = Body(  # noqa: B008
         ...,
         openapi_examples={
             "evenement_unique": {
@@ -125,12 +127,14 @@ def ingest_events(
     return response
 
 
+# ``Query(...)`` en valeur par défaut : FastAPI lit ces appels pour construire le schéma de la
+# requête (patron imposé par le framework ; signature gelée par le contrat d'API).
 @router.get("", summary="Lister les événements")
 def list_events(
     service: ServiceDep,
     principal: PrincipalDep,
-    kind: list[str] | None = Query(default=None),
-    source_type: list[str] | None = Query(default=None),
+    kind: list[str] | None = Query(default=None),  # noqa: B008
+    source_type: list[str] | None = Query(default=None),  # noqa: B008
     since: str | None = None,
     until: str | None = None,
     q: str | None = Query(default=None, max_length=200),

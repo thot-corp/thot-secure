@@ -853,7 +853,8 @@ def validate_params(playbook: Playbook, provided: dict[str, Any]) -> dict[str, A
             value = spec.default
         elif spec.required:
             raise PlaybookError(
-                f"paramètre obligatoire manquant: '{name}' ({spec.description or 'sans description'})",
+                f"paramètre obligatoire manquant: '{name}' "
+                f"({spec.description or 'sans description'})",
                 details={"playbook": playbook.name, "param": name},
             )
         else:

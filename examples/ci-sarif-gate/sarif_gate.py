@@ -206,7 +206,7 @@ class ApiError(RuntimeError):
     """Réponse HTTP d'erreur normalisée (§4.6)."""
 
     def __init__(self, status: int, code: str, message: str, details: Any = None) -> None:
-        super().__init__("HTTP %d · %s · %s" % (status, code or "error", message))
+        super().__init__(f"HTTP {status} · {code or 'error'} · {message}")
         self.status = int(status)
         self.code = code
         self.message = message
@@ -251,9 +251,18 @@ def http_request(
     if api_key:
         headers["X-API-Key"] = api_key
 
-    request = urlrequest.Request(url, headers=headers, method=method.upper())
+    # S310 : `urlopen` ouvrirait n'importe quel schéma (`file:`, `ftp:`, `data:`…) alors que
+    # cette URL vient de la ligne de commande ou d'un curseur renvoyé par le serveur. Les deux
+    # `# noqa: S310` ci-dessous pointent sur ce contrôle, seule barrière avant la connexion.
+    scheme = urlparse.urlparse(url).scheme.lower()
+    if scheme not in ("http", "https"):
+        raise TransportError(
+            f"schéma d'URL refusé : {scheme or '(absent)'} — seuls http et https sont acceptés."
+        )
+
+    request = urlrequest.Request(url, headers=headers, method=method.upper())  # noqa: S310
     try:
-        with urlrequest.urlopen(request, timeout=timeout) as response:
+        with urlrequest.urlopen(request, timeout=timeout) as response:  # noqa: S310
             raw = response.read()
             return response.status, _decode(raw), _text(raw)
     except urlerror.HTTPError as exc:
@@ -317,7 +326,7 @@ def read_findings_file(path: str) -> list[dict[str, Any]]:
         try:
             item = json.loads(line)
         except ValueError as exc:
-            raise ValueError("ligne %d : JSON invalide (%s)" % (number, exc)) from exc
+            raise ValueError(f"ligne {number} : JSON invalide ({exc})") from exc
         if isinstance(item, Mapping):
             findings.append(dict(item))
     return findings
@@ -388,9 +397,7 @@ class FindingsClient:
             seen_cursors.add(next_cursor)
             cursor = next_cursor
 
-        warn(
-            "limite de %d pages atteinte : la liste peut être incomplète (--max-pages)." % max_pages
-        )
+        warn(f"limite de {max_pages} pages atteinte : la liste peut être incomplète (--max-pages).")
         return findings
 
     def get_server_sarif(self, finding_id: str) -> str | None:
@@ -409,9 +416,9 @@ class FindingsClient:
         if status_code in (404, 405, 406, 501):
             return None
         if status_code >= 500:
-            warn("rapport SARIF serveur indisponible (HTTP %d) : conversion locale." % status_code)
+            warn(f"rapport SARIF serveur indisponible (HTTP {status_code}) : conversion locale.")
             return None
-        warn("rapport SARIF serveur refusé (HTTP %d) : conversion locale." % status_code)
+        warn(f"rapport SARIF serveur refusé (HTTP {status_code}) : conversion locale.")
         return None
 
 
@@ -806,13 +813,13 @@ def print_summary(
     print("=" * 78)
     print("PORTAIL CI — FINDINGS THOT SECURE")
     print("=" * 78)
-    print("  Findings examinés : %d" % len(findings))
+    print(f"  Findings examinés : {len(findings)}")
     for severity in SEVERITIES:
         if counts.get(severity):
-            print("    %-8s : %d" % (severity, counts[severity]))
+            print(f"    {severity:<8} : {counts[severity]}")
     for severity, total in sorted(counts.items()):
         if severity not in SEVERITIES:
-            print("    %-8s : %d" % (severity, total))
+            print(f"    {severity:<8} : {total}")
     if sarif_path:
         print(f"  SARIF agrégé      : {sarif_path}")
     print("  Sévérités bloquantes : {}".format(", ".join(fail_on)))
@@ -821,7 +828,7 @@ def print_summary(
         print("\n  ✔ Aucun finding bloquant non acquitté : portail franchi.")
         return
 
-    print("\n  ✖ %d finding(s) bloquant(s) non acquitté(s) :" % len(blocking))
+    print(f"\n  ✖ {len(blocking)} finding(s) bloquant(s) non acquitté(s) :")
     for finding in blocking:
         print(
             "    - [{}] risque {} · {} · {}".format(
@@ -858,8 +865,8 @@ def step_summary_markdown(
     lines.append("| Sévérité | Findings |")
     lines.append("|---|---|")
     for severity in SEVERITIES:
-        lines.append("| %s | %d |" % (severity, counts.get(severity, 0)))
-    lines.append("| **total** | **%d** |" % len(findings))
+        lines.append(f"| {severity} | {counts.get(severity, 0)} |")
+    lines.append(f"| **total** | **{len(findings)}** |")
     lines.append("")
     lines.append("Sévérités bloquantes configurées : `{}`".format(", ".join(fail_on)))
     lines.append("")
@@ -934,7 +941,7 @@ def emit_github_annotations(
         print(
             "::notice title={}::{}".format(
                 github_escape("Thot Secure", property_value=True),
-                github_escape("%d finding(s) examiné(s), aucun bloquant." % len(findings)),
+                github_escape(f"{len(findings)} finding(s) examiné(s), aucun bloquant."),
             )
         )
 
@@ -1099,7 +1106,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         except (OSError, ValueError) as exc:
             warn(f"lecture de {args.from_file} impossible : {exc}")
             return 2
-        info(args, "%d finding(s) lus depuis %s" % (len(findings), args.from_file))
+        info(args, f"{len(findings)} finding(s) lus depuis {args.from_file}")
     else:
         try:
             findings = client.list_findings(
@@ -1176,8 +1183,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             info(
                 args,
-                "SARIF écrit : %d résultat(s), %d règle(s) (source : %s)"
-                % (
+                "SARIF écrit : {} résultat(s), {} règle(s) (source : {})".format(
                     len(sarif["runs"][0]["results"]),
                     len(sarif["runs"][0]["tool"]["driver"]["rules"]),
                     "serveur + local" if server_sarif else "local",
@@ -1208,13 +1214,13 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if blocking and args.warn_only:
         warn(
-            "%d finding(s) bloquant(s) détecté(s), mais --warn-only est actif : sortie en succès. "
-            "Retirez --warn-only (et continue-on-error) une fois les findings traités."
-            % len(blocking)
+            f"{len(blocking)} finding(s) bloquant(s) détecté(s), mais --warn-only est actif : "
+            "sortie en succès. Retirez --warn-only (et continue-on-error) une fois les findings "
+            "traités."
         )
         return 0
     if blocking:
-        warn("portail échoué : %d finding(s) bloquant(s) non acquitté(s)." % len(blocking))
+        warn(f"portail échoué : {len(blocking)} finding(s) bloquant(s) non acquitté(s).")
         return 3
     return 0
 

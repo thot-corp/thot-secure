@@ -176,12 +176,14 @@ def inspect_certificate(
     context.check_hostname = False
     context.verify_mode = ssl.CERT_NONE
     try:
-        with socket.create_connection((host, port), timeout=timeout) as raw_socket:
-            with context.wrap_socket(raw_socket, server_hostname=host) as tls_socket:
-                certificate = tls_socket.getpeercert() or {}
-                info.protocol = tls_socket.version() or ""
-                cipher = tls_socket.cipher()
-                info.cipher = f"{cipher[0]} ({cipher[1]})" if cipher else ""
+        with (
+            socket.create_connection((host, port), timeout=timeout) as raw_socket,
+            context.wrap_socket(raw_socket, server_hostname=host) as tls_socket,
+        ):
+            certificate = tls_socket.getpeercert() or {}
+            info.protocol = tls_socket.version() or ""
+            cipher = tls_socket.cipher()
+            info.cipher = f"{cipher[0]} ({cipher[1]})" if cipher else ""
         info.subject = _format_name(certificate.get("subject"))
         info.issuer = _format_name(certificate.get("issuer"))
         info.not_before = _parse_ssl_date(certificate.get("notBefore"))

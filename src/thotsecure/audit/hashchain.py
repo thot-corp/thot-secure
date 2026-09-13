@@ -4,7 +4,8 @@ Le journal d'audit d'Thot Secure est *append-only* et chaîné : chaque enregist
 l'empreinte du précédent. Modifier ou supprimer une ligne passée invalide toutes les
 suivantes, ce que ``GET /api/v1/audit/verify`` détecte immédiatement.
 
-Pourquoi pas une blockchain : voir ``docs/adr/0004-audit-log-chaine-par-hash-plutot-que-blockchain.md``.
+Pourquoi pas une blockchain :
+``docs/adr/0004-audit-log-chaine-par-hash-plutot-que-blockchain.md``.
 En résumé : nous avons besoin d'**intégrité détectable**, pas de consensus distribué. Un
 attaquant disposant d'un accès root peut réécrire la chaîne entière et la recalculer ; les
 contre-mesures sont donc organisationnelles et architecturales (export SIEM continu,

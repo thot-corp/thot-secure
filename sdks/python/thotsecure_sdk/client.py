@@ -514,7 +514,7 @@ class ThotSecureClient:
         """
         if chunk_size < 1 or chunk_size > MAX_BATCH_SIZE:
             raise ValidationError(
-                "chunk_size doit être compris entre 1 et %d" % MAX_BATCH_SIZE,
+                f"chunk_size doit être compris entre 1 et {MAX_BATCH_SIZE}",
                 code="validation_error",
             )
         payloads = [self._fill_tenant(self._event_payload(e)) for e in events]

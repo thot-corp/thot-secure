@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+from collections.abc import Callable
 from typing import Any
 
 from ..audit.chain import AuditChain
@@ -242,7 +243,9 @@ class CollectorRunner:
                 scope=self.targets.for_tenant(tenant.tenant_id),
                 settings=self.settings,
                 run_id=new_id("run_"),
-                emit=lambda **kwargs: self._emit_streamed(collector.name, tenant.tenant_id, kwargs),
+                # L'émetteur est fabriqué hors de la boucle : les identifiants du collecteur et
+                # du tenant sont liés une fois pour toutes (voir ``_stream_emitter``).
+                emit=self._stream_emitter(collector.name, tenant.tenant_id),
             )
             tasks.append(
                 asyncio.create_task(
@@ -250,6 +253,15 @@ class CollectorRunner:
                 )
             )
         return tasks
+
+    def _stream_emitter(self, collector_name: str, tenant_id: str) -> Callable[..., Event]:
+        """Fabrique l'émetteur d'un collecteur en écoute, identifiants déjà liés.
+
+        Une lambda définie **dans** la boucle de démarrage capturerait les variables de boucle
+        (dernier collecteur, dernier tenant parcourus) : l'émetteur serait alors rattaché au
+        mauvais collecteur. Les deux identifiants sont donc liés ici, au moment de l'appel.
+        """
+        return lambda **kwargs: self._emit_streamed(collector_name, tenant_id, kwargs)
 
     def _emit_streamed(self, collector_name: str, tenant_id: str, kwargs: dict[str, Any]) -> Event:
         """Émission temps réel d'un collecteur en écoute (syslog) : traitement immédiat."""

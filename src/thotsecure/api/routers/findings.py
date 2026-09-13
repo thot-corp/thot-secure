@@ -24,12 +24,14 @@ TRANSITIONS: dict[str, set[str]] = {
 }
 
 
+# ``Query(...)`` en valeur par défaut : FastAPI lit ces appels pour construire le schéma de la
+# requête (patron imposé par le framework ; signature gelée par le contrat d'API).
 @router.get("", summary="Lister les findings")
 def list_findings(
     service: ServiceDep,
     principal: PrincipalDep,
-    status_filter: list[str] | None = Query(default=None, alias="status"),
-    severity: list[str] | None = Query(default=None),
+    status_filter: list[str] | None = Query(default=None, alias="status"),  # noqa: B008
+    severity: list[str] | None = Query(default=None),  # noqa: B008
     rule_id: str | None = None,
     since: str | None = None,
     until: str | None = None,

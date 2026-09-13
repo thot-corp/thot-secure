@@ -78,9 +78,15 @@ def compute_risk(
             else "bonus règle = 0.0 (non spécifié)"
         ),
         f"facteur de confiance (confidence={rule.confidence:.2f}) = {confidence_factor:.3f}",
-        f"facteur d'actif (criticité={criticality:.2f}, règle={rule.risk.asset_criticality:.2f}) = {asset_factor:.3f}",
+        (
+            f"facteur d'actif (criticité={criticality:.2f}, "
+            f"règle={rule.risk.asset_criticality:.2f}) = {asset_factor:.3f}"
+        ),
         f"facteur de répétition (count={effective_count}) = {repetition_factor:.3f}",
-        f"score = {base:.1f} × {confidence_factor:.3f} × {asset_factor:.3f} × {repetition_factor:.3f} = {final:.2f}",
+        (
+            f"score = {base:.1f} x {confidence_factor:.3f} "
+            f"x {asset_factor:.3f} x {repetition_factor:.3f} = {final:.2f}"
+        ),
     ]
 
     return RiskBreakdown(
@@ -90,7 +96,7 @@ def compute_risk(
         asset_factor=round(asset_factor, 3),
         repetition_factor=round(repetition_factor, 3),
         final=final,
-        formula="final = clamp(base × confiance × actif × répétition, 0, 100)",
+        formula="final = clamp(base x confiance x actif x répétition, 0, 100)",
         steps=steps,
     )
 

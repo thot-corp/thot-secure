@@ -69,6 +69,7 @@ from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 from typing import Any
 from urllib import error as urlerror
+from urllib import parse as urlparse
 from urllib import request as urlrequest
 
 
@@ -371,7 +372,7 @@ def pseudonymize_ip(ip: str, salt: str, *, keep_prefix: bool = False, prefix: st
             packed_str = str(address)
             if keep_prefix:
                 bits = 24 if address.version == 4 else 64
-                network_text = str(ipaddress.ip_network("%s/%d" % (address, bits), strict=False))
+                network_text = str(ipaddress.ip_network(f"{address}/{bits}", strict=False))
     except ValueError as exc:
         raise ValueError(f"pseudonymize_ip : {raw!r} n'est pas une IP ni un CIDR valide") from exc
 
@@ -974,7 +975,7 @@ class Translator:
         payload, truncated = truncate_payload(payload)
         if truncated:
             payload["_truncated_note"] = (
-                "payload tronqué à %d octets (contrat §3.1)" % MAX_PAYLOAD_BYTES
+                f"payload tronqué à {MAX_PAYLOAD_BYTES} octets (contrat §3.1)"
             )
 
         event = {
@@ -991,7 +992,7 @@ class Translator:
             "severity_hint": severity,
             "labels": self._labels(flat),
             "payload": payload,
-            "raw_ref": "truncated:payload>%d" % MAX_PAYLOAD_BYTES if truncated else None,
+            "raw_ref": f"truncated:payload>{MAX_PAYLOAD_BYTES}" if truncated else None,
         }
         return self._clean(event)
 
@@ -1022,7 +1023,7 @@ class Translator:
         payload, truncated = truncate_payload(event["payload"])
         event["payload"] = payload
         if truncated and not event["raw_ref"]:
-            event["raw_ref"] = "truncated:payload>%d" % MAX_PAYLOAD_BYTES
+            event["raw_ref"] = f"truncated:payload>{MAX_PAYLOAD_BYTES}"
         return event
 
     def _clean(self, event: dict[str, Any]) -> dict[str, Any]:
@@ -1069,7 +1070,7 @@ def validate_event(event: Mapping[str, Any]) -> None:
     if not isinstance(payload, Mapping):
         raise ValueError("payload doit être un objet")
     if serialized_size(payload) > MAX_PAYLOAD_BYTES:
-        raise ValueError("payload sérialisé > %d octets (contrat §3.1)" % MAX_PAYLOAD_BYTES)
+        raise ValueError(f"payload sérialisé > {MAX_PAYLOAD_BYTES} octets (contrat §3.1)")
     parsed = parse_timestamp(event.get("ts"))
     if parsed is None:
         raise ValueError("ts illisible : {!r}".format(event.get("ts")))
@@ -1096,7 +1097,7 @@ def iter_documents(text: str, *, jsonl: bool) -> Iterator[Any]:
             try:
                 yield json.loads(line)
             except ValueError as exc:
-                raise ValueError("ligne %d : JSON invalide (%s)" % (number, exc)) from exc
+                raise ValueError(f"ligne {number} : JSON invalide ({exc})") from exc
         return
     stripped = text.strip()
     if not stripped:
@@ -1191,9 +1192,19 @@ def post_json(
     }
     if api_key:
         headers["X-API-Key"] = api_key
-    request = urlrequest.Request(url, data=data, headers=headers, method="POST")
+
+    # S310 : `urlopen` ouvrirait n'importe quel schéma (`file:`, `ftp:`, `data:`…) alors que
+    # cette URL vient de la ligne de commande. Les deux `# noqa: S310` ci-dessous pointent sur
+    # ce contrôle, seule barrière avant la connexion.
+    scheme = urlparse.urlparse(url).scheme.lower()
+    if scheme not in ("http", "https"):
+        raise TransportError(
+            f"schéma d'URL refusé : {scheme or '(absent)'} — seuls http et https sont acceptés."
+        )
+
+    request = urlrequest.Request(url, data=data, headers=headers, method="POST")  # noqa: S310
     try:
-        with urlrequest.urlopen(request, timeout=timeout) as response:
+        with urlrequest.urlopen(request, timeout=timeout) as response:  # noqa: S310
             raw = response.read()
             return response.status, _decode(raw), _text(raw), response.headers
     except urlerror.HTTPError as exc:
@@ -1255,7 +1266,7 @@ def error_summary(payload: Any, raw_text: str) -> str:
 def chunk_events(events: Sequence[dict[str, Any]], size: int) -> Iterator[list[dict[str, Any]]]:
     """Découpe une séquence d'événements en lots de *size* (≤ 500, contrat §4.3)."""
     if size < 1 or size > MAX_BATCH_SIZE:
-        raise ValueError("batch_size doit être compris entre 1 et %d" % MAX_BATCH_SIZE)
+        raise ValueError(f"batch_size doit être compris entre 1 et {MAX_BATCH_SIZE}")
     for start in range(0, len(events), size):
         yield list(events[start : start + size])
 
@@ -1297,8 +1308,8 @@ def post_events(
                 delay = 1.0 if status == 429 else 2.0
             delay = max(0.0, min(delay, float(retry_after_max)))
             log(
-                "lot %d/%d : HTTP %d — nouvelle tentative unique dans %.1f s (Retry-After honoré)"
-                % (index, total_batches, status, delay)
+                f"lot {index}/{total_batches} : HTTP {status} — nouvelle tentative unique "
+                f"dans {delay:.1f} s (Retry-After honoré)"
             )
             if delay:
                 sleep(delay)
@@ -1320,27 +1331,28 @@ def post_events(
                     counters["findings"].extend(findings)
             if counters["rejected"]:
                 log(
-                    "lot %d/%d : HTTP %d — %s accepté(s), %s rejeté(s)"
-                    % (index, total_batches, status, counters["accepted"], counters["rejected"])
+                    "lot {}/{} : HTTP {} — {} accepté(s), {} rejeté(s)".format(
+                        index, total_batches, status, counters["accepted"], counters["rejected"]
+                    )
                 )
             continue
 
         if status in (401, 403):
             log(
-                "HTTP %d : clé API absente, invalide, révoquée ou rôle sans capacité « write:events » "
-                "(contrat §4.2) — vérifiez THOT_SECURE_API_KEY. %s"
-                % (status, error_summary(payload, raw_text))
+                f"HTTP {status} : clé API absente, invalide, révoquée ou rôle sans capacité "
+                "« write:events » (contrat §4.2) — vérifiez THOT_SECURE_API_KEY. "
+                f"{error_summary(payload, raw_text)}"
             )
             return 2, counters
 
         if status in (400, 409, 422):
             log(
-                "HTTP %d : événement refusé par le serveur — %s"
-                % (status, error_summary(payload, raw_text))
+                f"HTTP {status} : événement refusé par le serveur — "
+                f"{error_summary(payload, raw_text)}"
             )
             return 3, counters
 
-        log("HTTP %d : réponse inattendue — %s" % (status, error_summary(payload, raw_text)))
+        log(f"HTTP {status} : réponse inattendue — {error_summary(payload, raw_text)}")
         return 1, counters
 
     if counters["rejected"]:
@@ -1407,7 +1419,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--batch-size",
         type=int,
         default=DEFAULT_BATCH_SIZE,
-        help="événements par lot (1 à %d, contrat §4.3)" % MAX_BATCH_SIZE,
+        help=f"événements par lot (1 à {MAX_BATCH_SIZE}, contrat §4.3)",
     )
     parser.add_argument(
         "--timeout",
@@ -1444,7 +1456,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(list(argv) if argv is not None else None)
 
     if args.batch_size < 1 or args.batch_size > MAX_BATCH_SIZE:
-        _stderr("--batch-size doit être compris entre 1 et %d" % MAX_BATCH_SIZE)
+        _stderr(f"--batch-size doit être compris entre 1 et {MAX_BATCH_SIZE}")
         return 2
     if args.timeout <= 0:
         _stderr("--timeout doit être strictement positif")
@@ -1484,7 +1496,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         try:
             events.append(translator.translate(document))
         except (TranslationError, ValueError) as exc:
-            _stderr("document %d : traduction impossible — %s" % (index, exc))
+            _stderr(f"document {index} : traduction impossible — {exc}")
             return 2
 
     if not args.ip_salt:
@@ -1498,8 +1510,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         payload: Any = events[0] if len(events) == 1 else {"events": events}
         print(json.dumps(payload, ensure_ascii=False, indent=2, default=str))
         _stderr(
-            "--dry-run : %d événement(s) traduit(s), aucune requête envoyée vers %s"
-            % (len(events), _safe_url(str(args.url)))
+            f"--dry-run : {len(events)} événement(s) traduit(s), aucune requête envoyée vers "
+            f"{_safe_url(str(args.url))}"
         )
         return 0
 
@@ -1513,8 +1525,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     endpoint = "{}/api/v1/events".format(str(args.url).rstrip("/"))
     if args.verbose:
         _stderr(
-            "%d événement(s) → %s (lots de %d, profil %s)"
-            % (len(events), _safe_url(endpoint), args.batch_size, args.source)
+            f"{len(events)} événement(s) → {_safe_url(endpoint)} "
+            f"(lots de {args.batch_size}, profil {args.source})"
         )
 
     try:
@@ -1532,8 +1544,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
 
     _stderr(
-        "ingestion terminée : %d accepté(s), %d rejeté(s), %d finding(s) créé(s)"
-        % (
+        "ingestion terminée : {} accepté(s), {} rejeté(s), {} finding(s) créé(s)".format(
             counters.get("accepted", 0),
             counters.get("rejected", 0),
             len(counters.get("findings") or []),

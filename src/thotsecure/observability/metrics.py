@@ -17,6 +17,11 @@ from collections import defaultdict
 from collections.abc import Callable, Iterable
 from typing import Any
 
+from ..core.logging_setup import get_logger
+
+#: Journalise les échecs de collecte de métriques (jamais silencieux).
+log = get_logger("observability.metrics")
+
 #: Buckets d'histogramme par défaut (secondes), adaptés à un pipeline de détection.
 DEFAULT_BUCKETS: tuple[float, ...] = (
     0.001,
@@ -151,8 +156,10 @@ class MetricsRegistry:
         for collector in list(self._collectors):
             try:
                 collector(self)
-            except Exception:
-                continue
+            except Exception as exc:
+                # Un collecteur cassé ne doit pas priver l'exploitation de *toutes* les autres
+                # métriques : on l'isole, mais l'échec est journalisé (jamais avalé en silence).
+                log.warning("collecteur de métriques en échec", extra={"error": str(exc)})
 
         lines: list[str] = []
         with self._lock:
@@ -224,7 +231,9 @@ class _Timer:
 #: Catalogue des métriques exposées (également utilisé par les alertes du déploiement).
 METRICS_CATALOG: dict[str, str] = {
     "thotsecure_events_ingested_total": "Nombre total d'événements acceptés par tenant.",
-    "thotsecure_events_rejected_total": "Nombre d'événements refusés (tenant inconnu, lot trop grand).",
+    "thotsecure_events_rejected_total": (
+        "Nombre d'événements refusés (tenant inconnu, lot trop grand)."
+    ),
     "thotsecure_findings_total": "Findings créés, par sévérité.",
     "thotsecure_findings_open": "Findings actuellement ouverts.",
     "thotsecure_rule_eval_seconds": "Durée d'évaluation d'un événement par le moteur de règles.",
@@ -234,10 +243,16 @@ METRICS_CATALOG: dict[str, str] = {
     "thotsecure_actions_auto_total": "Actions déclenchées sans approbation humaine.",
     "thotsecure_actions_pending_approval": "Actions en attente d'approbation.",
     "thotsecure_rollbacks_total": "Rollbacks exécutés.",
-    "thotsecure_decisions_total": "Décisions par type (auto, require_approval, notify_only, ignore).",
+    "thotsecure_decisions_total": (
+        "Décisions par type (auto, require_approval, notify_only, ignore)."
+    ),
     "thotsecure_audit_records_total": "Enregistrements du journal d'audit.",
-    "thotsecure_audit_chain_valid": "1 si la chaîne d'audit est intègre, 0 sinon (alerte critique).",
-    "thotsecure_dry_run": "1 si le mode simulation est actif (valeur attendue en production supervisée).",
+    "thotsecure_audit_chain_valid": (
+        "1 si la chaîne d'audit est intègre, 0 sinon (alerte critique)."
+    ),
+    "thotsecure_dry_run": (
+        "1 si le mode simulation est actif (valeur attendue en production supervisée)."
+    ),
     "thotsecure_api_requests_total": "Requêtes HTTP par route et par code de statut.",
     "thotsecure_api_request_seconds": "Latence des requêtes HTTP.",
     "thotsecure_ws_clients": "Clients WebSocket connectés.",

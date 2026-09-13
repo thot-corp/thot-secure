@@ -219,11 +219,13 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"    suggestion : #{hint}")
         print()
         print(
-            f"{len(files)} fichier(s) analysé(s) — {internal} lien(s) interne(s), {external} lien(s) externe(s) ignoré(s)"
+            f"{len(files)} fichier(s) analysé(s) — {internal} lien(s) interne(s), "
+            f"{external} lien(s) externe(s) ignoré(s)"
         )
         if broken:
             print(
-                f"x {len(broken)} lien(s) cassé(s) : `mkdocs build --strict` échouerait sur ces avertissements"
+                f"x {len(broken)} lien(s) cassé(s) : `mkdocs build --strict` échouerait sur ces "
+                "avertissements"
             )
         else:
             print("v aucun lien interne cassé")

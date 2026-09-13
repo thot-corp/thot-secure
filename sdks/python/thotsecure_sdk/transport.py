@@ -13,6 +13,7 @@ Principes
 
 from __future__ import annotations
 
+import contextlib
 import importlib.util
 import json
 import logging
@@ -204,10 +205,10 @@ class UrllibTransport(Transport):
         except urlerror.HTTPError as exc:
             # Un statut >= 400 est une réponse légitime : ce n'est pas une erreur de transport.
             body = b""
-            try:
+            # Le corps peut avoir déjà été lu (ou la connexion fermée) : toute erreur de lecture
+            # laisse le corps vide, elle ne doit jamais masquer la réponse HTTP.
+            with contextlib.suppress(Exception):  # pragma: no cover - corps déjà consommé
                 body = exc.read() or b""
-            except Exception:  # pragma: no cover - corps déjà consommé
-                body = b""
             headers = {k: v for k, v in (exc.headers.items() if exc.headers else [])}
             return HttpResponse(status_code=int(exc.code), headers=headers, content=body)
         except (urlerror.URLError, TimeoutError, ssl.SSLError, OSError) as exc:

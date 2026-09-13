@@ -75,7 +75,7 @@ class Settings(BaseSettings):
     #:      redémarrage.
     secret_key: str = ""
     #: Origine de la clé de signature : ``env`` | ``file`` | ``ephemeral`` (calculée).
-    secret_key_source: Literal["env", "file", "ephemeral"] = "ephemeral"
+    secret_key_source: Literal["env", "file", "ephemeral"] = "ephemeral"  # noqa: S105 - origine
     bootstrap_api_key: str = DEV_BOOTSTRAP_KEY
     session_ttl_seconds: int = 8 * 3600
 
@@ -387,7 +387,7 @@ class Settings(BaseSettings):
         utilisateur qui suit le démarrage rapide.
         """
         if self.secret_key:
-            self.secret_key_source = "env"
+            self.secret_key_source = "env"  # noqa: S105 - origine de la clé, pas un secret
             return
 
         path = self.secret_key_file
@@ -396,7 +396,7 @@ class Settings(BaseSettings):
                 stored = path.read_text(encoding="utf-8").strip()
                 if stored:
                     self.secret_key = stored
-                    self.secret_key_source = "file"
+                    self.secret_key_source = "file"  # noqa: S105 - origine de la clé, pas un secret
                     return
             path.parent.mkdir(parents=True, exist_ok=True)
             generated = secrets.token_urlsafe(48)
@@ -406,18 +406,18 @@ class Settings(BaseSettings):
                 # les autres utilisateurs de la machine (sans effet sur les systèmes non POSIX).
                 path.chmod(0o600)
             self.secret_key = generated
-            self.secret_key_source = "file"
+            self.secret_key_source = "file"  # noqa: S105 - origine de la clé, pas un secret
         except OSError:
             # Système de fichiers en lecture seule (conteneur durci) : on continue avec une clé
             # éphémère, mais l'avertissement de sûreté le signalera explicitement.
             self.secret_key = secrets.token_urlsafe(48)
-            self.secret_key_source = "ephemeral"
+            self.secret_key_source = "ephemeral"  # noqa: S105 - origine de la clé, pas un secret
 
     @property
     def secret_key_is_ephemeral(self) -> bool:
         """Vrai si la clé de signature a été générée au vol : les clés API et les sessions ne
         survivront pas au redémarrage, et ne sont pas partagées entre processus."""
-        return self.secret_key_source == "ephemeral"
+        return self.secret_key_source == "ephemeral"  # noqa: S105 - origine, pas un secret
 
     @property
     def bootstrap_key_is_dev(self) -> bool:
@@ -443,7 +443,7 @@ class Settings(BaseSettings):
                 "sessions ne seront pas partagées entre processus et seront invalidées au "
                 "redémarrage. Définissez THOT_SECRET_KEY."
             )
-        elif self.secret_key_source == "file":
+        elif self.secret_key_source == "file":  # noqa: S105 - origine de la clé, pas un secret
             warnings.append(
                 f"Clé de signature persistée dans {self.secret_key_file} (permissions 0600). "
                 "Pour un déploiement multi-nœuds ou un conteneur sans volume persistant, "

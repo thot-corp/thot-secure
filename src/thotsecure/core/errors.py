@@ -144,14 +144,14 @@ class AuditIntegrityError(ThotSecureError):
         self.broken_at = broken_at
 
 
-class DryRunRefused(ThotSecureError):
+class DryRunRefused(ThotSecureError):  # noqa: N818 - nom public exporté (contrat d'API)
     """Action refusée car le mode simulation est actif (comportement attendu et sûr)."""
 
     code = "dry_run_refused"
     http_status = 409
 
 
-class AutonomyRefused(ThotSecureError):
+class AutonomyRefused(ThotSecureError):  # noqa: N818 - nom public exporté (contrat d'API)
     """Le mode d'autonomie du tenant exige une approbation humaine."""
 
     code = "autonomy_refused"

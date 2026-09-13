@@ -14,6 +14,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from fastapi import WebSocketDisconnect
 from fastapi.testclient import TestClient
 
 from thotsecure.core.models import Tenant
@@ -483,9 +484,13 @@ remediation: Ne rien faire, c'est un test.
 
 class StreamTest(ApiTestCase):
     def test_websocket_requires_authentication(self) -> None:
-        with self.assertRaises(Exception):
-            with self.client.websocket_connect("/api/v1/ws/stream") as socket:
-                socket.receive_json()
+        # Sans clé ni jeton, l'application ferme la connexion avant l'acceptation
+        # (``close(code=1008)``) : Starlette lève ``WebSocketDisconnect`` au handshake.
+        with (
+            self.assertRaises(WebSocketDisconnect),
+            self.client.websocket_connect("/api/v1/ws/stream") as socket,
+        ):
+            socket.receive_json()
 
     def test_websocket_sends_hello_frame(self) -> None:
         with self.client.websocket_connect(

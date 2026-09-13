@@ -57,11 +57,13 @@ def plan_action(
     return _action_payload(service, action, tenant)
 
 
+# ``Query(...)`` en valeur par défaut : FastAPI lit ces appels pour construire le schéma de la
+# requête (patron imposé par le framework ; signature gelée par le contrat d'API).
 @router.get("/actions", summary="Lister les actions")
 def list_actions(
     service: ServiceDep,
     principal: PrincipalDep,
-    status_filter: list[str] | None = Query(default=None, alias="status"),
+    status_filter: list[str] | None = Query(default=None, alias="status"),  # noqa: B008
     playbook: str | None = None,
     finding_id: str | None = None,
     limit: int = Query(default=100, ge=1, le=500),

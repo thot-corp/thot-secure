@@ -125,7 +125,10 @@ def load_policies_from_dir(
                     RuleDiagnostic(
                         path=str(file_path),
                         rule_id=policy.id,
-                        error=f"identifiant de politique en double (déjà défini dans {seen[policy.id]})",
+                        error=(
+                            "identifiant de politique en double (déjà défini dans "
+                            f"{seen[policy.id]})"
+                        ),
                     )
                 )
                 continue
@@ -190,15 +193,21 @@ def validate_policy(policy: Policy, *, known_playbooks: set[str] | None = None) 
         else:
             problems.append(f"valeur invalide pour '{key}': {type(value).__name__}")
 
-    if policy.then.playbook and known_playbooks is not None:
-        if policy.then.playbook not in known_playbooks:
-            problems.append(
-                f"then.playbook='{policy.then.playbook}' n'existe pas "
-                f"(disponibles: {sorted(known_playbooks)})"
-            )
-    if policy.rollback.playbook and known_playbooks is not None:
-        if policy.rollback.playbook not in known_playbooks:
-            problems.append(f"rollback.playbook='{policy.rollback.playbook}' n'existe pas")
+    if (
+        policy.then.playbook
+        and known_playbooks is not None
+        and policy.then.playbook not in known_playbooks
+    ):
+        problems.append(
+            f"then.playbook='{policy.then.playbook}' n'existe pas "
+            f"(disponibles: {sorted(known_playbooks)})"
+        )
+    if (
+        policy.rollback.playbook
+        and known_playbooks is not None
+        and policy.rollback.playbook not in known_playbooks
+    ):
+        problems.append(f"rollback.playbook='{policy.rollback.playbook}' n'existe pas")
 
     if policy.then.decision == "auto" and not policy.when:
         problems.append(
@@ -206,12 +215,15 @@ def validate_policy(policy: Policy, *, known_playbooks: set[str] | None = None) 
             "tous les findings : c'est interdit (ajoutez au moins une condition)"
         )
 
-    if policy.then.dry_run is False and policy.then.decision == "auto":
-        # Autorisé, mais cela désactive une protection : on exige une description explicite.
-        if not policy.description.strip():
-            problems.append(
-                "une politique 'auto' avec dry_run=false doit être documentée ('description')"
-            )
+    # Autorisé, mais cela désactive une protection : on exige une description explicite.
+    if (
+        policy.then.dry_run is False
+        and policy.then.decision == "auto"
+        and not policy.description.strip()
+    ):
+        problems.append(
+            "une politique 'auto' avec dry_run=false doit être documentée ('description')"
+        )
 
     if policy.then.max_actions_per_hour is not None and policy.then.max_actions_per_hour > 100:
         problems.append("then.max_actions_per_hour > 100 : refusé (risque de tempête d'actions)")

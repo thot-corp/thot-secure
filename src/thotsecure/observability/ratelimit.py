@@ -4,7 +4,7 @@ Objectif : qu'un client fautif (ou un collecteur mal configuré) ne puisse pas s
 service. Un seau à jetons par clé API, en mémoire, sans dépendance externe.
 
 Choix assumé : la limite est **par processus**. En déploiement multi-réplicas, chaque réplique
-applique sa propre limite — soit ``N × THOT_RATE_LIMIT_PER_MIN``. C'est documenté
+applique sa propre limite — soit ``N x THOT_RATE_LIMIT_PER_MIN``. C'est documenté
 explicitement dans ``docs/operations/deployment.md`` : mieux vaut une limite approximative
 documentée qu'une limite exacte qui exige Redis.
 """

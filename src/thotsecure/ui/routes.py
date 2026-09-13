@@ -193,7 +193,7 @@ def build_ui_router() -> APIRouter:
     def logout(request: Request, csrf_token: str = Form(default="")) -> Response:
         service = _service(request)
         principal = _principal(request, service)
-        with _suppress_errors():
+        with _SuppressExpiredSession():
             _check_csrf(service, request, csrf_token)
         if principal is not None:
             service.audit.record(
@@ -519,14 +519,29 @@ def _service(request: Request) -> Service:
     return service
 
 
-class _suppress_errors:
-    """Ignore une erreur CSRF à la déconnexion : on doit toujours pouvoir se déconnecter."""
+class _SuppressExpiredSession:
+    """Avale **un seul** cas : un jeton CSRF refusé à la déconnexion.
+
+    On doit toujours pouvoir se déconnecter — une session expirée ne doit pas enfermer
+    l'utilisateur dans une console dont il ne peut plus sortir. Mais la version précédente
+    avalait **tout** ``ThotSecureError`` : une panne de base pendant la déconnexion disparaissait
+    donc sans trace, ce qui est exactement le genre d'échec silencieux qu'un produit de sécurité
+    ne peut pas se permettre. Seul le refus attendu est supprimé, et il est journalisé.
+    """
 
     def __enter__(self) -> None:
         return None
 
     def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> bool:
-        return exc_type is not None and issubclass(exc_type, ThotSecureError)
+        if exc_type is not None and issubclass(exc_type, PermissionDeniedError):
+            log.info("déconnexion avec un jeton CSRF expiré : session fermée quand même")
+            return True
+        if exc_type is not None and issubclass(exc_type, ThotSecureError):
+            log.error(
+                "déconnexion interrompue par une erreur du produit",
+                extra={"error": str(exc)[:300], "type": exc_type.__name__},
+            )
+        return False
 
 
 __all__ = ["COOKIE_NAME", "CSRF_FIELD", "STATIC_DIR", "TEMPLATES_DIR", "build_ui_router"]

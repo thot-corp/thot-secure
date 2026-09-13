@@ -547,6 +547,39 @@ detection at all.
   `cryptography`, used by the TLS collector's key-strength check. That one is genuinely
   optional, so it is now a discoverable extra, `pip install "thotsecure[tls]"`, instead of a
   feature nobody could find.
+- **The PostgreSQL schema could not be created at all**: the DDL created the partial index
+  `idx_events_claims` on `claimed_at` *before* the `ALTER TABLE ... ADD COLUMN claimed_at`
+  statements that create the column. On a fresh database PostgreSQL rejects an index on a
+  column that does not exist yet, so the whole schema initialisation failed and every
+  PostgreSQL conformance test errored out. Columns first, index afterwards — and the ordering
+  is now commented so it is not "tidied up" by mistake.
+- **`claim_pending_events(lease_seconds=0)` silently did something else**: a zero lease was
+  clamped to one second, which broke the documented meaning of the value — "the previous worker
+  is dead, make its reservations reclaimable now". Zero is now honoured, and negative values
+  are treated as zero rather than as a one-second lease.
+- **`docker-compose.yml` was not deployable**: `uid` and `gid` are not accepted keys of the
+  long-syntax `tmpfs:` block, so `docker compose config` rejected the shipped file. `mode: 1777`
+  already makes ownership irrelevant for a temporary directory.
+- **The syslog collector used an ambiguous date parse**: RFC 3164 timestamps carry no year, and
+  Python 3.13 deprecates asking `strptime` for a date without one. The project turns
+  `DeprecationWarning` from its own modules into errors, so the pytest step failed on 3.13
+  only. The timestamp is now parsed component by component, with the year-boundary correction
+  kept and invalid input (31 February, out-of-range hour) rejected explicitly.
+- **The documentation build failed on links leaving `docs/`**: MkDocs cannot resolve a relative
+  link to a repository-root file, even though the file exists on disk — 21 such links pointed at
+  `CHANGELOG.md`, `CONTRIBUTING.md`, `SECURITY.md` and friends from inside the documentation.
+  They now use the absolute URL of the file on the forge, and
+  `scripts/check-docs-links.py` reports this class of link explicitly instead of treating it as
+  a valid internal link.
+- **A green lint job was never reachable**: `ruff check .` reported **1479** diagnostics, so the
+  job had failed on every push since the first commit. Automatic corrections brought that down
+  to 238, and the rest was fixed by hand — see *Changed* below for what remains ignored and why.
+- **GitHub Pages deployment failed on a repository setting**: the build job ran
+  `actions/configure-pages`, so a repository whose Pages source was not yet set to "GitHub
+  Actions" showed a red build even though the documentation compiled cleanly. Configuration
+  moved to the privileged deploy job, where a failure is reported as a warning with the exact
+  one-time action the owner must take, instead of a permanent red cross that trains people to
+  ignore it.
 
 ### Security
 

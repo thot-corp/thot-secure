@@ -65,7 +65,7 @@ CLOUDFRONT_REGION = "us-east-1"
 ALLOWED_SCOPES = ("REGIONAL", "CLOUDFRONT")
 
 #: Préfixe du jeton de rollback (:data:`rollback_token`), pour rester lisible et vérifiable.
-TOKEN_PREFIX = "wafv2"
+TOKEN_PREFIX = "wafv2"  # noqa: S105 - préfixe de jeton de rollback, pas un secret
 
 
 # --------------------------------------------------------------------------------------

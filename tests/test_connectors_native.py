@@ -50,8 +50,9 @@ from thotsecure.actions.connectors.aws_waf import (
     sha256_hex,
     sign_request,
 )
-from thotsecure.actions.connectors.base import redact_params
+from thotsecure.actions.connectors.base import ConnectorNotConfiguredError, redact_params
 from thotsecure.actions.connectors.cloudflare import CloudflareConnector
+from thotsecure.actions.connectors.http_webhook import HttpWebhookConnector
 from thotsecure.actions.connectors.notifications import (
     GithubIssueConnector,
     SlackConnector,
@@ -341,11 +342,13 @@ class FakeApiServer:
                 self.end_headers()
                 self.wfile.write(body)
 
-            do_GET = _handle
-            do_POST = _handle
-            do_PUT = _handle
-            do_PATCH = _handle
-            do_DELETE = _handle
+            # Noms imposés par `http.server.BaseHTTPRequestHandler`, qui répartit les méthodes
+            # HTTP par attribut `do_<VERBE>` : les renommer casserait le faux serveur de test.
+            do_GET = _handle  # noqa: N815
+            do_POST = _handle  # noqa: N815
+            do_PUT = _handle  # noqa: N815
+            do_PATCH = _handle  # noqa: N815
+            do_DELETE = _handle  # noqa: N815
 
             def log_message(self, *args: object) -> None:  # silence le serveur de test
                 return
@@ -390,7 +393,9 @@ class NativeConnectorTestCase(unittest.TestCase):
         self.addCleanup(server.close)
         return server
 
-    def assertNoSecret(self, secret: str, payload: Any, message: str = "") -> None:
+    # Nom aligné sur l'API d'assertion de `unittest` (`assertEqual`, `assertIn`…) : conservé
+    # tel quel, il est appelé par de nombreux tests.
+    def assertNoSecret(self, secret: str, payload: Any, message: str = "") -> None:  # noqa: N802
         """Aucune trace d'un secret dans un résultat, sérialisé en JSON."""
         rendered = json.dumps(payload, ensure_ascii=False, default=str)
         self.assertNotIn(secret, rendered, message or "un secret a fuité dans le résultat")
@@ -1963,6 +1968,61 @@ class NativeRegistryTest(unittest.TestCase):
         self.assertEqual(
             frozenset({"open_ticket", "close_ticket"}), GithubIssueConnector({}).capabilities
         )
+
+
+class WebhookSchemeValidationTest(unittest.TestCase):
+    """Une URL de connecteur ne doit jamais ouvrir autre chose que du HTTP.
+
+    Défaut corrigé, et il méritait un test : ``rollback_url`` était renvoyée telle quelle à
+    ``urlopen``. ``urllib`` ouvre aussi ``file://``, ``ftp://`` et ``data:`` — une ligne de
+    configuration mal remplie transformait donc le connecteur en lecteur de disque, et le
+    contenu du fichier se retrouvait dans le résultat de l'action, donc dans le journal,
+    l'audit et l'API.
+    """
+
+    def _connector(self, **settings: object) -> HttpWebhookConnector:
+        base: dict[str, object] = {"url": "https://passerelle.interne/thotsecure"}
+        base.update(settings)
+        return HttpWebhookConnector(base, dry_run=True)
+
+    def test_http_and_https_are_accepted(self) -> None:
+        for value in (
+            "https://passerelle.interne/hook",
+            "http://127.0.0.1:9000/hook",
+            # La casse ne doit pas décider : `startswith` refusait `HTTPS://` à tort.
+            "HTTPS://PASSERELLE.INTERNE/hook",
+        ):
+            with self.subTest(url=value):
+                self.assertEqual(
+                    value, self._connector(rollback_url=value, url=value).rollback_url
+                )
+
+    def test_every_other_scheme_is_refused(self) -> None:
+        for value in (
+            "file:///etc/passwd",
+            "file://C:/Windows/win.ini",
+            "ftp://exemple.interne/fichier",
+            "data:text/plain;base64,QQ==",
+            "gopher://exemple.interne/",
+            "sans-schema",
+        ):
+            with self.subTest(url=value):
+                connector = self._connector(rollback_url=value)
+                with self.assertRaises(ConnectorNotConfiguredError):
+                    _ = connector.rollback_url
+
+    def test_an_absent_rollback_url_stays_absent(self) -> None:
+        self.assertIsNone(self._connector().rollback_url)
+
+    def test_a_bad_scheme_becomes_a_recorded_failure_not_a_crash(self) -> None:
+        """Le contrat de connecteur : jamais d'exception qui remonte, toujours un résultat."""
+        connector = self._connector(rollback_url="file:///etc/passwd")
+        connector.dry_run = False  # chemin réel : l'URL est refusée avant toute ouverture
+        # `unblock_ip` est l'opération de rollback : c'est elle qui lit `rollback_url`.
+        result = connector.call("unblock_ip", {"target": "203.0.113.9"})
+        self.assertFalse(result.ok)
+        self.assertIn("rollback_url", result.error or "")
+        self.assertIn("refusé", result.error or "")
 
 
 if __name__ == "__main__":  # pragma: no cover

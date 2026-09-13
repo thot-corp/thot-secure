@@ -33,7 +33,7 @@ log = get_logger("actions.connector.notifications")
 
 #: Gravités connues, avec l'emoji qui rend le canal lisible d'un coup d'œil.
 SEVERITY_EMOJI = {
-    "info": "ℹ️",
+    "info": "ℹ️",  # noqa: RUF001 - emoji voulu : il rend le canal lisible d'un coup d'œil
     "low": "🔵",
     "medium": "⚠️",
     "high": "🔴",

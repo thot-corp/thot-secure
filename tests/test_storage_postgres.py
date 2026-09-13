@@ -350,9 +350,11 @@ class DriverLoadingTest(unittest.TestCase):
             def import_module(name: str) -> Any:
                 raise ImportError(f"pas de module {name}")
 
-        with mock.patch.object(pg, "importlib", _NoModules):
-            with self.assertRaises(StorageError) as raised:
-                pg.import_driver(refresh=True)
+        with (
+            mock.patch.object(pg, "importlib", _NoModules),
+            self.assertRaises(StorageError) as raised,
+        ):
+            pg.import_driver(refresh=True)
         message = raised.exception.message
         self.assertIn('pip install "thotsecure[postgres]"', message)
         self.assertIn("psycopg", message)
@@ -851,7 +853,7 @@ class PostgresStoreBehaviourTest(unittest.TestCase):
         self.assertEqual(1500, inserted, "le compte vient des lignes réellement renvoyées")
 
     def test_insert_event_deduplication_is_reported_as_false(self) -> None:
-        self.database.responder = lambda sql, params: [] if "RETURNING event_id" in sql else []
+        self.database.responder = lambda sql, params: []
         self.assertFalse(self.store.insert_event(sample_event()))
         self.database.responder = lambda sql, params: (
             [{"event_id": "ev_0000"}] if "RETURNING event_id" in sql else []

@@ -738,7 +738,10 @@ def _cmd_tenant(args: argparse.Namespace, service: Service, out: Output) -> int:
         )
         out.emit(
             stored.model_dump(mode="json"),
-            text=f"tenant '{stored.tenant_id}' enregistré (mode {stored.mode}, dry-run {stored.dry_run})",
+            text=(
+                f"tenant '{stored.tenant_id}' enregistré "
+                f"(mode {stored.mode}, dry-run {stored.dry_run})"
+            ),
         )
         if args.no_dry_run:
             out.warn(
@@ -1066,7 +1069,8 @@ def _cmd_findings(args: argparse.Namespace, service: Service, out: Output) -> in
             print(f"  identifiant : {finding.finding_id}")
             print(f"  règle       : {finding.rule_id} — {finding.rule_name}")
             print(
-                f"  sévérité    : {finding.severity}   score : {finding.risk_score:.1f}/100 ({risk_band(finding.risk_score)})"
+                f"  sévérité    : {finding.severity}   score : {finding.risk_score:.1f}/100 "
+                f"({risk_band(finding.risk_score)})"
             )
             print(f"  statut      : {finding.status}   occurrences : {finding.count}")
             print(f"  période     : {iso_z(finding.first_seen)} → {iso_z(finding.last_seen)}")
@@ -1083,7 +1087,8 @@ def _cmd_findings(args: argparse.Namespace, service: Service, out: Output) -> in
                 print("  actions :")
                 for action in actions:
                     print(
-                        f"    {action.action_id} {action.playbook} → {action.status} (dry-run {action.dry_run})"
+                        f"    {action.action_id} {action.playbook} → {action.status} "
+                        f"(dry-run {action.dry_run})"
                     )
         return EXIT_OK
 
@@ -1181,7 +1186,8 @@ def _cmd_actions(args: argparse.Namespace, service: Service, out: Output) -> int
         print(f"  cible       : {action.target}")
         print(f"  paramètres  : {json.dumps(action.params, ensure_ascii=False)}")
         print(
-            f"  simulation  : {'oui' if action.dry_run else 'NON (effet réel possible après approbation)'}"
+            "  simulation  : "
+            f"{'oui' if action.dry_run else 'NON (effet réel possible après approbation)'}"
         )
         print(f"  rév. dispo. : {'oui' if action.rollback.available else 'non'}")
         print()
@@ -1233,12 +1239,14 @@ def _cmd_actions(args: argparse.Namespace, service: Service, out: Output) -> int
                         "simulé" if step.get("simulated") else ("ok" if step.get("ok") else "ÉCHEC")
                     )
                     print(
-                        f"    [{marker}] {step.get('connector')}.{step.get('call')} — {step.get('detail') or step.get('error')}"
+                        f"    [{marker}] {step.get('connector')}.{step.get('call')} — "
+                        f"{step.get('detail') or step.get('error')}"
                     )
             if action.status == "succeeded" and action.rollback.available:
                 print()
                 print(
-                    f"  annulation possible : thotsecure actions rollback {action.action_id} --tenant {args.tenant}"
+                    f"  annulation possible : thotsecure actions rollback {action.action_id} "
+                    f"--tenant {args.tenant}"
                 )
             if action.status == "failed":
                 out.warn(f"échec : {action.reason}")
@@ -1336,16 +1344,15 @@ def _cmd_probe(args: argparse.Namespace, service: Service, out: Output) -> int:
     """Audit de surface **de ses propres actifs déclarés**."""
     scope = service.targets.for_tenant(args.tenant)
     verdict = service.targets.check_probe(args.tenant)
-    if args.target:
-        if not any(
-            args.target in asset.urls or args.target == asset.host for asset in scope.assets
-        ):
-            from .core.errors import TargetNotAllowedError
+    if args.target and not any(
+        args.target in asset.urls or args.target == asset.host for asset in scope.assets
+    ):
+        from .core.errors import TargetNotAllowedError
 
-            raise TargetNotAllowedError(
-                f"la cible '{args.target}' n'est pas déclarée pour le tenant '{args.tenant}'",
-                details={"declared": [url for asset in scope.assets for url in asset.urls]},
-            )
+        raise TargetNotAllowedError(
+            f"la cible '{args.target}' n'est pas déclarée pour le tenant '{args.tenant}'",
+            details={"declared": [url for asset in scope.assets for url in asset.urls]},
+        )
     if not verdict.allowed:
         out.error(verdict.reason)
         out.error("Thot Secure n'audite que les actifs que vous avez explicitement déclarés")
@@ -1517,7 +1524,8 @@ def _cmd_demo(args: argparse.Namespace, service: Service, out: Output) -> int:
     else:
         out.title(f"Démonstration « {args.scenario} » — tenant '{tenant_id}'")
         print(
-            f"  {outcome.result.accepted} événement(s) ingéré(s), {len(outcome.findings)} finding(s)"
+            f"  {outcome.result.accepted} événement(s) ingéré(s), "
+            f"{len(outcome.findings)} finding(s)"
         )
         for index, finding in enumerate(outcome.findings):
             decision = outcome.decisions[index] if index < len(outcome.decisions) else None
@@ -1527,7 +1535,8 @@ def _cmd_demo(args: argparse.Namespace, service: Service, out: Output) -> int:
             print(f"    remédiation : {finding.remediation[:80]}")
             if decision is not None:
                 print(
-                    f"    décision    : {decision.decision} (politique {decision.policy_id or 'aucune'})"
+                    f"    décision    : {decision.decision} "
+                    f"(politique {decision.policy_id or 'aucune'})"
                 )
                 if decision.guards:
                     print(f"    garde-fous  : {', '.join(decision.guards)}")

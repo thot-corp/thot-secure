@@ -41,21 +41,30 @@ SSH_CHECKS: tuple[ConfigCheck, ...] = (
         check="ssh_permit_root_login",
         pattern=r"(?im)^\s*PermitRootLogin\s+(yes|without-password|prohibit-password)",
         severity="high",
-        message="La connexion directe de root en SSH est autorisée : un mot de passe root compromis suffit.",
+        message=(
+            "La connexion directe de root en SSH est autorisée : "
+            "un mot de passe root compromis suffit."
+        ),
         reference="CIS 5.2.8 — Ensure SSH root login is disabled",
     ),
     ConfigCheck(
         check="ssh_password_authentication",
         pattern=r"(?im)^\s*PasswordAuthentication\s+yes",
         severity="medium",
-        message="L'authentification par mot de passe SSH est active : elle est vulnérable au bourrage d'identifiants.",
+        message=(
+            "L'authentification par mot de passe SSH est active : "
+            "elle est vulnérable au bourrage d'identifiants."
+        ),
         reference="CIS 5.2.10 — Ensure SSH access is limited / keys only",
     ),
     ConfigCheck(
         check="ssh_empty_passwords",
         pattern=r"(?im)^\s*PermitEmptyPasswords\s+yes",
         severity="critical",
-        message="Les mots de passe vides sont acceptés en SSH : accès direct sans authentification.",
+        message=(
+            "Les mots de passe vides sont acceptés en SSH : "
+            "accès direct sans authentification."
+        ),
         reference="CIS 5.2.9 — Ensure SSH PermitEmptyPasswords is disabled",
     ),
     ConfigCheck(
@@ -81,7 +90,10 @@ WEB_CHECKS: tuple[ConfigCheck, ...] = (
         check="web_tls_legacy_protocol",
         pattern=r"(?im)^\s*ssl_protocols\s+[^;]*\b(TLSv1|TLSv1\.1|SSLv3)\b",
         severity="high",
-        message="Des protocoles TLS obsolètes sont activés : le chiffrement est considéré comme cassé.",
+        message=(
+            "Des protocoles TLS obsolètes sont activés : "
+            "le chiffrement est considéré comme cassé."
+        ),
         reference="CIS 2.4 — Nginx TLS configuration",
     ),
     ConfigCheck(
@@ -95,14 +107,20 @@ WEB_CHECKS: tuple[ConfigCheck, ...] = (
         check="web_directory_listing",
         pattern=r"(?im)^\s*autoindex\s+on\s*;",
         severity="medium",
-        message="L'indexation automatique des répertoires est active : elle expose l'arborescence et les fichiers non liés.",
+        message=(
+            "L'indexation automatique des répertoires est active : "
+            "elle expose l'arborescence et les fichiers non liés."
+        ),
         reference="OWASP — Directory listing",
     ),
     ConfigCheck(
         check="web_missing_hsts",
         pattern=r"(?im)add_header\s+Strict-Transport-Security",
         severity="medium",
-        message="Aucun en-tête HSTS trouvé : la rétrogradation d'une première requête en HTTP est possible.",
+        message=(
+            "Aucun en-tête HSTS trouvé : "
+            "la rétrogradation d'une première requête en HTTP est possible."
+        ),
         reference="OWASP Secure Headers Project",
         expect_absent=False,
     ),
@@ -121,21 +139,30 @@ CONTAINER_CHECKS: tuple[ConfigCheck, ...] = (
         check="container_docker_socket",
         pattern=r"(?im)/var/run/docker\.sock",
         severity="critical",
-        message="Le socket Docker est monté dans un conteneur : cela équivaut à un accès root sur l'hôte.",
+        message=(
+            "Le socket Docker est monté dans un conteneur : "
+            "cela équivaut à un accès root sur l'hôte."
+        ),
         reference="CIS Docker 5.31 — Ensure the Docker socket is not mounted",
     ),
     ConfigCheck(
         check="container_host_network",
         pattern=r"(?im)network_mode\s*:\s*[\"']?host[\"']?",
         severity="high",
-        message="Un conteneur partage la pile réseau de l'hôte : les protections réseau deviennent inopérantes.",
+        message=(
+            "Un conteneur partage la pile réseau de l'hôte : "
+            "les protections réseau deviennent inopérantes."
+        ),
         reference="CIS Docker 5.9 — Ensure host network mode is not used",
     ),
     ConfigCheck(
         check="container_no_new_privileges",
         pattern=r"(?im)no-new-privileges",
         severity="medium",
-        message="L'option no-new-privileges n'est pas définie : un binaire setuid peut élever les privilèges.",
+        message=(
+            "L'option no-new-privileges n'est pas définie : "
+            "un binaire setuid peut élever les privilèges."
+        ),
         reference="CIS Docker 5.25 — Ensure no-new-privileges is set",
         expect_absent=False,
     ),

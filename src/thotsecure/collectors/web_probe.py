@@ -249,7 +249,9 @@ class WebProbeCollector(Collector):
                     source_host=host,
                     labels={"check": "cookie_without_secure", "url": url, "host": host},
                     payload={
-                        "explanation": "Un cookie de session sans attribut Secure peut fuiter en HTTP."
+                        "explanation": (
+                            "Un cookie de session sans attribut Secure peut fuiter en HTTP."
+                        )
                     },
                     severity_hint="medium",
                 )
@@ -263,7 +265,9 @@ class WebProbeCollector(Collector):
                     source_host=host,
                     labels={"check": "cookie_without_httponly", "url": url, "host": host},
                     payload={
-                        "explanation": "Sans HttpOnly, un script injecté peut lire le cookie de session."
+                        "explanation": (
+                            "Sans HttpOnly, un script injecté peut lire le cookie de session."
+                        )
                     },
                     severity_hint="medium",
                 )
@@ -277,7 +281,9 @@ class WebProbeCollector(Collector):
                     source_host=host,
                     labels={"check": "cookie_without_samesite", "url": url, "host": host},
                     payload={
-                        "explanation": "Sans SameSite, le site est exposé aux requêtes forgées (CSRF)."
+                        "explanation": (
+                            "Sans SameSite, le site est exposé aux requêtes forgées (CSRF)."
+                        )
                     },
                     severity_hint="low",
                 )

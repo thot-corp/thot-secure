@@ -58,7 +58,8 @@ def finding_to_markdown(
         f"**Identifiant du finding** : `{finding.finding_id}`  ",
         f"**Règle** : `{finding.rule_id}` — {finding.rule_name}  ",
         f"**Sévérité** : `{finding.severity}`  ",
-        f"**Score de risque** : **{finding.risk_score:.1f}/100** (bande : {risk_band(finding.risk_score)})  ",
+        f"**Score de risque** : **{finding.risk_score:.1f}/100** "
+        f"(bande : {risk_band(finding.risk_score)})  ",
         f"**Confiance de la règle** : {finding.confidence:.0%}  ",
         f"**Statut** : `{finding.status}`  ",
         f"**Occurrences** : {finding.count}  ",
@@ -189,7 +190,8 @@ def _md_cell(value: Any) -> str:
 # --------------------------------------------------------------------------------------
 
 
-HTML_TEMPLATE = """<!DOCTYPE html>
+HTML_TEMPLATE = (
+    """<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="utf-8">
@@ -197,28 +199,36 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <title>{title}</title>
 <style>
   :root {{ color-scheme: dark; }}
-  body {{ font-family: -apple-system, "Segoe UI", Roboto, sans-serif; margin: 0; background: #0b1120; color: #e2e8f0; }}
+  body {{ font-family: -apple-system, "Segoe UI", Roboto, sans-serif; """
+    """margin: 0; background: #0b1120; color: #e2e8f0; }}
   main {{ max-width: 960px; margin: 0 auto; padding: 40px 24px 80px; }}
   h1 {{ font-size: 1.7rem; line-height: 1.25; margin: 0 0 8px; }}
-  h2 {{ font-size: 1.1rem; margin-top: 36px; border-bottom: 1px solid #1e293b; padding-bottom: 6px; }}
-  .meta {{ display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 16px 0; font-size: .9rem; }}
+  h2 {{ font-size: 1.1rem; margin-top: 36px; """
+    """border-bottom: 1px solid #1e293b; padding-bottom: 6px; }}
+  .meta {{ display: grid; grid-template-columns: max-content 1fr; """
+    """gap: 4px 16px; margin: 16px 0; font-size: .9rem; }}
   .meta dt {{ color: #94a3b8; }}
   .meta dd {{ margin: 0; }}
-  code, pre {{ font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: .85rem; }}
+  code, pre {{ font-family: ui-monospace, "Cascadia Code", Consolas, monospace; """
+    """font-size: .85rem; }}
   code {{ background: #111c33; padding: 1px 5px; border-radius: 4px; }}
   pre {{ background: #111c33; padding: 12px; border-radius: 6px; overflow-x: auto; }}
   table {{ width: 100%; border-collapse: collapse; margin: 12px 0; font-size: .85rem; }}
-  th, td {{ text-align: left; padding: 6px 8px; border-bottom: 1px solid #1e293b; vertical-align: top; }}
+  th, td {{ text-align: left; padding: 6px 8px; """
+    """border-bottom: 1px solid #1e293b; vertical-align: top; }}
   th {{ color: #94a3b8; font-weight: 600; }}
-  .badge {{ display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: .75rem; font-weight: 700; text-transform: uppercase; }}
+  .badge {{ display: inline-block; padding: 2px 10px; border-radius: 999px; """
+    """font-size: .75rem; font-weight: 700; text-transform: uppercase; }}
   .sev-critical {{ background: #7f1d1d; color: #fecaca; }}
   .sev-high {{ background: #9a3412; color: #fed7aa; }}
   .sev-medium {{ background: #854d0e; color: #fef08a; }}
   .sev-low {{ background: #164e63; color: #a5f3fc; }}
   .sev-info {{ background: #1e293b; color: #cbd5e1; }}
-  .gauge {{ height: 10px; background: #1e293b; border-radius: 999px; overflow: hidden; margin: 8px 0 4px; }}
+  .gauge {{ height: 10px; background: #1e293b; border-radius: 999px; """
+    """overflow: hidden; margin: 8px 0 4px; }}
   .gauge > span {{ display: block; height: 100%; }}
-  .warn {{ background: #422006; border-left: 3px solid #f59e0b; padding: 12px 16px; border-radius: 4px; margin: 16px 0; }}
+  .warn {{ background: #422006; border-left: 3px solid #f59e0b; """
+    """padding: 12px 16px; border-radius: 4px; margin: 16px 0; }}
   footer {{ margin-top: 48px; color: #64748b; font-size: .8rem; }}
 </style>
 </head>
@@ -250,6 +260,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 </body>
 </html>
 """
+)
 
 
 def finding_to_html(
@@ -334,7 +345,8 @@ def finding_to_html(
         audit_block = (
             "<h2>Piste d'audit</h2><table><tr><th>seq</th><th>horodatage</th><th>acteur</th>"
             f"<th>action</th></tr>{rows}</table>"
-            "<p>Intégrité vérifiable par chaîne de hachage : <code>thotsecure audit verify</code>.</p>"
+            "<p>Intégrité vérifiable par chaîne de hachage : "
+            "<code>thotsecure audit verify</code>.</p>"
         )
 
     dry_run_banner = ""

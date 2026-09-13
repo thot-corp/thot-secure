@@ -48,6 +48,11 @@ class ShippedPlaybookEndToEndTest(StackTestCase):
     """
 
     dry_run = False
+    #: Mode `manual` : sans cela, la politique `auto-block-high-web` du socle de test peut
+    #: exécuter une **seconde** action automatiquement pendant l'ingestion, et le comptage des
+    #: tickets dépend alors de la seconde d'horloge (`local-ticket` nomme ses fichiers à la
+    #: seconde). C'est exactement ce qui a rendu ce test instable en CI sur Python 3.11.
+    tenant_mode = "manual"
 
     def setUp(self) -> None:
         super().setUp()
@@ -88,19 +93,27 @@ class ShippedPlaybookEndToEndTest(StackTestCase):
         )
         self.assertEqual("succeeded", executed.status, executed.result)
 
-        tickets = sorted(self._tickets_dir().glob("*.md"))
+        # On identifie le ticket **par l'action** qu'il référence, et non par un comptage :
+        # le test doit échouer si le ticket de cette action n'existe pas, pas si un autre
+        # ticket traîne à côté.
+        tickets = [
+            path
+            for path in sorted(self._tickets_dir().glob("*.md"))
+            if executed.action_id in path.read_text(encoding="utf-8")
+        ]
         self.assertEqual(
             1,
             len(tickets),
-            "l'étape de ticketing, même optionnelle, ne doit pas être sautée par un placeholder "
-            "non résolu",
+            f"aucun ticket ne référence l'action {executed.action_id} : l'étape de ticketing, "
+            "même optionnelle, ne doit pas être sautée par un placeholder non résolu",
         )
-        body = tickets[0].read_text(encoding="utf-8")
+        ticket = tickets[0]
+        body = ticket.read_text(encoding="utf-8")
         self.assertIn(finding.remediation, body, "la remédiation doit figurer dans le ticket")
         # La cible et le titre du finding sont, eux aussi, des placeholders résolus.
         self.assertIn("Blocage de 203.0.113.9", body)
         self.assertIn(finding.finding_id, body, "le ticket doit rester rattaché à son finding")
-        return executed, tickets[0]
+        return executed, ticket
 
     def test_the_shipped_block_playbook_opens_a_ticket_containing_the_remediation(self) -> None:
         """`${finding.remediation}` doit être résolu : sinon le ticket n'existe pas."""

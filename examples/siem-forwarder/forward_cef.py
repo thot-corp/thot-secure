@@ -230,7 +230,7 @@ class ApiError(RuntimeError):
     """Réponse HTTP d'erreur normalisée (§4.6)."""
 
     def __init__(self, status: int, code: str, message: str, details: Any = None) -> None:
-        super().__init__("HTTP %d · %s · %s" % (status, code or "error", message))
+        super().__init__(f"HTTP {status} · {code or 'error'} · {message}")
         self.status = int(status)
         self.code = code
         self.message = message
@@ -277,9 +277,18 @@ def http_request(
     if api_key:
         headers["X-API-Key"] = api_key
 
-    request = urlrequest.Request(url, headers=headers, method=method.upper())
+    # S310 : `urlopen` ouvrirait n'importe quel schéma (`file:`, `ftp:`, `data:`…) alors que
+    # cette URL vient de la ligne de commande. Les deux `# noqa: S310` ci-dessous pointent sur
+    # ce contrôle, seule barrière avant la connexion.
+    scheme = urlparse.urlparse(url).scheme.lower()
+    if scheme not in ("http", "https"):
+        raise TransportError(
+            f"schéma d'URL refusé : {scheme or '(absent)'} — seuls http et https sont acceptés."
+        )
+
+    request = urlrequest.Request(url, headers=headers, method=method.upper())  # noqa: S310
     try:
-        with urlrequest.urlopen(request, timeout=timeout) as response:
+        with urlrequest.urlopen(request, timeout=timeout) as response:  # noqa: S310
             return response.status, response.read()
     except urlerror.HTTPError as exc:
         return exc.code, exc.read()
@@ -332,15 +341,15 @@ class RotatingFile:
         """Effectue la rotation si le seuil est atteint."""
         if self._size() < self.max_bytes:
             return
-        oldest = Path("%s.%d" % (self.path, self.backups))
+        oldest = Path(f"{self.path}.{self.backups}")
         try:
             if oldest.exists():
                 oldest.unlink()
         except OSError as exc:
             log(f"rotation : suppression de {oldest} impossible ({exc})", level="WARN")
         for index in range(self.backups - 1, 0, -1):
-            source = Path("%s.%d" % (self.path, index))
-            target = Path("%s.%d" % (self.path, index + 1))
+            source = Path(f"{self.path}.{index}")
+            target = Path(f"{self.path}.{index + 1}")
             if source.exists():
                 try:
                     os.replace(source, target)
@@ -350,10 +359,7 @@ class RotatingFile:
             if self.path.exists():
                 os.replace(self.path, Path(f"{self.path}.1"))
                 self.rotations += 1
-                log(
-                    "rotation : %s → %s.1 (seuil %d octets)"
-                    % (self.path, self.path, self.max_bytes)
-                )
+                log(f"rotation : {self.path} → {self.path}.1 (seuil {self.max_bytes} octets)")
         except OSError as exc:
             log(f"rotation impossible ({exc}) : écriture en ajout malgré tout", level="WARN")
 
@@ -792,8 +798,7 @@ class SiemClient:
             seen.add(next_cursor)
             cursor = next_cursor
         log(
-            "limite de %d pages atteinte sur %s : résultat possiblement partiel"
-            % (max_pages, path),
+            f"limite de {max_pages} pages atteinte sur {path} : résultat possiblement partiel",
             level="WARN",
         )
         return items
@@ -986,11 +991,12 @@ class Forwarder:
                     output.write_bytes(payload)
                     output.records_written += count
                     total += count
-                    log("audit CEF : %d enregistrement(s) → %s" % (count, output.path))
+                    log(f"audit CEF : {count} enregistrement(s) → {output.path}")
                 else:
                     log(
-                        "audit CEF : %d ligne(s) déjà transmise(s) (dédupliquées)"
-                        % raw.count(b"\n")
+                        "audit CEF : {} ligne(s) déjà transmise(s) (dédupliquées)".format(
+                            raw.count(b"\n")
+                        )
                     )
             else:
                 payload, count = self._filter_lines(raw, source="audit")
@@ -999,7 +1005,7 @@ class Forwarder:
                     output.write_bytes(payload)
                     output.records_written += count
                     total += count
-                    log("audit JSONL : %d enregistrement(s) → %s" % (count, output.path))
+                    log(f"audit JSONL : {count} enregistrement(s) → {output.path}")
         return total
 
     def _audit_jsonl_fallback(self, since: str | None, until: str | None) -> bytes:
@@ -1034,12 +1040,12 @@ class Forwarder:
                         continue
                     lines.append(finding_to_cef(finding))
                 if not lines:
-                    log("findings CEF : %d finding(s) déjà transmis (dédupliqués)" % len(findings))
+                    log(f"findings CEF : {len(findings)} finding(s) déjà transmis (dédupliqués)")
                     continue
                 output = self.output("findings", "cef")
                 count = output.write_lines(lines)
                 total += count
-                log("findings CEF : %d enregistrement(s) → %s" % (count, output.path))
+                log(f"findings CEF : {count} enregistrement(s) → {output.path}")
             else:
                 payload_lines = []
                 for finding in findings:
@@ -1055,7 +1061,7 @@ class Forwarder:
                 output = self.output("findings", "jsonl")
                 count = output.write_lines(payload_lines)
                 total += count
-                log("findings JSONL : %d enregistrement(s) → %s" % (count, output.path))
+                log(f"findings JSONL : {count} enregistrement(s) → {output.path}")
         return total
 
     def _filter_lines(self, raw: bytes, *, source: str) -> tuple[bytes, int]:
@@ -1351,8 +1357,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     forwarder = Forwarder(args, client)
 
     log(
-        "démarrage : %s → %s (sources=%s, format=%s, rotation=%d octets × %d)"
-        % (
+        "démarrage : {} → {} (sources={}, format={}, rotation={} octets x {})".format(
             safe_url(args.url),
             os.path.abspath(args.out_dir),
             ",".join(args.sources),
@@ -1383,10 +1388,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             try:
                 count = forwarder.run_cycle()
                 exit_code = 0
-                log("cycle %d terminé : %d enregistrement(s) transmis" % (cycles, count))
+                log(f"cycle {cycles} terminé : {count} enregistrement(s) transmis")
             except ApiError as exc:
                 exit_code = 2 if exc.status in (401, 403) else 1
-                log("cycle %d : erreur d'API (%s)" % (cycles, exc), level="ERROR")
+                log(f"cycle {cycles} : erreur d'API ({exc})", level="ERROR")
                 if exc.status in (401, 403):
                     log(
                         "capacité manquante : « read:audit » (export du journal) et "
@@ -1397,15 +1402,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             except TransportError as exc:
                 exit_code = 1
                 log(
-                    "cycle %d : réseau indisponible (%s) — curseur NON avancé, reprise au prochain cycle"
-                    % (cycles, exc),
+                    f"cycle {cycles} : réseau indisponible ({exc}) — curseur NON avancé, reprise "
+                    "au prochain cycle",
                     level="ERROR",
                 )
             except OSError as exc:
                 exit_code = 1
                 log(
-                    "cycle %d : écriture impossible (%s) — curseur NON avancé (le SIEM ne perdra rien)"
-                    % (cycles, exc),
+                    f"cycle {cycles} : écriture impossible ({exc}) — curseur NON avancé "
+                    "(le SIEM ne perdra rien)",
                     level="ERROR",
                 )
 

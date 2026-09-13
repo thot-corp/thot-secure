@@ -362,7 +362,7 @@ def pseudonymize_ip(ip: str, salt: str, *, keep_prefix: bool = False, prefix: st
             packed_str = str(addr)
             if keep_prefix:
                 bits = 24 if addr.version == 4 else 64
-                network_text = str(ipaddress.ip_network("%s/%d" % (addr, bits), strict=False))
+                network_text = str(ipaddress.ip_network(f"{addr}/{bits}", strict=False))
     except ValueError as exc:
         raise ValueError(f"pseudonymize_ip : {raw!r} n'est pas une IP ni un CIDR valide") from exc
 
@@ -787,7 +787,7 @@ def normalize_event(
 
     payload, was_truncated = truncate_payload(payload, max_bytes=max_payload_bytes)
     if was_truncated and not raw_ref:
-        raw_ref = "truncated:payload>%d" % max_payload_bytes
+        raw_ref = f"truncated:payload>{max_payload_bytes}"
 
     parsed_ts = parse_timestamp(request_ts)
     iso_ts = _to_iso_utc(parsed_ts) if parsed_ts is not None else now_iso()
@@ -881,7 +881,7 @@ def from_syslog_line(
     labels: dict[str, Any] = {}
     if pri is not None:
         facility_code, severity_code = divmod(pri, 8)
-        labels["syslog_facility"] = _SYSLOG_FACILITIES.get(facility_code, "facility%d" % facility_code)
+        labels["syslog_facility"] = _SYSLOG_FACILITIES.get(facility_code, f"facility{facility_code}")
         labels["syslog_severity"] = severity_code
         severity_hint = _SYSLOG_SEVERITY_HINT.get(severity_code)
     if fields.get("tag"):
@@ -983,7 +983,7 @@ def iter_jsonl(
             except ValueError as exc:
                 if skip_invalid:
                     continue
-                raise ValueError("%s:%d : JSON invalide (%s)" % (file_path, number, exc)) from exc
+                raise ValueError(f"{file_path}:{number} : JSON invalide ({exc})") from exc
 
 
 def env(name: str, default: str | None = None, *, required: bool = False) -> str | None:

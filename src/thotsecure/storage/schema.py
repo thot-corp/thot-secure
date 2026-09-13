@@ -22,7 +22,8 @@ from __future__ import annotations
 #: Version du schéma, inscrite dans ``PRAGMA user_version``.
 SCHEMA_VERSION = 1
 
-SQLITE_DDL = """
+SQLITE_DDL = (
+    """
 -- ---------------------------------------------------------------------------------
 -- Tenants : frontière d'isolation. Toute table porte tenant_id.
 -- ---------------------------------------------------------------------------------
@@ -112,9 +113,11 @@ CREATE TABLE IF NOT EXISTS findings (
     created_at   TEXT NOT NULL,
     updated_at   TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_findings_tenant_status   ON findings(tenant_id, status, risk_score DESC);
+CREATE INDEX IF NOT EXISTS idx_findings_tenant_status   ON """
+    """findings(tenant_id, status, risk_score DESC);
 CREATE INDEX IF NOT EXISTS idx_findings_tenant_lastseen ON findings(tenant_id, last_seen DESC);
-CREATE INDEX IF NOT EXISTS idx_findings_dedup           ON findings(tenant_id, rule_id, dedup_key, status);
+CREATE INDEX IF NOT EXISTS idx_findings_dedup           ON """
+    """findings(tenant_id, rule_id, dedup_key, status);
 
 -- ---------------------------------------------------------------------------------
 -- Actions : cycle de vie complet, idempotence, rollback.
@@ -146,10 +149,12 @@ CREATE TABLE IF NOT EXISTS actions (
     audit_seq       INTEGER,
     reason          TEXT NOT NULL DEFAULT ''
 );
-CREATE INDEX IF NOT EXISTS idx_actions_tenant_status ON actions(tenant_id, status, requested_at DESC);
+CREATE INDEX IF NOT EXISTS idx_actions_tenant_status ON """
+    """actions(tenant_id, status, requested_at DESC);
 CREATE INDEX IF NOT EXISTS idx_actions_tenant_time   ON actions(tenant_id, requested_at DESC);
 CREATE INDEX IF NOT EXISTS idx_actions_finding       ON actions(finding_id);
-CREATE INDEX IF NOT EXISTS idx_actions_cooldown      ON actions(tenant_id, playbook, requested_at DESC);
+CREATE INDEX IF NOT EXISTS idx_actions_cooldown      ON """
+    """actions(tenant_id, playbook, requested_at DESC);
 
 -- ---------------------------------------------------------------------------------
 -- Journal d'audit append-only, chaîné par hash. Aucun UPDATE/DELETE applicatif.
@@ -188,7 +193,8 @@ CREATE TABLE IF NOT EXISTS collector_runs (
     errors       INTEGER NOT NULL DEFAULT 0,
     detail       TEXT NOT NULL DEFAULT '{}'
 );
-CREATE INDEX IF NOT EXISTS idx_collector_runs ON collector_runs(tenant_id, collector, started_at DESC);
+CREATE INDEX IF NOT EXISTS idx_collector_runs ON """
+    """collector_runs(tenant_id, collector, started_at DESC);
 
 CREATE TABLE IF NOT EXISTS suppressions (
     suppression_id  TEXT PRIMARY KEY,
@@ -202,13 +208,15 @@ CREATE TABLE IF NOT EXISTS suppressions (
 );
 CREATE INDEX IF NOT EXISTS idx_suppressions_active ON suppressions(tenant_id, rule_id, expires_at);
 """
+)
 
 #: Tables et index PostgreSQL — **obligatoires**. Mêmes colonnes que ``SQLITE_DDL`` (le mappage
 #: ligne → modèle est partagé par les deux implémentations), avec les types natifs : ``JSONB``
 #: pour les documents, ``TIMESTAMPTZ`` pour les horodatages, ``BOOLEAN`` pour les drapeaux,
 #: ``DOUBLE PRECISION`` pour les scores (parité exacte avec le ``REAL`` de SQLite, qui est un
 #: flottant 8 octets : un ``numeric(5,2)`` arrondirait et casserait les curseurs de pagination).
-POSTGRES_CORE_DDL = """
+POSTGRES_CORE_DDL = (
+    """
 
 CREATE TABLE IF NOT EXISTS tenants (
     tenant_id            TEXT PRIMARY KEY,
@@ -281,7 +289,8 @@ CREATE INDEX IF NOT EXISTS idx_events_labels_src_ip ON events USING gin (labels 
 -- c'est exactement ce qui faisait échouer toute l'initialisation du schéma en CI.
 ALTER TABLE events ADD COLUMN IF NOT EXISTS claimed_by TEXT;
 ALTER TABLE events ADD COLUMN IF NOT EXISTS claimed_at TIMESTAMPTZ;
-CREATE INDEX IF NOT EXISTS idx_events_claims      ON events (claimed_at) WHERE claimed_at IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_events_claims      ON """
+    """events (claimed_at) WHERE claimed_at IS NOT NULL;
 
 -- ---------------------------------------------------------------------------------
 -- Findings : agrégats produits par le moteur de détection.
@@ -315,9 +324,11 @@ CREATE TABLE IF NOT EXISTS findings (
     created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS idx_findings_tenant_status   ON findings (tenant_id, status, risk_score DESC);
+CREATE INDEX IF NOT EXISTS idx_findings_tenant_status   ON """
+    """findings (tenant_id, status, risk_score DESC);
 CREATE INDEX IF NOT EXISTS idx_findings_tenant_lastseen ON findings (tenant_id, last_seen DESC);
-CREATE INDEX IF NOT EXISTS idx_findings_dedup           ON findings (tenant_id, rule_id, dedup_key, status);
+CREATE INDEX IF NOT EXISTS idx_findings_dedup           ON """
+    """findings (tenant_id, rule_id, dedup_key, status);
 
 -- ---------------------------------------------------------------------------------
 -- Actions : cycle de vie complet, idempotence, rollback.
@@ -349,10 +360,12 @@ CREATE TABLE IF NOT EXISTS actions (
     audit_seq       BIGINT,
     reason          TEXT NOT NULL DEFAULT ''
 );
-CREATE INDEX IF NOT EXISTS idx_actions_tenant_status ON actions (tenant_id, status, requested_at DESC);
+CREATE INDEX IF NOT EXISTS idx_actions_tenant_status ON """
+    """actions (tenant_id, status, requested_at DESC);
 CREATE INDEX IF NOT EXISTS idx_actions_tenant_time   ON actions (tenant_id, requested_at DESC);
 CREATE INDEX IF NOT EXISTS idx_actions_finding       ON actions (finding_id);
-CREATE INDEX IF NOT EXISTS idx_actions_cooldown      ON actions (tenant_id, playbook, requested_at DESC);
+CREATE INDEX IF NOT EXISTS idx_actions_cooldown      ON """
+    """actions (tenant_id, playbook, requested_at DESC);
 
 -- ---------------------------------------------------------------------------------
 -- Journal d'audit append-only, chaîné par hash.
@@ -399,7 +412,8 @@ CREATE TABLE IF NOT EXISTS collector_runs (
     errors       INTEGER NOT NULL DEFAULT 0,
     detail       JSONB NOT NULL DEFAULT '{}'::jsonb
 );
-CREATE INDEX IF NOT EXISTS idx_collector_runs ON collector_runs (tenant_id, collector, started_at DESC);
+CREATE INDEX IF NOT EXISTS idx_collector_runs ON """
+    """collector_runs (tenant_id, collector, started_at DESC);
 
 CREATE TABLE IF NOT EXISTS suppressions (
     suppression_id  TEXT PRIMARY KEY,
@@ -413,6 +427,7 @@ CREATE TABLE IF NOT EXISTS suppressions (
 );
 CREATE INDEX IF NOT EXISTS idx_suppressions_active ON suppressions (tenant_id, rule_id, expires_at);
 """
+)
 
 #: Extension TimescaleDB. Isolée : sans elle, tout le reste du DDL reste applicable et
 #: l'adaptateur fonctionne sur un PostgreSQL nu (seule la rétention native est perdue).

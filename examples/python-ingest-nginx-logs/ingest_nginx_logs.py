@@ -100,6 +100,7 @@ from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any
 from urllib import error as urlerror
+from urllib import parse as urlparse
 from urllib import request as urlrequest
 
 
@@ -415,7 +416,7 @@ def pseudonymize_ip(ip: str, salt: str, *, keep_prefix: bool = False, prefix: st
             packed_str = str(address)
             if keep_prefix:
                 bits = 24 if address.version == 4 else 64
-                network_text = str(ipaddress.ip_network("%s/%d" % (address, bits), strict=False))
+                network_text = str(ipaddress.ip_network(f"{address}/{bits}", strict=False))
     except ValueError as exc:
         raise ValueError(f"pseudonymize_ip : {raw!r} n'est pas une IP ni un CIDR valide") from exc
 
@@ -771,7 +772,8 @@ def truncate_payload(
     return result, True
 
 
-class LineUnparsed(ValueError):
+# Nom public de l'exemple, cité dans la docstring du module et par les appelants : conservé.
+class LineUnparsed(ValueError):  # noqa: N818
     """Ligne de journal inutilisable (même comme message brut)."""
 
 
@@ -938,7 +940,7 @@ def build_event(
 
     event["payload"], truncated = truncate_payload(event["payload"])
     if truncated:
-        event["raw_ref"] = "truncated:payload>%d" % MAX_PAYLOAD_BYTES
+        event["raw_ref"] = f"truncated:payload>{MAX_PAYLOAD_BYTES}"
 
     if redact:
         event = redact_secrets(event)
@@ -983,7 +985,7 @@ def validate_event(event: Mapping[str, Any]) -> None:
     if not isinstance(payload, Mapping):
         raise ValueError("payload doit être un objet")
     if serialized_size(payload) > MAX_PAYLOAD_BYTES:
-        raise ValueError("payload sérialisé > %d octets (contrat §3.1)" % MAX_PAYLOAD_BYTES)
+        raise ValueError(f"payload sérialisé > {MAX_PAYLOAD_BYTES} octets (contrat §3.1)")
     if parse_timestamp(event.get("ts")) is None:
         raise ValueError("ts illisible : {!r}".format(event.get("ts")))
 
@@ -1119,7 +1121,10 @@ class LogTailer:
 
     def _open(self, offset: int) -> tuple[Any, int | None]:
         """Ouvre le fichier à *offset* et retourne ``(handle, inode)``."""
-        handle = open(self.path, "rb")
+        # Le descripteur survit à cette fonction : `lines()` le garde ouvert pendant toute la
+        # lecture et le referme lui-même (rotation, reprise). Un `with` ici le fermerait avant
+        # la première ligne lue.
+        handle = open(self.path, "rb")  # noqa: SIM115 — descripteur rendu à l'appelant
         inode: int | None = None
         try:
             stat = os.stat(self.path)
@@ -1272,9 +1277,19 @@ def post_json(
     }
     if api_key:
         headers["X-API-Key"] = api_key
-    request = urlrequest.Request(url, data=data, headers=headers, method="POST")
+
+    # S310 : `urlopen` ouvrirait n'importe quel schéma (`file:`, `ftp:`, `data:`…) alors que
+    # cette URL vient de la ligne de commande. Les deux `# noqa: S310` ci-dessous pointent sur
+    # ce contrôle, seule barrière avant la connexion.
+    scheme = urlparse.urlparse(url).scheme.lower()
+    if scheme not in ("http", "https"):
+        raise TransportError(
+            f"schéma d'URL refusé : {scheme or '(absent)'} — seuls http et https sont acceptés."
+        )
+
+    request = urlrequest.Request(url, data=data, headers=headers, method="POST")  # noqa: S310
     try:
-        with urlrequest.urlopen(request, timeout=timeout) as response:
+        with urlrequest.urlopen(request, timeout=timeout) as response:  # noqa: S310
             raw = response.read()
             return response.status, _decode(raw), _text(raw), response.headers
     except urlerror.HTTPError as exc:
@@ -1344,12 +1359,9 @@ class BatchResult:
         self.attempts = attempts
 
     def __repr__(self) -> str:  # pragma: no cover - aide au débogage
-        return "BatchResult(outcome=%r, http_status=%r, accepted=%d, rejected=%d, findings=%d)" % (
-            self.outcome,
-            self.http_status,
-            self.accepted,
-            self.rejected,
-            self.findings,
+        return (
+            f"BatchResult(outcome={self.outcome!r}, http_status={self.http_status!r}, "
+            f"accepted={self.accepted}, rejected={self.rejected}, findings={self.findings})"
         )
 
 
@@ -1408,7 +1420,7 @@ class IngestClient:
             return BatchResult("accepted", accepted=0)
         if len(events) > MAX_BATCH_SIZE:
             raise ValueError(
-                "un lot ne peut pas dépasser %d événements (contrat §4.3)" % MAX_BATCH_SIZE
+                f"un lot ne peut pas dépasser {MAX_BATCH_SIZE} événements (contrat §4.3)"
             )
 
         body = {"events": list(events)}
@@ -1425,9 +1437,7 @@ class IngestClient:
             except TransportError as exc:
                 last_message = str(exc)
                 if attempt >= self.max_attempts:
-                    self._log(
-                        "lot : échec réseau après %d tentative(s) — %s" % (attempt, last_message)
-                    )
+                    self._log(f"lot : échec réseau après {attempt} tentative(s) — {last_message}")
                     return BatchResult("transport", message=last_message, attempts=attempt)
                 wait = min(delay, self.retry_after_max)
                 self._log(f"lot : {last_message} — nouvelle tentative dans {wait:.1f} s")
@@ -1450,7 +1460,7 @@ class IngestClient:
                 )
 
             if status == 429 or 500 <= status < 600:
-                last_message = "HTTP %d — %s" % (status, error_summary(payload, raw_text))
+                last_message = f"HTTP {status} — {error_summary(payload, raw_text)}"
                 if attempt >= self.max_attempts:
                     self._log(f"lot : {last_message} (tentatives épuisées)")
                     return BatchResult(
@@ -1461,8 +1471,8 @@ class IngestClient:
                     wait = 1.0 if status == 429 else delay
                 wait = max(0.0, min(wait, self.retry_after_max))
                 self._log(
-                    "lot : contre-pression HTTP %d — nouvelle tentative dans %.1f s (Retry-After honoré)"
-                    % (status, wait)
+                    f"lot : contre-pression HTTP {status} — nouvelle tentative dans {wait:.1f} s "
+                    "(Retry-After honoré)"
                 )
                 if self._wait(wait):
                     return BatchResult("interrupted", message="arrêt demandé", attempts=attempt)
@@ -1471,9 +1481,9 @@ class IngestClient:
 
             if status in (401, 403):
                 last_message = (
-                    "HTTP %d : clé API absente, invalide, révoquée ou rôle sans capacité "
-                    "« write:events » (contrat §4.2) — %s"
-                    % (status, error_summary(payload, raw_text))
+                    f"HTTP {status} : clé API absente, invalide, révoquée ou rôle sans capacité "
+                    "« write:events » (contrat §4.2) — "
+                    f"{error_summary(payload, raw_text)}"
                 )
                 self._log(last_message)
                 return BatchResult(
@@ -1481,19 +1491,13 @@ class IngestClient:
                 )
 
             if status in (400, 409, 422):
-                last_message = "HTTP %d : lot refusé — %s" % (
-                    status,
-                    error_summary(payload, raw_text),
-                )
+                last_message = f"HTTP {status} : lot refusé — {error_summary(payload, raw_text)}"
                 self._log(last_message)
                 return BatchResult(
                     "rejected", http_status=status, message=last_message, attempts=attempt
                 )
 
-            last_message = "HTTP %d : réponse inattendue — %s" % (
-                status,
-                error_summary(payload, raw_text),
-            )
+            last_message = f"HTTP {status} : réponse inattendue — {error_summary(payload, raw_text)}"
             self._log(last_message)
             return BatchResult(
                 "unexpected", http_status=status, message=last_message, attempts=attempt
@@ -1553,7 +1557,8 @@ class Stats:
 # --------------------------------------------------------------------------------------
 
 
-class _StopIngest(Exception):
+# Nom conservé : exception interne d'arrêt de la boucle, déjà citée par les appelants.
+class _StopIngest(Exception):  # noqa: N818
     """Arrêt immédiat de la boucle d'ingestion (clé refusée, arrêt demandé pendant une reprise)."""
 
 
@@ -1598,10 +1603,8 @@ def run_follow(
     for signal_name in ("SIGINT", "SIGTERM"):
         candidate = getattr(signal, signal_name, None)
         if candidate is not None:
-            try:
+            with _contextlib.suppress(ValueError, OSError):  # plateforme sans ce signal
                 signal.signal(candidate, handle_signal)
-            except (ValueError, OSError):  # plateforme sans ce signal
-                pass
 
     def reader_loop(tailer: LogTailer) -> None:
         """Lit une source et pousse les événements dans la file bornée."""
@@ -1666,7 +1669,7 @@ def run_follow(
             return True
 
     for tailer in tailers:
-        log("suivi de %s (reprise à l'offset %d)" % (tailer.path, tailer.stored_offset()))
+        log(f"suivi de {tailer.path} (reprise à l'offset {tailer.stored_offset()})")
         thread = threading.Thread(
             target=reader_loop, args=(tailer,), name=f"reader:{tailer.path}", daemon=True
         )
@@ -1687,7 +1690,7 @@ def run_follow(
         if client is None:  # dry-run
             write_dry_run_batch(batch, pretty=args.pretty, stream=sys.stdout)
             stats.add(batches_sent=1)
-            log("lot de %d événement(s) affiché (%s)" % (len(batch), reason))
+            log(f"lot de {len(batch)} événement(s) affiché ({reason})")
             return
         result = client.post_batch(batch)
         stats.add(batches_sent=1)
@@ -1698,9 +1701,9 @@ def run_follow(
             findings=result.findings,
         )
         if result.outcome == "accepted":
-            log("lot de %d événement(s) accepté (%s)" % (len(batch), reason))
+            log(f"lot de {len(batch)} événement(s) accepté ({reason})")
         elif result.outcome == "rejected":
-            log("lot de %d événement(s) refusé par le serveur (%s)" % (len(batch), reason))
+            log(f"lot de {len(batch)} événement(s) refusé par le serveur ({reason})")
             exit_code = max(exit_code, 3)
             stats.add(batches_failed=1)
         elif result.outcome == "auth":
@@ -1710,7 +1713,7 @@ def run_follow(
         elif result.outcome == "interrupted":
             stats.add(batches_failed=1)
         else:
-            log("lot de %d événement(s) perdu : %s" % (len(batch), result.message))
+            log(f"lot de {len(batch)} événement(s) perdu : {result.message}")
             exit_code = max(exit_code, 1)
             stats.add(batches_failed=1)
 
@@ -1797,9 +1800,9 @@ def run_once(
             result = client.post_batch(batch)
             stats.add(retries=max(0, result.attempts - 1))
             if result.outcome == "accepted":
-                log("lot de %d événement(s) accepté" % len(batch))
+                log(f"lot de {len(batch)} événement(s) accepté")
             elif result.outcome == "rejected":
-                log("lot de %d événement(s) refusé : %s" % (len(batch), result.message))
+                log(f"lot de {len(batch)} événement(s) refusé : {result.message}")
                 exit_code = max(exit_code, 3)
                 stats.add(batches_failed=1)
             elif result.outcome == "auth":
@@ -1810,7 +1813,7 @@ def run_once(
                 stats.add(batches_failed=1)
                 raise _StopIngest("arrêt demandé pendant une reprise")
             else:
-                log("lot de %d événement(s) perdu : %s" % (len(batch), result.message))
+                log(f"lot de {len(batch)} événement(s) perdu : {result.message}")
                 exit_code = max(exit_code, 1)
                 stats.add(batches_failed=1)
             stats.add(
@@ -1823,7 +1826,7 @@ def run_once(
     stop_event = threading.Event()
     try:
         for tailer in tailers:
-            log("lecture de %s (reprise à l'offset %d)" % (tailer.path, tailer.stored_offset()))
+            log(f"lecture de {tailer.path} (reprise à l'offset {tailer.stored_offset()})")
             for line, next_offset in tailer.lines(stop_event):
                 stats.add(lines_read=1)
                 try:
@@ -1849,7 +1852,7 @@ def run_once(
                 if len(pending) >= args.batch_size:
                     flush()
                 if args.max_events and stats.events_built >= args.max_events:
-                    log("limite --max-events atteinte (%d événement(s))" % args.max_events)
+                    log(f"limite --max-events atteinte ({args.max_events} événement(s))")
                     flush()
                     state.save()
                     return exit_code
@@ -1930,15 +1933,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--batch-size",
         type=int,
         default=DEFAULT_BATCH_SIZE,
-        help="événements par lot (1 à %d, contrat §4.3 ; défaut %d)"
-        % (MAX_BATCH_SIZE, DEFAULT_BATCH_SIZE),
+        help=f"événements par lot (1 à {MAX_BATCH_SIZE}, contrat §4.3 ; défaut {DEFAULT_BATCH_SIZE})",
     )
     parser.add_argument(
         "--queue-size",
         type=int,
         default=DEFAULT_QUEUE_SIZE,
-        help="taille de la file bornée entre lecteurs et émetteur (défaut %d) : "
-        "c'est le levier de contre-pression mémoire" % DEFAULT_QUEUE_SIZE,
+        help=f"taille de la file bornée entre lecteurs et émetteur (défaut {DEFAULT_QUEUE_SIZE}) : "
+        "c'est le levier de contre-pression mémoire",
     )
     parser.add_argument(
         "--flush-interval",
@@ -1962,8 +1964,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--max-attempts",
         type=int,
         default=DEFAULT_MAX_ATTEMPTS,
-        help="nombre total de tentatives par lot sur 429/5xx/réseau (défaut %d)"
-        % DEFAULT_MAX_ATTEMPTS,
+        help=f"nombre total de tentatives par lot sur 429/5xx/réseau (défaut {DEFAULT_MAX_ATTEMPTS})",
     )
     parser.add_argument(
         "--retry-after-max",
@@ -2021,7 +2022,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(list(argv) if argv is not None else None)
 
     if args.batch_size < 1 or args.batch_size > MAX_BATCH_SIZE:
-        _stderr("--batch-size doit être compris entre 1 et %d (contrat §4.3)" % MAX_BATCH_SIZE)
+        _stderr(f"--batch-size doit être compris entre 1 et {MAX_BATCH_SIZE} (contrat §4.3)")
         return 2
     if args.queue_size < 1:
         _stderr("--queue-size doit être au moins 1")
@@ -2075,7 +2076,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             log=log,
             stop_event=stop_event,
         )
-        log("ingestion vers %s (lots de %d)" % (safe_url(client.endpoint), args.batch_size))
+        log(f"ingestion vers {safe_url(client.endpoint)} (lots de {args.batch_size})")
     else:
         _stderr(
             "--dry-run : aucune requête ne sera émise et aucun fichier d'état ne sera écrit ; "
@@ -2109,10 +2110,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     summary = stats.summary()
     _stderr(
-        "récapitulatif : %d ligne(s) lue(s), %d non reconnue(s), %d événement(s) construit(s), "
-        "%d accepté(s), %d rejeté(s), %d finding(s) créé(s), %d lot(s) envoyé(s), %d reprise(s), "
-        "%d lot(s) en échec, %.2f événement(s)/s"
-        % (
+        "récapitulatif : {} ligne(s) lue(s), {} non reconnue(s), {} événement(s) construit(s), "
+        "{} accepté(s), {} rejeté(s), {} finding(s) créé(s), {} lot(s) envoyé(s), {} reprise(s), "
+        "{} lot(s) en échec, {:.2f} événement(s)/s".format(
             summary["lines_read"],
             summary["lines_unparsed"],
             summary["events_built"],

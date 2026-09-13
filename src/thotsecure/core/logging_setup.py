@@ -17,7 +17,9 @@ from typing import Any
 
 from .util import redact_secrets
 
-_CTX: ContextVar[dict[str, Any]] = ContextVar("thotsecure_log_context", default={})
+#: Le défaut est ``None`` et non ``{}`` : la valeur par défaut d'un ``ContextVar`` n'est
+#: construite qu'une fois, un dictionnaire mutable y serait donc partagé par tous les contextes.
+_CTX: ContextVar[dict[str, Any] | None] = ContextVar("thotsecure_log_context", default=None)
 
 #: Attributs standards de ``logging`` : tout le reste est traité comme contexte applicatif.
 _RESERVED = frozenset(
@@ -62,7 +64,15 @@ class SafeLogger(logging.Logger):
     plutôt que de faire échouer l'appel.
     """
 
-    def makeRecord(  # type: ignore[override]
+    # Override de ``logging.Logger`` : le nom camelCase ``makeRecord`` est imposé par la
+    # bibliothèque standard, il ne peut pas être renommé.
+    #
+    # Ordre des pragmas, volontaire : ``noqa`` d'abord, parce que ruff ne reconnaît la directive
+    # que si le commentaire **commence** par elle — et c'est ruff qui bloque la CI, pas mypy.
+    # Conséquence assumée : ``type: ignore`` n'est alors plus reconnu par mypy, dont le job est
+    # explicitement non bloquant (`ci.yml`). Si mypy signale à nouveau cette ligne, c'est le
+    # signal qu'il faut revoir la signature, pas réordonner les commentaires.
+    def makeRecord(  # noqa: N802 - override de logging.Logger  # type: ignore[override]
         self,
         name: str,
         level: int,
@@ -90,7 +100,7 @@ logging.setLoggerClass(SafeLogger)
 
 def bind_context(**values: Any) -> None:
     """Enrichit le contexte de journalisation de la tâche courante."""
-    current = dict(_CTX.get())
+    current = dict(_CTX.get() or {})
     current.update({k: v for k, v in values.items() if v is not None})
     _CTX.set(current)
 
@@ -100,7 +110,7 @@ def clear_context() -> None:
 
 
 def current_context() -> dict[str, Any]:
-    return dict(_CTX.get())
+    return dict(_CTX.get() or {})
 
 
 def new_request_id() -> str:
@@ -128,7 +138,7 @@ class JsonFormatter(logging.Formatter):
             "logger": record.name,
             "message": redact_secrets(record.getMessage(), max_length=8192),
         }
-        payload.update(_CTX.get())
+        payload.update(_CTX.get() or {})
         for key, value in record.__dict__.items():
             if key not in _RESERVED and not key.startswith("_"):
                 payload[key] = _redact_value(value)
@@ -162,7 +172,10 @@ class ConsoleFormatter(logging.Formatter):
             if parts:
                 suffix = " [" + " ".join(parts) + "]"
         message = redact_secrets(record.getMessage(), max_length=8192)
-        line = f"{time.strftime('%H:%M:%S', time.localtime(record.created))} {color}{record.levelname:<8}{self.RESET} {record.name:<28} {message}{suffix}"
+        line = (
+            f"{time.strftime('%H:%M:%S', time.localtime(record.created))} {color}"
+            f"{record.levelname:<8}{self.RESET} {record.name:<28} {message}{suffix}"
+        )
         if record.exc_info:
             line += "\n" + redact_secrets(self.formatException(record.exc_info), max_length=8192)
         return line

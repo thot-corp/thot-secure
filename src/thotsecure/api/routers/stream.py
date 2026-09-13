@@ -8,6 +8,7 @@ par jeton de session de la console.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import uuid
 from typing import Any
 
@@ -114,10 +115,8 @@ async def stream(
         for task in tasks:
             task.cancel()
         await manager.disconnect(client_id)
-        try:
+        with contextlib.suppress(RuntimeError):  # pragma: no cover - connexion déjà fermée
             await websocket.close()
-        except RuntimeError:  # pragma: no cover - connexion déjà fermée
-            pass
 
 
 @router.get("/clients", summary="État des connexions temps réel")

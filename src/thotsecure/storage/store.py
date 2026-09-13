@@ -749,13 +749,15 @@ class Store:
             params.append(since_iso)
         by_severity: dict[str, int] = {}
         for row in self.connection.execute(
-            f"SELECT severity, COUNT(*) AS n FROM findings WHERE tenant_id = ? {clause} GROUP BY severity",  # noqa: S608
+            f"SELECT severity, COUNT(*) AS n FROM findings "  # noqa: S608
+            f"WHERE tenant_id = ? {clause} GROUP BY severity",
             params,
         ).fetchall():
             by_severity[row["severity"]] = row["n"]
         by_status: dict[str, int] = {}
         for row in self.connection.execute(
-            f"SELECT status, COUNT(*) AS n FROM findings WHERE tenant_id = ? {clause} GROUP BY status",  # noqa: S608
+            f"SELECT status, COUNT(*) AS n FROM findings "  # noqa: S608
+            f"WHERE tenant_id = ? {clause} GROUP BY status",
             params,
         ).fetchall():
             by_status[row["status"]] = row["n"]
@@ -976,7 +978,8 @@ class Store:
 
     def actions_for_finding(self, tenant_id: str, finding_id: str) -> list[Action]:
         rows = self.connection.execute(
-            "SELECT * FROM actions WHERE tenant_id = ? AND finding_id = ? ORDER BY requested_at DESC",
+            "SELECT * FROM actions WHERE tenant_id = ? AND finding_id = ? "
+            "ORDER BY requested_at DESC",
             (tenant_id, finding_id),
         ).fetchall()
         return [self._row_to_action(row) for row in rows]
@@ -1335,13 +1338,15 @@ class Store:
         ).fetchone()
         auto_count = safe_int(
             self.connection.execute(
-                "SELECT COUNT(*) AS n FROM actions WHERE tenant_id = ? AND mode = 'auto' AND requested_at >= ?",
+                "SELECT COUNT(*) AS n FROM actions WHERE tenant_id = ? AND mode = 'auto' "
+                "AND requested_at >= ?",
                 (tenant_id, iso_z(since)),
             ).fetchone()["n"]
         )
         manual_count = safe_int(
             self.connection.execute(
-                "SELECT COUNT(*) AS n FROM actions WHERE tenant_id = ? AND mode = 'manual' AND requested_at >= ?",
+                "SELECT COUNT(*) AS n FROM actions WHERE tenant_id = ? AND mode = 'manual' "
+                "AND requested_at >= ?",
                 (tenant_id, iso_z(since)),
             ).fetchone()["n"]
         )

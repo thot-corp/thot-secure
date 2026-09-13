@@ -296,8 +296,8 @@ class DecisionEngine:
             decision.guards.append("hourly_cap")
             decision.decision = "notify_only"
             decision.reason += (
-                f" | garde-fou : plafond de {cap} actions/heure atteint ({recent} déjà demandées) — "
-                "protection contre un faux positif massif"
+                f" | garde-fou : plafond de {cap} actions/heure atteint "
+                f"({recent} déjà demandées) — protection contre un faux positif massif"
             )
             return decision
 
@@ -328,7 +328,8 @@ class DecisionEngine:
             decision.guards.append("dry_run")
             decision.reason += (
                 " | garde-fou : mode simulation actif"
-                f" ({'global' if dry_run_global else 'tenant'}) — aucune action réelle ne sera appliquée"
+                f" ({'global' if dry_run_global else 'tenant'}) — aucune action réelle "
+                "ne sera appliquée"
             )
 
         return decision
@@ -408,7 +409,8 @@ def _evaluate_key(key: str, actual: Any, expected: Any) -> tuple[bool, str]:
                 ok = not missing
                 return (
                     ok,
-                    f"{key}={sorted(present)} {'contient' if ok else 'ne contient pas'} {sorted(required)}",
+                    f"{key}={sorted(present)} {'contient' if ok else 'ne contient pas'} "
+                    f"{sorted(required)}",
                 )
             ok = bool(required & present)
             return ok, f"{key} ∩ {sorted(required)} = {sorted(required & present)}"

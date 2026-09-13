@@ -7,6 +7,7 @@ playbooks et le vrai journal d'audit chaîné. Si ce test passe, le produit fonc
 
 from __future__ import annotations
 
+from thotsecure.core.errors import AuthenticationError
 from thotsecure.core.models import Tenant
 
 from .support import StackTestCase, build_stack
@@ -151,7 +152,7 @@ class EndToEndTest(StackTestCase):
         self.assertTrue(principal.can("execute:actions"))
         self.assertFalse(principal.can("admin:tenants"))
         self.assertTrue(self.stack.keys.revoke(key_id=info.key_id))
-        with self.assertRaises(Exception):
+        with self.assertRaises(AuthenticationError):
             self.stack.keys.authenticate(key)
 
 
@@ -185,5 +186,5 @@ class ProtectedTargetTest(StackTestCase):
         self.assertEqual([], outcome.actions)
 
 
-def _unused_build_stack_reference() -> None:  # pragma: no cover - garde l'import explicite
-    build_stack
+def _unused_build_stack_reference() -> object:  # pragma: no cover - garde l'import explicite
+    return build_stack

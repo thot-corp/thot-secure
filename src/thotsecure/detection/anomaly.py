@@ -263,8 +263,8 @@ class AnomalyDetector:
                         severity_hint="low",
                         detail=(
                             f"Première observation de '{entity}' sur {field_name} pour ce tenant. "
-                            "À confirmer : nouvelle source légitime (partenaire, nouvel utilisateur) "
-                            "ou signe de reconnaissance."
+                            "À confirmer : nouvelle source légitime (partenaire, nouvel "
+                            "utilisateur) ou signe de reconnaissance."
                         ),
                         entity_field=field_name,
                         bucket_seconds=self.bucket_seconds,
@@ -328,9 +328,10 @@ class AnomalyDetector:
                         zscore=zscore,
                         severity_hint=_severity_for(zscore),
                         detail=(
-                            f"{observed} événements en {self.bucket_seconds}s pour '{stats.entity}', "
-                            f"contre {stats.rate_mean:.1f} attendus (écart de {zscore:.1f} écarts-types, "
-                            f"base de {stats.buckets_seen} intervalles observés)."
+                            f"{observed} événements en {self.bucket_seconds}s "
+                            f"pour '{stats.entity}', contre {stats.rate_mean:.1f} attendus "
+                            f"(écart de {zscore:.1f} écarts-types, base de "
+                            f"{stats.buckets_seen} intervalles observés)."
                         ),
                         entity_field=field_name,
                         bucket_seconds=self.bucket_seconds,
@@ -397,8 +398,9 @@ class AnomalyDetector:
                         zscore=zscore,
                         severity_hint="high",
                         detail=(
-                            f"{observed} sources distinctes en {self.bucket_seconds}s pour ce tenant, "
-                            f"contre {state.mean:.1f} habituellement (écart de {zscore:.1f} écarts-types). "
+                            f"{observed} sources distinctes en {self.bucket_seconds}s "
+                            f"pour ce tenant, contre {state.mean:.1f} habituellement "
+                            f"(écart de {zscore:.1f} écarts-types). "
                             "Schéma compatible avec une attaque distribuée ou un balayage réparti."
                         ),
                         entity_field=self.entity_fields[0]
@@ -489,7 +491,8 @@ def _entity_value(event: Event, field_name: str) -> str | None:
 
 
 def _severity_for(zscore: float) -> Severity:
-    """Gravité graduée : un écart de 4 σ et un écart de 20 σ ne méritent pas le même traitement."""
+    """Gravité graduée : un écart-type de 4 et un écart-type de 20 ne méritent pas le même
+    traitement."""
     if zscore >= 20:
         return "critical"
     if zscore >= 12:

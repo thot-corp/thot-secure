@@ -228,7 +228,8 @@ def is_valid_cidr(value: str) -> bool:
 
 
 def ip_in_cidrs(ip: str, cidrs: Iterable[str]) -> bool:
-    """Vrai si l'IP appartient à l'une des plages. Entrée invalide ⇒ ``False`` (jamais d'exception)."""
+    """Vrai si l'IP appartient à l'une des plages. Entrée invalide ⇒ ``False``
+    (jamais d'exception)."""
     try:
         address = ipaddress.ip_address(ip.strip())
     except (ValueError, AttributeError):

@@ -20,6 +20,7 @@ import hmac
 import json
 import ssl
 import urllib.error
+import urllib.parse
 import urllib.request
 from typing import Any
 
@@ -29,6 +30,26 @@ from .base import Connector, ConnectorNotConfiguredError, ConnectorResult
 log = get_logger("actions.connector.webhook")
 
 DEFAULT_TIMEOUT = 10.0
+
+#: Schémas acceptés pour une URL de connecteur. Volontairement limité à HTTP et HTTPS :
+#: ``urllib`` sait aussi ouvrir ``file://``, ``ftp://`` et ``data:``, et une URL de
+#: configuration mal remplie ne doit pas transformer le connecteur en lecteur de disque.
+ALLOWED_SCHEMES = frozenset({"http", "https"})
+
+
+def _require_http_scheme(url: str, *, setting: str) -> str:
+    """Valide le schéma d'une URL de connecteur, et refuse tout le reste.
+
+    Comparaison via ``urlsplit`` et non ``startswith`` : ``HTTPS://…`` est une URL valide que
+    ``startswith`` rejetait à tort, tandis que ``file://`` passait.
+    """
+    scheme = urllib.parse.urlsplit(url).scheme.lower()
+    if scheme not in ALLOWED_SCHEMES:
+        raise ConnectorNotConfiguredError(
+            f"paramètre '{setting}' invalide : schéma '{scheme or 'absent'}' refusé "
+            f"(http ou https attendu) — {url}"
+        )
+    return url
 
 #: Toutes les opérations sont relayées à la passerelle : c'est elle qui sait quoi en faire.
 RELAYED_OPERATIONS = frozenset(
@@ -69,14 +90,25 @@ class HttpWebhookConnector(Connector):
                 "paramètre 'url' absent : renseignez config/connectors.yaml "
                 "(ex. https://waf-bridge.interne/thotsecure)"
             )
-        if not url.startswith(("https://", "http://")):
-            raise ConnectorNotConfiguredError(f"URL invalide (http/https attendu): {url}")
-        return url
+        return _require_http_scheme(url, setting="url")
 
     @property
     def rollback_url(self) -> str | None:
+        """URL de l'opération inverse (``undo_*``), si elle est configurée.
+
+        Le schéma est **contrôlé ici comme pour ``url``**, et ce n'était pas le cas : la valeur
+        était renvoyée telle quelle puis passée à ``urlopen``. Or ``urllib`` ouvre bien d'autres
+        choses que du HTTP — ``rollback_url: file:///etc/passwd`` faisait lire un fichier local,
+        dont le contenu se retrouvait dans le résultat de l'action, donc dans le journal, l'audit
+        et l'API. Un ``undo_*`` suffisait à déclencher le chemin, sans aucun accès réseau.
+
+        Un connecteur qui peut lire le disque du serveur parce qu'une ligne de configuration a
+        été mal remplie est exactement ce qu'un produit de sécurité ne doit pas être.
+        """
         value = self.settings.get("rollback_url")
-        return str(value) if value else None
+        if not value:
+            return None
+        return _require_http_scheme(str(value).strip(), setting="rollback_url")
 
     @property
     def secret(self) -> str:
