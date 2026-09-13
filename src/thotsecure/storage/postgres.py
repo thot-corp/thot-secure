@@ -408,7 +408,7 @@ def in_clause(column: str, count: int) -> str:
     ``column`` provient toujours d'une constante interne (jamais d'une entrée utilisateur) ;
     les **valeurs**, elles, ne sont jamais concaténées : ce sont des paramètres liés.
     """
-    return f"{column} IN ({placeholders(count)})"  # noqa: S608 - colonne issue d'une constante
+    return f"{column} IN ({placeholders(count)})"
 
 
 def column_placeholder(table: str, column: str) -> str:
@@ -973,7 +973,7 @@ class PostgresStore:
         """
         try:
             self._fetchone("SELECT 1 AS ok")
-        except Exception:  # noqa: BLE001 - un diagnostic ne lève pas
+        except Exception:
             return False
         return True
 
@@ -1043,9 +1043,7 @@ class PostgresStore:
                 _close_quietly(cursor)
         return [dict(row) for row in (rows or [])]
 
-    def _fetchone(
-        self, sql: str, params: Sequence[Any] = ()
-    ) -> dict[str, Any] | None:
+    def _fetchone(self, sql: str, params: Sequence[Any] = ()) -> dict[str, Any] | None:
         return self._fetchone_on(self.connection, sql, params)
 
     def _fetchone_on(
@@ -1107,7 +1105,7 @@ class PostgresStore:
                 cooldown_seconds = EXCLUDED.cooldown_seconds,
                 asset_criticality = EXCLUDED.asset_criticality,
                 updated_at = EXCLUDED.updated_at
-        """  # noqa: S608 - instruction constante, valeurs liées
+        """
         self._execute(sql, payload)
         created = self.get_tenant(tenant.tenant_id)
         if created is None:  # pragma: no cover - ne peut arriver qu'en cas de corruption
@@ -1153,9 +1151,7 @@ class PostgresStore:
                 updates[key] = value
         if not updates:
             return self.require_tenant(tenant_id)
-        assignments = ", ".join(
-            f"{key} = {column_placeholder('tenants', key)}" for key in updates
-        )  # noqa: S608 - clés filtrées par allowlist, casts issus de constantes
+        assignments = ", ".join(f"{key} = {column_placeholder('tenants', key)}" for key in updates)
         sql = (
             f"UPDATE tenants SET {assignments}, updated_at = now() "  # noqa: S608 - clés filtrées
             "WHERE tenant_id = %s"
@@ -1174,7 +1170,7 @@ class PostgresStore:
             INSERT INTO api_keys (key_id, tenant_id, label, role, key_hash, key_prefix,
                                   created_at, last_used_at, revoked_at)
             VALUES (%s,%s,%s,%s,%s,%s,%s::timestamptz,%s::timestamptz,%s::timestamptz)
-        """  # noqa: S608 - instruction constante
+        """
         try:
             self._execute(
                 sql,
@@ -1273,7 +1269,7 @@ class PostgresStore:
         sql = (
             f"INSERT INTO events {self.EVENT_COLUMNS} VALUES {self.EVENT_ROW_TEMPLATE} "
             "ON CONFLICT DO NOTHING RETURNING event_id"
-        )  # noqa: S608 - gabarit constant
+        )
         rows = self._fetchall(sql, self._event_row(event, now_iso()))
         return bool(rows)
 
@@ -1302,7 +1298,7 @@ class PostgresStore:
                 sql = (
                     f"INSERT INTO events {self.EVENT_COLUMNS} VALUES %s "
                     "ON CONFLICT DO NOTHING RETURNING 1"
-                )  # noqa: S608 - gabarit constant
+                )
                 result = self.driver.execute_values(
                     cursor,
                     sql,
@@ -1315,7 +1311,7 @@ class PostgresStore:
             sql = (
                 f"INSERT INTO events {self.EVENT_COLUMNS} VALUES {self.EVENT_ROW_TEMPLATE} "
                 "ON CONFLICT DO NOTHING"
-            )  # noqa: S608 - gabarit constant
+            )
             cursor.executemany(sql, batch)
             return max(0, safe_int(cursor.rowcount, 0))
         finally:
@@ -1457,7 +1453,7 @@ class PostgresStore:
                 FOR UPDATE SKIP LOCKED
             )
             RETURNING *
-        """  # noqa: S608 - instruction constante
+        """
         rows = self._fetchall(sql, (claimant, lease, limit))
         return [Store._row_to_event(row) for row in rows]
 
@@ -1476,7 +1472,7 @@ class PostgresStore:
             for batch in chunked(list(event_ids), 400):
                 sql = (
                     "UPDATE events SET processed = TRUE, processed_at = %s::timestamptz, "
-                    "claimed_by = NULL, claimed_at = NULL "  # noqa: S608 - instruction constante
+                    "claimed_by = NULL, claimed_at = NULL "
                     f"WHERE event_id IN ({placeholders(len(batch))}) AND processed = FALSE"
                 )
                 total += self._execute_on(connection, sql, [stamp, *batch])
@@ -1512,7 +1508,7 @@ class PostgresStore:
             VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s::jsonb,%s::jsonb,
                     %s::timestamptz,%s::timestamptz,%s,%s::jsonb,%s,%s,%s,
                     %s::timestamptz,%s::timestamptz)
-        """  # noqa: S608 - instruction constante
+        """
         try:
             self._execute(sql, self._finding_params(finding))
         except StorageError as exc:
@@ -1580,9 +1576,7 @@ class PostgresStore:
             else:
                 updates[key] = value
         updates["updated_at"] = now_iso()
-        assignments = ", ".join(
-            f"{key} = {column_placeholder('findings', key)}" for key in updates
-        )  # noqa: S608 - clés filtrées par allowlist
+        assignments = ", ".join(f"{key} = {column_placeholder('findings', key)}" for key in updates)
         sql = (
             f"UPDATE findings SET {assignments} "  # noqa: S608
             "WHERE finding_id = %s AND tenant_id = %s"
@@ -1764,7 +1758,7 @@ class PostgresStore:
             VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s::jsonb,%s,%s::timestamptz,
                     %s,%s::timestamptz,%s,%s::timestamptz,%s::timestamptz,
                     %s::timestamptz,%s::jsonb,%s::jsonb,%s,%s,%s)
-        """  # noqa: S608 - instruction constante
+        """
         try:
             self._execute(sql, self._action_params(action))
         except StorageError as exc:
@@ -1810,7 +1804,7 @@ class PostgresStore:
                 rejected_by = %s, rejected_at = %s::timestamptz, executed_at = %s::timestamptz,
                 result = %s::jsonb, rollback = %s::jsonb, audit_seq = %s, reason = %s
             WHERE action_id = %s AND tenant_id = %s
-        """  # noqa: S608 - instruction constante
+        """
         changed = self._execute(
             sql,
             (
@@ -1839,9 +1833,7 @@ class PostgresStore:
         return Store._row_to_action(row) if row else None
 
     def find_action_by_idempotency(self, idempotency_key: str) -> Action | None:
-        row = self._fetchone(
-            "SELECT * FROM actions WHERE idempotency_key = %s", (idempotency_key,)
-        )
+        row = self._fetchone("SELECT * FROM actions WHERE idempotency_key = %s", (idempotency_key,))
         return Store._row_to_action(row) if row else None
 
     def list_actions(
@@ -2025,7 +2017,7 @@ class PostgresStore:
                                            target, before, after, context, prev_hash, hash)
                     VALUES (%s,%s::timestamptz,%s,%s,%s,%s,%s::jsonb,%s::jsonb,%s::jsonb,
                             %s::jsonb,%s,%s)
-                    """,  # noqa: S608 - instruction constante
+                    """,
                     (
                         seq,
                         stamp,
@@ -2163,7 +2155,7 @@ class PostgresStore:
             INSERT INTO collector_runs (run_id, tenant_id, collector, started_at, finished_at,
                 status, events, findings, errors, detail)
             VALUES (%s,%s,%s,%s::timestamptz,%s::timestamptz,%s,%s,%s,%s,%s::jsonb)
-        """  # noqa: S608 - instruction constante
+        """
         self._execute(
             sql,
             (
@@ -2240,7 +2232,7 @@ class PostgresStore:
             INSERT INTO suppressions (suppression_id, tenant_id, rule_id, dedup_key, reason,
                 created_by, created_at, expires_at)
             VALUES (%s,%s,%s,%s,%s,%s,%s::timestamptz,%s::timestamptz)
-        """  # noqa: S608 - instruction constante
+        """
         self._execute(
             sql,
             (
@@ -2467,7 +2459,7 @@ class PostgresStore:
             raise StorageError("le stockage est fermé")
         tables = ", ".join(self.LOGICAL_TABLES)  # noms de tables issus d'une constante interne
         with self._guard("réinitialisation de la base"):
-            self._execute(f"TRUNCATE {tables} RESTART IDENTITY CASCADE")  # noqa: S608
+            self._execute(f"TRUNCATE {tables} RESTART IDENTITY CASCADE")
         log.info(
             "base PostgreSQL réinitialisée (toutes les tables vidées)",
             extra={"dsn": self.safe_dsn, "tables": list(self.LOGICAL_TABLES)},

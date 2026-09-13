@@ -17,34 +17,34 @@ import importlib.util
 import json
 import logging
 import random
-import socket
 import ssl
 import time
 import warnings
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from email.utils import parsedate_to_datetime
-from typing import Any, Callable, Dict, Mapping, Optional
+from typing import Any
 from urllib import error as urlerror
 from urllib import parse as urlparse
 from urllib import request as urlrequest
 
-from .errors import ThotSecureError, TransportError
+from .errors import TransportError
 
 logger = logging.getLogger("thotsecure_sdk.transport")
 
 __all__ = [
+    "IDEMPOTENT_METHODS",
+    "RETRY_STATUS_CODES",
     "HttpRequest",
     "HttpResponse",
-    "Transport",
-    "UrllibTransport",
     "HttpxTransport",
     "RetryingTransport",
+    "Transport",
+    "UrllibTransport",
     "create_transport",
     "httpx_available",
     "is_retry_safe",
     "parse_retry_after",
-    "IDEMPOTENT_METHODS",
-    "RETRY_STATUS_CODES",
 ]
 
 #: Méthodes HTTP idempotentes par définition (RFC 9110) : réessayables sans risque.
@@ -56,7 +56,7 @@ RETRY_STATUS_CODES = frozenset({429, 502, 503, 504})
 DEFAULT_USER_AGENT = "thotsecure-sdk-python/0.1.0"
 
 
-def is_retry_safe(method: str, idempotency_key: Optional[str] = None) -> bool:
+def is_retry_safe(method: str, idempotency_key: str | None = None) -> bool:
     """Indique si l'appel peut être réessayé sans risque d'effet de bord dupliqué.
 
     ``POST``/``PATCH`` ne sont réessayés que si l'appelant fournit une ``idempotency_key``
@@ -67,7 +67,7 @@ def is_retry_safe(method: str, idempotency_key: Optional[str] = None) -> bool:
     return bool(idempotency_key)
 
 
-def parse_retry_after(value: Optional[str]) -> Optional[float]:
+def parse_retry_after(value: str | None) -> float | None:
     """Convertit un en-tête ``Retry-After`` (secondes ou date HTTP) en secondes flottantes."""
     if not value:
         return None
@@ -100,9 +100,9 @@ class HttpRequest:
 
     method: str
     url: str
-    headers: Dict[str, str] = field(default_factory=dict)
-    params: Optional[Mapping[str, Any]] = None
-    content: Optional[bytes] = None
+    headers: dict[str, str] = field(default_factory=dict)
+    params: Mapping[str, Any] | None = None
+    content: bytes | None = None
     timeout: float = 30.0
     #: ``False`` interdit tout nouvel essai (méthode non idempotente sans clé d'idempotence).
     retry_safe: bool = True
@@ -116,7 +116,7 @@ class HttpRequest:
             return self.url
         query = urlparse.urlencode(cleaned, doseq=True)
         separator = "&" if "?" in self.url else "?"
-        return "%s%s%s" % (self.url, separator, query)
+        return f"{self.url}{separator}{query}"
 
 
 @dataclass
@@ -124,14 +124,14 @@ class HttpResponse:
     """Réponse HTTP brute retournée par la couche transport."""
 
     status_code: int
-    headers: Dict[str, str] = field(default_factory=dict)
+    headers: dict[str, str] = field(default_factory=dict)
     content: bytes = b""
 
     @property
     def text(self) -> str:
         return self.content.decode("utf-8", errors="replace")
 
-    def header(self, name: str) -> Optional[str]:
+    def header(self, name: str) -> str | None:
         """Lecture d'en-tête insensible à la casse."""
         if name in self.headers:
             return self.headers[name]
@@ -168,7 +168,7 @@ def _build_ssl_context(verify_tls: bool) -> ssl.SSLContext:
         stacklevel=3,
     )
     logger.warning("TLS: vérification du certificat désactivée (verify_tls=False)")
-    return ssl._create_unverified_context()  # noqa: SLF001 - usage documenté
+    return ssl._create_unverified_context()
 
 
 class UrllibTransport(Transport):
@@ -176,9 +176,9 @@ class UrllibTransport(Transport):
 
     def __init__(self, verify_tls: bool = True) -> None:
         self.verify_tls = verify_tls
-        self._ssl_context: Optional[ssl.SSLContext] = None
+        self._ssl_context: ssl.SSLContext | None = None
 
-    def _context(self) -> Optional[ssl.SSLContext]:
+    def _context(self) -> ssl.SSLContext | None:
         if self._ssl_context is None:
             self._ssl_context = _build_ssl_context(self.verify_tls)
         return self._ssl_context
@@ -210,9 +210,9 @@ class UrllibTransport(Transport):
                 body = b""
             headers = {k: v for k, v in (exc.headers.items() if exc.headers else [])}
             return HttpResponse(status_code=int(exc.code), headers=headers, content=body)
-        except (urlerror.URLError, socket.timeout, TimeoutError, ssl.SSLError, OSError) as exc:
+        except (urlerror.URLError, TimeoutError, ssl.SSLError, OSError) as exc:
             raise TransportError(
-                "échec du transport vers %s : %s" % (url, exc),
+                f"échec du transport vers {url} : {exc}",
                 method=request.method,
                 url=url,
             ) from exc
@@ -248,7 +248,7 @@ class HttpxTransport(Transport):
             )
         except self._httpx.HTTPError as exc:
             raise TransportError(
-                "échec du transport vers %s : %s" % (request.url, exc),
+                f"échec du transport vers {request.url} : {exc}",
                 method=request.method,
                 url=request.url,
             ) from exc
@@ -309,10 +309,10 @@ class RetryingTransport(Transport):
 
     # ------------------------------------------------------------------ interne
 
-    def _delay(self, attempt: int, retry_after: Optional[float]) -> float:
+    def _delay(self, attempt: int, retry_after: float | None) -> float:
         if retry_after is not None:
             return min(retry_after, self.max_retry_after)
-        raw = min(self.backoff_max, self.backoff_base * (2 ** attempt))
+        raw = min(self.backoff_max, self.backoff_base * (2**attempt))
         return raw * (0.5 + 0.5 * self._rand())
 
     def _wait(self, delay: float, reason: str, request: HttpRequest) -> None:
@@ -352,7 +352,7 @@ class RetryingTransport(Transport):
                 delay = self._delay(attempt, retry_after)
                 attempt += 1
                 self.retry_count += 1
-                self._wait(delay, "HTTP %s" % response.status_code, request)
+                self._wait(delay, f"HTTP {response.status_code}", request)
                 continue
 
             return response

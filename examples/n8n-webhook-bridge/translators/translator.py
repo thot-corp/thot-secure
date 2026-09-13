@@ -51,10 +51,9 @@ Codes de sortie
 """
 
 from __future__ import annotations
-import contextlib as _contextlib
-import sys as _sys
 
 import argparse
+import contextlib as _contextlib
 import hashlib
 import hmac
 import ipaddress
@@ -62,14 +61,16 @@ import json
 import os
 import re
 import sys
+import sys as _sys
 import time
 import uuid
 from collections.abc import Iterator, Mapping, Sequence
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 from typing import Any
 from urllib import error as urlerror
 from urllib import request as urlrequest
+
 
 # --- Sortie Unicode sûre ---------------------------------------------------------------
 # Sous Windows, une console en page de code cp1252 ne peut pas encoder « ✖ », « ✔ » ou « ─ » :
@@ -88,7 +89,7 @@ _configure_safe_output()
 # ----------------------------------------------------------------------------------------
 
 
-__all__ = ["main", "Translator", "redact_secrets", "pseudonymize_ip", "PROFILES"]
+__all__ = ["PROFILES", "Translator", "main", "pseudonymize_ip", "redact_secrets"]
 
 # --------------------------------------------------------------------------------------
 # Constantes du contrat (§3.1, §4.3, §9)
@@ -240,7 +241,9 @@ _SENSITIVE_PARTS = frozenset(
 )
 
 _JWT_RE = re.compile(r"\beyJ[A-Za-z0-9_\-]{4,}\.[A-Za-z0-9_\-]{4,}\.[A-Za-z0-9_\-]{4,}\b")
-_AUTH_SCHEME_RE = re.compile(r"(?i)\b(bearer|basic|token|apikey|api[_-]?key)\s+([A-Za-z0-9._\-+/=]{6,})")
+_AUTH_SCHEME_RE = re.compile(
+    r"(?i)\b(bearer|basic|token|apikey|api[_-]?key)\s+([A-Za-z0-9._\-+/=]{6,})"
+)
 _KV_SECRET_RE = re.compile(
     r"(?i)\b(api[_-]?key|apikey|token|access_token|password|passwd|secret|signature)=([^&\s\"';]+)"
 )
@@ -265,16 +268,14 @@ def is_sensitive_key(key: Any) -> bool:
     parts = [part for part in normalized.split("_") if part]
     if any(part in _SENSITIVE_PARTS for part in parts):
         return True
-    if "api" in parts and "key" in parts:
-        return True
-    return False
+    return bool("api" in parts and "key" in parts)
 
 
 def _scrub_string(value: str) -> str:
     """Masque les secrets *contenus* dans une chaîne (JWT, ``Bearer …``, ``token=…``)."""
     scrubbed = _JWT_RE.sub(REDACTED_JWT, value)
-    scrubbed = _AUTH_SCHEME_RE.sub(lambda match: "%s %s" % (match.group(1), REDACTED), scrubbed)
-    scrubbed = _KV_SECRET_RE.sub(lambda match: "%s=%s" % (match.group(1), REDACTED), scrubbed)
+    scrubbed = _AUTH_SCHEME_RE.sub(lambda match: f"{match.group(1)} {REDACTED}", scrubbed)
+    scrubbed = _KV_SECRET_RE.sub(lambda match: f"{match.group(1)}={REDACTED}", scrubbed)
     return scrubbed
 
 
@@ -283,7 +284,7 @@ def _mask_value(value: Any) -> Any:
     if isinstance(value, str):
         parts = value.split(None, 1)
         if len(parts) == 2 and parts[0].lower() in ("bearer", "basic", "token", "apikey"):
-            return "%s %s" % (parts[0], REDACTED)
+            return f"{parts[0]} {REDACTED}"
         return REDACTED
     return REDACTED
 
@@ -372,12 +373,12 @@ def pseudonymize_ip(ip: str, salt: str, *, keep_prefix: bool = False, prefix: st
                 bits = 24 if address.version == 4 else 64
                 network_text = str(ipaddress.ip_network("%s/%d" % (address, bits), strict=False))
     except ValueError as exc:
-        raise ValueError("pseudonymize_ip : %r n'est pas une IP ni un CIDR valide" % raw) from exc
+        raise ValueError(f"pseudonymize_ip : {raw!r} n'est pas une IP ni un CIDR valide") from exc
 
     digest = hmac.new(salt.encode("utf-8"), packed_str.encode("utf-8"), hashlib.sha256).hexdigest()
-    token = "%s%s" % (prefix, digest[:32])
+    token = f"{prefix}{digest[:32]}"
     if keep_prefix and network_text:
-        return "%s@%s" % (token, network_text)
+        return f"{token}@{network_text}"
     return token
 
 
@@ -417,7 +418,9 @@ def pseudonymize_ip_fields(
         return out
     if isinstance(data, list):
         return [
-            pseudonymize_ip_fields(item, salt, fields=fields, keep_prefix=keep_prefix, depth=depth + 1)
+            pseudonymize_ip_fields(
+                item, salt, fields=fields, keep_prefix=keep_prefix, depth=depth + 1
+            )
             for item in data
         ]
     return data
@@ -431,14 +434,14 @@ def pseudonymize_ip_fields(
 def _to_iso_utc(moment: datetime) -> str:
     """ISO 8601 UTC en millisecondes, au format du contrat (``…Z``)."""
     if moment.tzinfo is None:
-        moment = moment.replace(tzinfo=timezone.utc)
-    moment = moment.astimezone(timezone.utc)
+        moment = moment.replace(tzinfo=UTC)
+    moment = moment.astimezone(UTC)
     return moment.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
 
 
 def now_iso() -> str:
     """Horodatage courant au format du contrat §3.1."""
-    return _to_iso_utc(datetime.now(timezone.utc))
+    return _to_iso_utc(datetime.now(UTC))
 
 
 def parse_timestamp(value: Any) -> datetime | None:
@@ -454,7 +457,7 @@ def parse_timestamp(value: Any) -> datetime | None:
         if seconds > 1e11:  # millisecondes
             seconds /= 1000.0
         try:
-            return datetime.fromtimestamp(seconds, tz=timezone.utc)
+            return datetime.fromtimestamp(seconds, tz=UTC)
         except (OverflowError, OSError, ValueError):
             return None
     text = str(value).strip()
@@ -467,7 +470,7 @@ def parse_timestamp(value: Any) -> datetime | None:
         parsed = datetime.fromisoformat(normalized)
     except ValueError:
         return None
-    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
 
 
 #: Niveaux fournisseur usuels → ``severity_hint`` du contrat.
@@ -528,7 +531,16 @@ def normalize_severity(value: Any) -> str | None:
 # du contrat §3.1. Les listes sont des **alias ordonnés** (le premier trouvé gagne) et
 # acceptent un chemin pointé (``"event.severity"``) pour les payloads imbriqués.
 
-_UNWRAP_KEYS: tuple[str, ...] = ("event", "data", "alert", "detail", "details", "finding", "record", "item")
+_UNWRAP_KEYS: tuple[str, ...] = (
+    "event",
+    "data",
+    "alert",
+    "detail",
+    "details",
+    "finding",
+    "record",
+    "item",
+)
 
 _GENERIC_LABELS: dict[str, tuple[str, ...]] = {
     "event_type": ("event_type", "event_name", "type", "category", "event.action", "action"),
@@ -546,7 +558,14 @@ PROFILES: dict[str, dict[str, Any]] = {
         "ts": ("ts", "timestamp", "@timestamp", "time", "event_time", "occurred_at", "created_at"),
         "host": ("host", "hostname", "host_name", "device", "computer", "source_host"),
         "name": ("source_name", "sensor", "collector", "product", "app", "vendor"),
-        "severity": ("severity_hint", "severity", "level", "priority", "risk_level", "classification"),
+        "severity": (
+            "severity_hint",
+            "severity",
+            "level",
+            "priority",
+            "risk_level",
+            "classification",
+        ),
         "message": ("message", "msg", "description", "summary", "detail", "reason", "event"),
         "ip": ("src_ip", "source_ip", "client_ip", "remote_addr", "remote_ip", "ip", "ip_address"),
         "labels": _GENERIC_LABELS,
@@ -582,7 +601,14 @@ PROFILES: dict[str, dict[str, Any]] = {
             "file_hash_sha256": ("file_hash_sha256", "sha256", "hash.sha256", "file.hash"),
             "platform": ("platform", "os", "os_family", "operating_system"),
         },
-        "payload": ("file_path", "process_name", "process_id", "quarantine_id", "detection_confidence", "user_notified"),
+        "payload": (
+            "file_path",
+            "process_name",
+            "process_id",
+            "quarantine_id",
+            "detection_confidence",
+            "user_notified",
+        ),
     },
     # ------------------------------------------------------------------ authentification
     "auth": {
@@ -606,7 +632,13 @@ PROFILES: dict[str, dict[str, Any]] = {
             "detected_by": ("detected_by", "detector", "vendor"),
             "detector_rule": ("detector_rule", "rule_id", "rule"),
         },
-        "payload": ("detector_note", "source_port", "first_failure_ts", "last_failure_ts", "account_locked_by_detector"),
+        "payload": (
+            "detector_note",
+            "source_port",
+            "first_failure_ts",
+            "last_failure_ts",
+            "account_locked_by_detector",
+        ),
     },
     # ------------------------------------------------------------------ WAF
     "waf": {
@@ -632,7 +664,14 @@ PROFILES: dict[str, dict[str, Any]] = {
             "waf_action": ("waf_action", "action", "disposition", "rule.action"),
             "waf_engine": ("waf_engine", "engine", "product"),
         },
-        "payload": ("status", "bytes", "matched_parameter", "anomaly_score", "request_id", "blocked_before_origin"),
+        "payload": (
+            "status",
+            "bytes",
+            "matched_parameter",
+            "anomaly_score",
+            "request_id",
+            "blocked_before_origin",
+        ),
     },
     # ------------------------------------------------------------------ CSPM / cloud
     "cspm": {
@@ -772,7 +811,9 @@ def truncate_payload(
         if serialized_size(result) <= max_bytes:
             break
         candidates = [
-            (len(str(value)), key) for key, value in result.items() if isinstance(value, str) and len(value) > 256
+            (len(str(value)), key)
+            for key, value in result.items()
+            if isinstance(value, str) and len(value) > 256
         ]
         if not candidates:
             break
@@ -783,7 +824,11 @@ def truncate_payload(
     for _ in range(64):
         if serialized_size(result) <= max_bytes:
             break
-        candidates = [(serialized_size({key: value}), key) for key, value in result.items() if key not in keep_keys]
+        candidates = [
+            (serialized_size({key: value}), key)
+            for key, value in result.items()
+            if key not in keep_keys
+        ]
         if not candidates:
             break
         candidates.sort(reverse=True)
@@ -836,7 +881,7 @@ class Translator:
         name = PROFILE_ALIASES.get(profile, profile)
         if name not in PROFILES:
             raise TranslationError(
-                "profil inconnu : %r (attendu : %s)" % (profile, ", ".join(sorted(PROFILES)))
+                "profil inconnu : {!r} (attendu : {})".format(profile, ", ".join(sorted(PROFILES)))
             )
         self.profile_name = profile
         self.profile = PROFILES[name]
@@ -850,7 +895,7 @@ class Translator:
         self.source_host = overrides.get("source_host")
         if self.kind not in KINDS:
             raise TranslationError(
-                "kind invalide : %r (énumération §3.1 : %s)" % (self.kind, ", ".join(KINDS))
+                "kind invalide : {!r} (énumération §3.1 : {})".format(self.kind, ", ".join(KINDS))
             )
 
     # -- construction ------------------------------------------------------------------
@@ -870,7 +915,7 @@ class Translator:
                     return parsed
             return {"message": text}
         raise TranslationError(
-            "payload non pris en charge (attendu objet JSON ou chaîne, reçu %s)" % type(raw).__name__
+            f"payload non pris en charge (attendu objet JSON ou chaîne, reçu {type(raw).__name__})"
         )
 
     def _labels(self, record: Mapping[str, Any]) -> dict[str, Any]:
@@ -898,7 +943,7 @@ class Translator:
                 continue
             payload[key] = value
         # Traçabilité : permet de savoir par quel pont l'événement est entré.
-        payload["translator"] = "n8n-webhook-bridge/%s" % self.profile_name
+        payload["translator"] = f"n8n-webhook-bridge/{self.profile_name}"
         return payload
 
     def _already_event(self, record: Mapping[str, Any]) -> bool:
@@ -919,7 +964,7 @@ class Translator:
         flat = unwrap(record)
         message = pick(flat, self.profile["message"])
         if message is None:
-            message = "Événement %s reçu via webhook (aucun champ « message » exploitable)" % self.profile_name
+            message = f"Événement {self.profile_name} reçu via webhook (aucun champ « message » exploitable)"
 
         host = self.source_host or pick(flat, self.profile["host"])
         name = self.source_name or pick(flat, self.profile["name"]) or self.profile["source_name"]
@@ -928,7 +973,9 @@ class Translator:
         payload = self._payload(flat, message)
         payload, truncated = truncate_payload(payload)
         if truncated:
-            payload["_truncated_note"] = "payload tronqué à %d octets (contrat §3.1)" % MAX_PAYLOAD_BYTES
+            payload["_truncated_note"] = (
+                "payload tronqué à %d octets (contrat §3.1)" % MAX_PAYLOAD_BYTES
+            )
 
         event = {
             "event_id": str(uuid.uuid4()),
@@ -963,7 +1010,10 @@ class Translator:
                 "host": str(source.get("host") or source.get("name") or self.source_name),
             },
             "severity_hint": normalize_severity(record.get("severity_hint")),
-            "labels": {str(key): as_scalar(value) for key, value in dict(record.get("labels") or {}).items()},
+            "labels": {
+                str(key): as_scalar(value)
+                for key, value in dict(record.get("labels") or {}).items()
+            },
             "payload": dict(record.get("payload") or {}),
             "raw_ref": record.get("raw_ref"),
         }
@@ -993,13 +1043,17 @@ class Translator:
 def validate_event(event: Mapping[str, Any]) -> None:
     """Vérifie les invariants du contrat §3.1 (lève ``ValueError`` avec un motif explicite)."""
     if event.get("schema_version") != "1":
-        raise ValueError("schema_version doit valoir \"1\" (contrat §3.1)")
+        raise ValueError('schema_version doit valoir "1" (contrat §3.1)')
     if not event.get("tenant_id"):
         raise ValueError("tenant_id manquant (contrat §1 : tout objet porte un tenant_id)")
     if event.get("kind") not in KINDS:
-        raise ValueError("kind invalide : %r (énumération §3.1 : %s)" % (event.get("kind"), ", ".join(KINDS)))
+        raise ValueError(
+            "kind invalide : {!r} (énumération §3.1 : {})".format(
+                event.get("kind"), ", ".join(KINDS)
+            )
+        )
     if event.get("severity_hint") is not None and event["severity_hint"] not in SEVERITY_HINTS:
-        raise ValueError("severity_hint invalide : %r" % (event.get("severity_hint"),))
+        raise ValueError("severity_hint invalide : {!r}".format(event.get("severity_hint")))
     source = event.get("source")
     if not isinstance(source, Mapping) or not source.get("type") or not source.get("name"):
         raise ValueError("source.type et source.name sont obligatoires (contrat §3.1)")
@@ -1008,7 +1062,9 @@ def validate_event(event: Mapping[str, Any]) -> None:
         raise ValueError("labels doit être un objet plat")
     for key, value in labels.items():
         if isinstance(value, (Mapping, list, tuple, set)):
-            raise ValueError("labels.%s n'est pas scalaire : « labels » doit rester plat (contrat §3.1)" % key)
+            raise ValueError(
+                f"labels.{key} n'est pas scalaire : « labels » doit rester plat (contrat §3.1)"
+            )
     payload = event.get("payload")
     if not isinstance(payload, Mapping):
         raise ValueError("payload doit être un objet")
@@ -1016,7 +1072,7 @@ def validate_event(event: Mapping[str, Any]) -> None:
         raise ValueError("payload sérialisé > %d octets (contrat §3.1)" % MAX_PAYLOAD_BYTES)
     parsed = parse_timestamp(event.get("ts"))
     if parsed is None:
-        raise ValueError("ts illisible : %r" % (event.get("ts"),))
+        raise ValueError("ts illisible : {!r}".format(event.get("ts")))
 
 
 # --------------------------------------------------------------------------------------
@@ -1066,7 +1122,7 @@ def read_documents(input_path: str | None, *, use_stdin: bool, jsonl: bool) -> l
         return list(iter_documents(sys.stdin.read(), jsonl=jsonl))
     if not input_path:
         raise ValueError("aucune entrée : utilisez --input FICHIER ou --stdin")
-    with open(input_path, "r", encoding="utf-8") as handle:
+    with open(input_path, encoding="utf-8") as handle:
         return list(iter_documents(handle.read(), jsonl=jsonl))
 
 
@@ -1109,8 +1165,8 @@ def parse_retry_after(value: Any) -> float | None:
     if moment is None:
         return None
     if moment.tzinfo is None:
-        moment = moment.replace(tzinfo=timezone.utc)
-    return max(0.0, (moment - datetime.now(timezone.utc)).total_seconds())
+        moment = moment.replace(tzinfo=UTC)
+    return max(0.0, (moment - datetime.now(UTC)).total_seconds())
 
 
 def post_json(
@@ -1144,7 +1200,7 @@ def post_json(
         raw = exc.read()
         return exc.code, _decode(raw), _text(raw), exc.headers
     except (urlerror.URLError, OSError, ValueError) as exc:
-        raise TransportError("échec de la requête vers %s : %s" % (_safe_url(url), exc)) from exc
+        raise TransportError(f"échec de la requête vers {_safe_url(url)} : {exc}") from exc
 
 
 def _decode(raw: bytes) -> Any:
@@ -1166,7 +1222,9 @@ def _text(raw: bytes) -> str:
 
 def _safe_url(url: str) -> str:
     """URL expurgée de tout identifiant utilisateur (``http://user:pass@hôte``)."""
-    without_credentials = re.sub(r"^(?P<scheme>[a-zA-Z][a-zA-Z0-9+.\-]*://)[^/@\s]*@", r"\g<scheme>", url)
+    without_credentials = re.sub(
+        r"^(?P<scheme>[a-zA-Z][a-zA-Z0-9+.\-]*://)[^/@\s]*@", r"\g<scheme>", url
+    )
     return without_credentials
 
 
@@ -1180,7 +1238,9 @@ def error_summary(payload: Any, raw_text: str) -> str:
             details = error.get("details")
             parts = [str(part) for part in (code, message) if part]
             if details:
-                parts.append("details=%s" % json.dumps(details, ensure_ascii=False, default=str)[:300])
+                parts.append(
+                    f"details={json.dumps(details, ensure_ascii=False, default=str)[:300]}"
+                )
             if parts:
                 return " · ".join(parts)
         return json.dumps(payload, ensure_ascii=False, default=str)[:300]
@@ -1229,9 +1289,7 @@ def post_events(
 
     for index, batch in enumerate(chunk_events(events, batch_size), start=1):
         body: Any = batch[0] if len(batch) == 1 else {"events": batch}
-        status, payload, raw_text, headers = post_json(
-            url, body, api_key=api_key, timeout=timeout
-        )
+        status, payload, raw_text, headers = post_json(url, body, api_key=api_key, timeout=timeout)
 
         if status == 429 or 500 <= status < 600:
             delay = parse_retry_after(get_header(headers, "Retry-After"))
@@ -1313,11 +1371,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     source_group = parser.add_mutually_exclusive_group(required=True)
     source_group.add_argument("--input", metavar="FICHIER", help="payload à lire (JSON ou JSONL)")
-    source_group.add_argument("--stdin", action="store_true", help="lire le payload sur stdin (mode n8n)")
+    source_group.add_argument(
+        "--stdin", action="store_true", help="lire le payload sur stdin (mode n8n)"
+    )
     parser.add_argument(
         "--url",
         default=env_first("THOT_SECURE_URL", "THOT_URL", default=DEFAULT_BASE_URL),
-        help="base de l'API (défaut : $env:THOT_SECURE_URL, sinon $env:THOT_URL, sinon %s)" % DEFAULT_BASE_URL,
+        help=f"base de l'API (défaut : $env:THOT_SECURE_URL, sinon $env:THOT_URL, sinon {DEFAULT_BASE_URL})",
     )
     parser.add_argument(
         "--api-key",
@@ -1353,27 +1413,29 @@ def build_parser() -> argparse.ArgumentParser:
         "--timeout",
         type=float,
         default=DEFAULT_TIMEOUT,
-        help="délai d'attente par requête en secondes (défaut %s)" % DEFAULT_TIMEOUT,
+        help=f"délai d'attente par requête en secondes (défaut {DEFAULT_TIMEOUT})",
     )
     parser.add_argument(
         "--retry-after-max",
         type=float,
         default=DEFAULT_RETRY_AFTER_MAX,
-        help="plafond d'attente imposé par Retry-After, en secondes (défaut %s)" % DEFAULT_RETRY_AFTER_MAX,
+        help=f"plafond d'attente imposé par Retry-After, en secondes (défaut {DEFAULT_RETRY_AFTER_MAX})",
     )
     parser.add_argument(
         "--dry-run",
         action="store_true",
         help="affiche les événements traduits sur stdout et n'envoie AUCUNE requête",
     )
-    parser.add_argument("-v", "--verbose", action="store_true", help="journalise la progression sur stderr")
+    parser.add_argument(
+        "-v", "--verbose", action="store_true", help="journalise la progression sur stderr"
+    )
     parser.add_argument("--version", action="version", version="thotsecure-webhook-bridge 0.1.0")
     return parser
 
 
 def _stderr(message: str) -> None:
     """Journalise sur stderr : stdout reste réservé aux données (JSON en mode --dry-run)."""
-    print("[translator] %s" % message, file=sys.stderr, flush=True)
+    print(f"[translator] {message}", file=sys.stderr, flush=True)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -1393,7 +1455,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         documents = read_documents(args.input, use_stdin=args.stdin, jsonl=jsonl)
     except (OSError, ValueError) as exc:
-        _stderr("lecture de l'entrée impossible : %s" % exc)
+        _stderr(f"lecture de l'entrée impossible : {exc}")
         return 2
 
     if not documents:
@@ -1448,7 +1510,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return 2
 
-    endpoint = "%s/api/v1/events" % str(args.url).rstrip("/")
+    endpoint = "{}/api/v1/events".format(str(args.url).rstrip("/"))
     if args.verbose:
         _stderr(
             "%d événement(s) → %s (lots de %d, profil %s)"
@@ -1466,7 +1528,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             log=_stderr if args.verbose else (lambda _message: None),
         )
     except TransportError as exc:
-        _stderr("échec réseau : %s" % exc)
+        _stderr(f"échec réseau : {exc}")
         return 1
 
     _stderr(
@@ -1481,8 +1543,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         for finding in counters["findings"]:
             if isinstance(finding, Mapping):
                 _stderr(
-                    "  finding %s · règle %s · sévérité %s · risque %s · décision %s"
-                    % (
+                    "  finding {} · règle {} · sévérité {} · risque {} · décision {}".format(
                         finding.get("finding_id"),
                         finding.get("rule_id"),
                         finding.get("severity"),

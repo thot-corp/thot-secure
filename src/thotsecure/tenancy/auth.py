@@ -31,7 +31,7 @@ from ..core.config import DEV_BOOTSTRAP_KEY, Settings
 from ..core.errors import AuthenticationError, NotFoundError
 from ..core.logging_setup import get_logger
 from ..core.models import ApiKeyInfo, ApiKeyRecord, Principal, Role, Tenant
-from ..core.util import iso_z, new_id, parse_dt, token, utcnow
+from ..core.util import iso_z, new_id, token, utcnow
 from ..storage import StoreProtocol
 from .rbac import build_principal
 
@@ -230,7 +230,9 @@ class ApiKeyService:
             label=record.label,
         )
         with self._lock:
-            self._cache[cache_key] = _CacheEntry(principal=principal, expires_at=now + AUTH_CACHE_TTL)
+            self._cache[cache_key] = _CacheEntry(
+                principal=principal, expires_at=now + AUTH_CACHE_TTL
+            )
             last_touch = self._touch_seen.get(key_id, 0.0)
             should_touch = now - last_touch > TOUCH_INTERVAL
             if should_touch:
@@ -264,9 +266,11 @@ class ApiKeyService:
             "key_id": principal.key_id or "",
             "exp": int(time.time()) + ttl,
         }
-        encoded = base64.urlsafe_b64encode(
-            json.dumps(payload, separators=(",", ":")).encode("utf-8")
-        ).decode("ascii").rstrip("=")
+        encoded = (
+            base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
+            .decode("ascii")
+            .rstrip("=")
+        )
         signature = hmac.new(self._pepper(), encoded.encode("ascii"), hashlib.sha256).hexdigest()
         return f"{encoded}.{signature}"
 
@@ -337,7 +341,11 @@ class ApiKeyService:
                 actor_role="system",
                 action="tenant.create",
                 target={"type": "tenant", "id": tenant.tenant_id},
-                after={"tenant_id": tenant.tenant_id, "mode": tenant.mode, "dry_run": tenant.dry_run},
+                after={
+                    "tenant_id": tenant.tenant_id,
+                    "mode": tenant.mode,
+                    "dry_run": tenant.dry_run,
+                },
                 context={
                     "note": "tenant d'amorçage créé automatiquement",
                     "bootstrap_key_is_dev": self.settings.bootstrap_key_is_dev,

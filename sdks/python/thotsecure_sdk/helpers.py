@@ -22,28 +22,29 @@ import json
 import os
 import re
 import uuid
-from datetime import datetime, timedelta, timezone
+from collections.abc import Iterable, Iterator, Mapping, Sequence
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, Iterable, Iterator, List, Mapping, Optional, Sequence, Tuple
+from typing import Any
 
 from .models import Event
 
 __all__ = [
-    "MAX_PAYLOAD_BYTES",
     "MAX_BATCH_SIZE",
+    "MAX_PAYLOAD_BYTES",
     "REDACTED",
-    "normalize_event",
-    "parse_http_log_line",
-    "from_syslog_line",
-    "redact_secrets",
-    "pseudonymize_ip",
-    "pseudonymize_ip_fields",
-    "iter_jsonl",
     "chunked",
     "env",
+    "from_syslog_line",
+    "iter_jsonl",
     "new_event_id",
+    "normalize_event",
     "now_iso",
+    "parse_http_log_line",
     "parse_timestamp",
+    "pseudonymize_ip",
+    "pseudonymize_ip_fields",
+    "redact_secrets",
     "truncate_payload",
 ]
 
@@ -57,8 +58,18 @@ REDACTED = "[REDACTED]"
 REDACTED_JWT = "[REDACTED_JWT]"
 
 _MONTHS = {
-    "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
-    "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12,
+    "jan": 1,
+    "feb": 2,
+    "mar": 3,
+    "apr": 4,
+    "may": 5,
+    "jun": 6,
+    "jul": 7,
+    "aug": 8,
+    "sep": 9,
+    "oct": 10,
+    "nov": 11,
+    "dec": 12,
 }
 
 #: Log « combined » Nginx/Apache : hôte virtuel optionnel, puis la ligne standard.
@@ -103,10 +114,26 @@ _SYSLOG_SEVERITY_HINT = {
 }
 
 _SYSLOG_FACILITIES = {
-    0: "kern", 1: "user", 2: "mail", 3: "daemon", 4: "auth", 5: "syslog",
-    6: "lpr", 7: "news", 8: "uucp", 9: "cron", 10: "authpriv", 11: "ftp",
-    16: "local0", 17: "local1", 18: "local2", 19: "local3",
-    20: "local4", 21: "local5", 22: "local6", 23: "local7",
+    0: "kern",
+    1: "user",
+    2: "mail",
+    3: "daemon",
+    4: "auth",
+    5: "syslog",
+    6: "lpr",
+    7: "news",
+    8: "uucp",
+    9: "cron",
+    10: "authpriv",
+    11: "ftp",
+    16: "local0",
+    17: "local1",
+    18: "local2",
+    19: "local3",
+    20: "local4",
+    21: "local5",
+    22: "local6",
+    23: "local7",
 }
 
 # --------------------------------------------------------------------------------------
@@ -183,9 +210,7 @@ _SENSITIVE_PARTS = frozenset(
 )
 
 _JWT_RE = re.compile(r"\beyJ[A-Za-z0-9_\-]{4,}\.[A-Za-z0-9_\-]{4,}\.[A-Za-z0-9_\-]{4,}\b")
-_AUTH_SCHEME_RE = re.compile(
-    r"(?i)\b(bearer|basic|token|apikey|api[_-]?key)\s+([A-Za-z0-9._\-+/=]{6,})"
-)
+_AUTH_SCHEME_RE = re.compile(r"(?i)\b(bearer|basic|token|apikey|api[_-]?key)\s+([A-Za-z0-9._\-+/=]{6,})")
 _KV_SECRET_RE = re.compile(
     r"(?i)\b(api[_-]?key|apikey|token|access_token|password|passwd|secret|signature)=([^&\s\"';]+)"
 )
@@ -209,16 +234,14 @@ def is_sensitive_key(key: Any) -> bool:
     parts = [part for part in normalized.split("_") if part]
     if any(part in _SENSITIVE_PARTS for part in parts):
         return True
-    if "api" in parts and "key" in parts:
-        return True
-    return False
+    return bool("api" in parts and "key" in parts)
 
 
 def _scrub_string(value: str) -> str:
     """Masque les secrets *contenus* dans une chaîne (JWT, ``Bearer …``, ``token=…``)."""
     scrubbed = _JWT_RE.sub(REDACTED_JWT, value)
-    scrubbed = _AUTH_SCHEME_RE.sub(lambda m: "%s %s" % (m.group(1), REDACTED), scrubbed)
-    scrubbed = _KV_SECRET_RE.sub(lambda m: "%s=%s" % (m.group(1), REDACTED), scrubbed)
+    scrubbed = _AUTH_SCHEME_RE.sub(lambda m: f"{m.group(1)} {REDACTED}", scrubbed)
+    scrubbed = _KV_SECRET_RE.sub(lambda m: f"{m.group(1)}={REDACTED}", scrubbed)
     return scrubbed
 
 
@@ -226,12 +249,12 @@ def _mask_value(value: Any) -> Any:
     if isinstance(value, str):
         parts = value.split(None, 1)
         if len(parts) == 2 and parts[0].lower() in ("bearer", "basic", "token", "apikey"):
-            return "%s %s" % (parts[0], REDACTED)
+            return f"{parts[0]} {REDACTED}"
         return REDACTED
     return REDACTED
 
 
-def redact_secrets(data: Any, *, depth: int = 0, _seen: Optional[set] = None) -> Any:
+def redact_secrets(data: Any, *, depth: int = 0, _seen: set | None = None) -> Any:
     """Retourne une copie de *data* où les champs sensibles sont masqués.
 
     Le traitement est récursif (dict, listes, tuples) et couvre :
@@ -254,7 +277,7 @@ def redact_secrets(data: Any, *, depth: int = 0, _seen: Optional[set] = None) ->
         if id(data) in _seen:
             return REDACTED
         _seen.add(id(data))
-        out: Dict[Any, Any] = {}
+        out: dict[Any, Any] = {}
         for key, value in data.items():
             if is_sensitive_key(key):
                 out[key] = _mask_value(value)
@@ -341,14 +364,12 @@ def pseudonymize_ip(ip: str, salt: str, *, keep_prefix: bool = False, prefix: st
                 bits = 24 if addr.version == 4 else 64
                 network_text = str(ipaddress.ip_network("%s/%d" % (addr, bits), strict=False))
     except ValueError as exc:
-        raise ValueError("pseudonymize_ip : %r n'est pas une IP ni un CIDR valide" % raw) from exc
+        raise ValueError(f"pseudonymize_ip : {raw!r} n'est pas une IP ni un CIDR valide") from exc
 
-    digest = hmac.new(
-        salt.encode("utf-8"), packed_str.encode("utf-8"), hashlib.sha256
-    ).hexdigest()
-    token = "%s%s" % (prefix, digest[:32])
+    digest = hmac.new(salt.encode("utf-8"), packed_str.encode("utf-8"), hashlib.sha256).hexdigest()
+    token = f"{prefix}{digest[:32]}"
     if keep_prefix and network_text:
-        return "%s@%s" % (token, network_text)
+        return f"{token}@{network_text}"
     return token
 
 
@@ -369,7 +390,7 @@ def pseudonymize_ip_fields(
         return data
     wanted = {_normalize_key(f) for f in fields}
     if isinstance(data, Mapping):
-        out: Dict[Any, Any] = {}
+        out: dict[Any, Any] = {}
         for key, value in data.items():
             if _normalize_key(key) in wanted and isinstance(value, str) and value.strip() not in ("", "-"):
                 try:
@@ -397,17 +418,17 @@ def pseudonymize_ip_fields(
 
 def now_iso() -> str:
     """Horodatage ISO 8601 UTC en millisecondes, au format du contrat (``…Z``)."""
-    return _to_iso_utc(datetime.now(timezone.utc))
+    return _to_iso_utc(datetime.now(UTC))
 
 
 def _to_iso_utc(moment: datetime) -> str:
     if moment.tzinfo is None:
-        moment = moment.replace(tzinfo=timezone.utc)
-    moment = moment.astimezone(timezone.utc)
+        moment = moment.replace(tzinfo=UTC)
+    moment = moment.astimezone(UTC)
     return moment.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
 
 
-def _parse_clf_timestamp(value: str) -> Optional[datetime]:
+def _parse_clf_timestamp(value: str) -> datetime | None:
     """Analyse ``14/Feb/2026:10:00:00 +0100`` sans dépendre de la locale (Windows FR incluse)."""
     match = re.match(
         r"^(\d{1,2})/([A-Za-z]{3})/(\d{4}):(\d{2}):(\d{2}):(\d{2})\s*([+-]\d{4})?$", value.strip()
@@ -418,7 +439,7 @@ def _parse_clf_timestamp(value: str) -> Optional[datetime]:
     month = _MONTHS.get(month_name.lower())
     if month is None:
         return None
-    tzinfo = timezone.utc
+    tzinfo = UTC
     if offset:
         sign = 1 if offset[0] == "+" else -1
         delta = timedelta(hours=int(offset[1:3]), minutes=int(offset[3:5]))
@@ -429,7 +450,7 @@ def _parse_clf_timestamp(value: str) -> Optional[datetime]:
         return None
 
 
-def _parse_iso_timestamp(value: str) -> Optional[datetime]:
+def _parse_iso_timestamp(value: str) -> datetime | None:
     """Analyse un horodatage ISO 8601 (suffixe ``Z`` accepté). Aucune récursion."""
     text = value.strip()
     if not text:
@@ -439,10 +460,10 @@ def _parse_iso_timestamp(value: str) -> Optional[datetime]:
         parsed = datetime.fromisoformat(normalized)
     except ValueError:
         return None
-    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
 
 
-def _parse_syslog_timestamp(value: str, *, year: Optional[int] = None) -> Optional[datetime]:
+def _parse_syslog_timestamp(value: str, *, year: int | None = None) -> datetime | None:
     """Analyse ``Feb 14 10:00:00`` (RFC 3164, sans année) ou un horodatage ISO."""
     value = value.strip()
     iso = _parse_iso_timestamp(value)
@@ -455,9 +476,9 @@ def _parse_syslog_timestamp(value: str, *, year: Optional[int] = None) -> Option
     month = _MONTHS.get(month_name.lower())
     if month is None:
         return None
-    reference = datetime.now(timezone.utc)
+    reference = datetime.now(UTC)
     candidate = datetime(
-        year or reference.year, month, int(day), int(hour), int(minute), int(second), tzinfo=timezone.utc
+        year or reference.year, month, int(day), int(hour), int(minute), int(second), tzinfo=UTC
     )
     # Un message de décembre lu en janvier appartient à l'année précédente.
     if candidate > reference + timedelta(days=2):
@@ -465,18 +486,18 @@ def _parse_syslog_timestamp(value: str, *, year: Optional[int] = None) -> Option
     return candidate
 
 
-def parse_timestamp(value: Any) -> Optional[datetime]:
+def parse_timestamp(value: Any) -> datetime | None:
     """Analyse un horodatage hétérogène (ISO 8601, epoch, CLF, syslog) → ``datetime`` UTC."""
     if value is None:
         return None
     if isinstance(value, datetime):
-        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+        return value if value.tzinfo else value.replace(tzinfo=UTC)
     if isinstance(value, (int, float)) and not isinstance(value, bool):
         seconds = float(value)
         if seconds > 1e11:  # millisecondes
             seconds /= 1000.0
         try:
-            return datetime.fromtimestamp(seconds, tz=timezone.utc)
+            return datetime.fromtimestamp(seconds, tz=UTC)
         except (OverflowError, OSError, ValueError):
             return None
     text = str(value).strip()
@@ -507,13 +528,13 @@ def truncate_payload(
     *,
     max_bytes: int = MAX_PAYLOAD_BYTES,
     keep_keys: Sequence[str] = ("status", "method", "path"),
-) -> Tuple[Dict[str, Any], bool]:
+) -> tuple[dict[str, Any], bool]:
     """Ramène *payload* sous *max_bytes* et indique si une troncature a eu lieu.
 
     Stratégie : troncature des chaînes les plus longues d'abord, puis retrait des clés les plus
     volumineuses (en préservant ``keep_keys``), puis remplacement par un marqueur si nécessaire.
     """
-    result: Dict[str, Any] = dict(payload)
+    result: dict[str, Any] = dict(payload)
     if _serialized_size(result) <= max_bytes:
         return result, False
 
@@ -522,11 +543,7 @@ def truncate_payload(
     for _ in range(64):
         if _serialized_size(result) <= max_bytes:
             break
-        candidates = [
-            (len(str(v)), k)
-            for k, v in result.items()
-            if isinstance(v, str) and len(v) > 256
-        ]
+        candidates = [(len(str(v)), k) for k, v in result.items() if isinstance(v, str) and len(v) > 256]
         if not candidates:
             break
         candidates.sort(reverse=True)
@@ -537,11 +554,7 @@ def truncate_payload(
     for _ in range(64):
         if _serialized_size(result) <= max_bytes:
             break
-        candidates = [
-            (_serialized_size({k: v}), k)
-            for k, v in result.items()
-            if k not in keep_keys
-        ]
+        candidates = [(_serialized_size({k: v}), k) for k, v in result.items() if k not in keep_keys]
         if not candidates:
             break
         candidates.sort(reverse=True)
@@ -550,7 +563,7 @@ def truncate_payload(
 
     # 3) dernier recours
     if _serialized_size(result) > max_bytes:
-        result = {"_truncated": True, "_original_keys": sorted(str(k) for k in payload.keys())}
+        result = {"_truncated": True, "_original_keys": sorted(str(k) for k in payload)}
     return result, truncated
 
 
@@ -559,7 +572,7 @@ def truncate_payload(
 # --------------------------------------------------------------------------------------
 
 
-def parse_http_log_line(line: str) -> Optional[Dict[str, Any]]:
+def parse_http_log_line(line: str) -> dict[str, Any] | None:
     """Analyse une ligne de log Nginx/Apache (formats ``combined`` et ``common``).
 
     Retourne un dictionnaire de champs bruts ou ``None`` si la ligne n'est pas reconnue.
@@ -578,7 +591,7 @@ def parse_http_log_line(line: str) -> Optional[Dict[str, Any]]:
     if target and "?" in target:
         path, query = target.split("?", 1)
 
-    bytes_sent: Optional[int] = None
+    bytes_sent: int | None = None
     if groups.get("bytes") and groups["bytes"] != "-":
         try:
             bytes_sent = int(groups["bytes"])
@@ -628,7 +641,7 @@ def _pick(data: Mapping[str, Any], field: str) -> Any:
     return None
 
 
-def _severity_hint_for_status(status: Optional[int]) -> Optional[str]:
+def _severity_hint_for_status(status: int | None) -> str | None:
     if status is None:
         return None
     if 500 <= status < 600:
@@ -650,19 +663,19 @@ def normalize_event(
     source: Any,
     *,
     tenant_id: str,
-    source_name: Optional[str] = None,
+    source_name: str | None = None,
     source_type: str = "log_tail",
-    source_host: Optional[str] = None,
-    kind: Optional[str] = None,
-    event_id: Optional[str] = None,
-    ts: Optional[Any] = None,
-    severity_hint: Optional[str] = None,
-    extra_labels: Optional[Mapping[str, Any]] = None,
-    extra_payload: Optional[Mapping[str, Any]] = None,
-    ip_salt: Optional[str] = None,
+    source_host: str | None = None,
+    kind: str | None = None,
+    event_id: str | None = None,
+    ts: Any | None = None,
+    severity_hint: str | None = None,
+    extra_labels: Mapping[str, Any] | None = None,
+    extra_payload: Mapping[str, Any] | None = None,
+    ip_salt: str | None = None,
     ip_fields: Sequence[str] = DEFAULT_IP_FIELDS,
     redact: bool = True,
-    raw_ref: Optional[str] = None,
+    raw_ref: str | None = None,
     max_payload_bytes: int = MAX_PAYLOAD_BYTES,
 ) -> Event:
     """Construit un ``Event`` conforme au contrat §3.1 depuis un log HTTP brut.
@@ -679,8 +692,8 @@ def normalize_event(
     if not tenant_id:
         raise ValueError("normalize_event exige un tenant_id (le contrat l'impose sur tout objet)")
 
-    payload_extra: Dict[str, Any] = {}
-    record: Dict[str, Any] = {}
+    payload_extra: dict[str, Any] = {}
+    record: dict[str, Any] = {}
 
     if isinstance(source, Mapping):
         record = dict(source)
@@ -701,7 +714,7 @@ def normalize_event(
                 payload_extra["message"] = text
                 record = {}
     else:
-        raise TypeError("normalize_event attend une chaîne ou un mapping, reçu %r" % type(source).__name__)
+        raise TypeError(f"normalize_event attend une chaîne ou un mapping, reçu {type(source).__name__!r}")
 
     status = _pick(record, "status")
     try:
@@ -724,15 +737,15 @@ def normalize_event(
 
     if method is None and path is None and message is None and not payload_extra:
         # Aucun champ exploitable : on conserve au moins la ligne brute comme message.
-        message = json.dumps(source, ensure_ascii=False, default=str) if not isinstance(source, str) else source
+        message = (
+            json.dumps(source, ensure_ascii=False, default=str) if not isinstance(source, str) else source
+        )
 
     resolved_kind = kind or ("http.request" if (method or path or status_int is not None) else "log.line")
     if resolved_kind not in Event.KINDS:
-        raise ValueError(
-            "kind invalide : %r (attendu : %s)" % (resolved_kind, ", ".join(Event.KINDS))
-        )
+        raise ValueError("kind invalide : {!r} (attendu : {})".format(resolved_kind, ", ".join(Event.KINDS)))
 
-    labels: Dict[str, Any] = {}
+    labels: dict[str, Any] = {}
     if method:
         labels["method"] = _as_scalar(method)
     if path:
@@ -752,7 +765,7 @@ def normalize_event(
         for key, value in extra_labels.items():
             labels[str(key)] = _as_scalar(value)
 
-    payload: Dict[str, Any] = {}
+    payload: dict[str, Any] = {}
     if status_int is not None:
         payload["status"] = status_int
     if raw_bytes not in (None, ""):
@@ -781,7 +794,7 @@ def normalize_event(
     if request_ts is not None and parsed_ts is None:
         payload.setdefault("raw_ts", _as_scalar(request_ts))
 
-    event_dict: Dict[str, Any] = {
+    event_dict: dict[str, Any] = {
         "event_id": event_id or new_event_id(),
         "schema_version": "1",
         "tenant_id": tenant_id,
@@ -792,7 +805,9 @@ def normalize_event(
             "name": source_name or "thotsecure-sdk",
             "host": host or source_name or "unknown",
         },
-        "severity_hint": severity_hint if severity_hint is not None else _severity_hint_for_status(status_int),
+        "severity_hint": severity_hint
+        if severity_hint is not None
+        else _severity_hint_for_status(status_int),
         "labels": labels,
         "payload": payload,
         "raw_ref": raw_ref,
@@ -805,7 +820,7 @@ def normalize_event(
 
     event = Event.from_dict(event_dict)
     if event.kind not in Event.KINDS:
-        raise ValueError("kind invalide : %r" % event.kind)
+        raise ValueError(f"kind invalide : {event.kind!r}")
     return event
 
 
@@ -813,13 +828,13 @@ def from_syslog_line(
     line: str,
     *,
     tenant_id: str,
-    source_name: Optional[str] = None,
+    source_name: str | None = None,
     source_type: str = "syslog",
-    source_host: Optional[str] = None,
-    ip_salt: Optional[str] = None,
+    source_host: str | None = None,
+    ip_salt: str | None = None,
     redact: bool = True,
-    extra_labels: Optional[Mapping[str, Any]] = None,
-    extra_payload: Optional[Mapping[str, Any]] = None,
+    extra_labels: Mapping[str, Any] | None = None,
+    extra_payload: Mapping[str, Any] | None = None,
 ) -> Event:
     """Convertit une ligne syslog (RFC 3164 ou RFC 5424) en ``Event`` (``kind="syslog"``).
 
@@ -830,9 +845,9 @@ def from_syslog_line(
         raise ValueError("from_syslog_line : ligne vide")
 
     text = line.strip()
-    pri: Optional[int] = None
-    fields: Dict[str, Any] = {}
-    payload_extra: Dict[str, Any] = {}
+    pri: int | None = None
+    fields: dict[str, Any] = {}
+    payload_extra: dict[str, Any] = {}
 
     match5424 = _SYSLOG_RFC5424_RE.match(text)
     if match5424:
@@ -862,8 +877,8 @@ def from_syslog_line(
         else:
             fields = {"message": text}
 
-    severity_hint: Optional[str] = None
-    labels: Dict[str, Any] = {}
+    severity_hint: str | None = None
+    labels: dict[str, Any] = {}
     if pri is not None:
         facility_code, severity_code = divmod(pri, 8)
         labels["syslog_facility"] = _SYSLOG_FACILITIES.get(facility_code, "facility%d" % facility_code)
@@ -900,7 +915,7 @@ _IPV4_IN_TEXT_RE = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
 _IPV6_IN_TEXT_RE = re.compile(r"(?:[0-9A-Fa-f]{1,4}:){2,7}[0-9A-Fa-f]{1,4}|::[0-9A-Fa-f:]{1,}")
 
 
-def _extract_ip(text: str) -> Optional[str]:
+def _extract_ip(text: str) -> str | None:
     """Extrait la première IP d'un message, en privilégiant IPv4.
 
     Les candidats IPv6 sont validés par ``ipaddress`` : sans cela, un horodatage comme
@@ -930,11 +945,11 @@ def new_event_id() -> str:
     return str(uuid.uuid4())
 
 
-def chunked(iterable: Iterable[Any], size: int = MAX_BATCH_SIZE) -> Iterator[List[Any]]:
+def chunked(iterable: Iterable[Any], size: int = MAX_BATCH_SIZE) -> Iterator[list[Any]]:
     """Découpe un itérable en lots de *size* éléments (≤ 500 par défaut, contrat §4.3)."""
     if size < 1:
         raise ValueError("size doit être ≥ 1")
-    batch: List[Any] = []
+    batch: list[Any] = []
     for item in iterable:
         batch.append(item)
         if len(batch) >= size:
@@ -971,7 +986,7 @@ def iter_jsonl(
                 raise ValueError("%s:%d : JSON invalide (%s)" % (file_path, number, exc)) from exc
 
 
-def env(name: str, default: Optional[str] = None, *, required: bool = False) -> Optional[str]:
+def env(name: str, default: str | None = None, *, required: bool = False) -> str | None:
     """Lecture d'une variable d'environnement, avec erreur explicite si ``required``.
 
     Ne journalise **jamais** la valeur : ``THOT_API_KEY`` transite par ici.
@@ -979,6 +994,6 @@ def env(name: str, default: Optional[str] = None, *, required: bool = False) -> 
     value = os.environ.get(name, default)
     if required and not value:
         raise RuntimeError(
-            "variable d'environnement %s manquante (voir docs/architecture/api-contract.md §9)" % name
+            f"variable d'environnement {name} manquante (voir docs/architecture/api-contract.md §9)"
         )
     return value

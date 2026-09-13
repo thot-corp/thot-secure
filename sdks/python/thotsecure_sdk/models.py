@@ -11,28 +11,29 @@ Chaque modèle est une ``dataclass`` qui :
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field, fields
 from datetime import date, datetime
-from typing import Any, ClassVar, Dict, Generic, List, Mapping, Optional, TypeVar
+from typing import Any, ClassVar, Generic, TypeVar
 
 __all__ = [
-    "Model",
-    "Page",
+    "Action",
+    "ApiKey",
+    "AuditRecord",
+    "AuditVerification",
+    "CollectorStatus",
+    "Decision",
     "Event",
     "Finding",
-    "Decision",
-    "Action",
-    "AuditRecord",
-    "Tenant",
-    "Rule",
-    "Playbook",
-    "StatsOverview",
-    "CollectorStatus",
-    "ApiKey",
-    "IngestResult",
     "IngestOutcome",
+    "IngestResult",
+    "Model",
+    "Page",
+    "Playbook",
+    "Rule",
     "RuleValidation",
-    "AuditVerification",
+    "StatsOverview",
+    "Tenant",
 ]
 
 T = TypeVar("T")
@@ -56,11 +57,11 @@ class Model:
     """Base commune : tolérance aux champs inconnus et aller-retour dictionnaire."""
 
     #: Champs non reconnus, conservés tels quels pour ne rien perdre de la réponse serveur.
-    extra: Dict[str, Any] = field(default_factory=dict, repr=False, compare=False)
+    extra: dict[str, Any] = field(default_factory=dict, repr=False, compare=False)
 
     #: Champs imbriqués (nom du champ -> modèle) et listes de modèles.
-    _NESTED: ClassVar[Dict[str, type]] = {}
-    _NESTED_LISTS: ClassVar[Dict[str, type]] = {}
+    _NESTED: ClassVar[dict[str, type]] = {}
+    _NESTED_LISTS: ClassVar[dict[str, type]] = {}
 
     # ------------------------------------------------------------------ utilitaires
 
@@ -69,7 +70,7 @@ class Model:
         cached = cls.__dict__.get("_field_names_cache")
         if cached is None:
             cached = tuple(f.name for f in fields(cls) if f.name != "extra")
-            setattr(cls, "_field_names_cache", cached)
+            cls._field_names_cache = cached
         return cached
 
     @classmethod
@@ -79,34 +80,31 @@ class Model:
             return nested.from_dict(value)
         list_model = cls._NESTED_LISTS.get(name)
         if list_model is not None and isinstance(value, list):
-            return [
-                list_model.from_dict(item) if isinstance(item, Mapping) else item
-                for item in value
-            ]
+            return [list_model.from_dict(item) if isinstance(item, Mapping) else item for item in value]
         return value
 
     @classmethod
-    def from_dict(cls, data: Optional[Mapping[str, Any]]) -> Any:
+    def from_dict(cls, data: Mapping[str, Any] | None) -> Any:
         """Construit le modèle depuis un dictionnaire (tolérant : champs inconnus → ``extra``)."""
         if data is None:
             return None
         if not isinstance(data, Mapping):
-            raise TypeError("%s.from_dict attend un mapping, reçu %r" % (cls.__name__, type(data)))
+            raise TypeError(f"{cls.__name__}.from_dict attend un mapping, reçu {type(data)!r}")
         names = cls._field_names()
-        kwargs: Dict[str, Any] = {}
+        kwargs: dict[str, Any] = {}
         for name in names:
             if name in data:
                 kwargs[name] = cls._convert(name, data[name])
         kwargs["extra"] = {k: v for k, v in data.items() if k not in names}
         return cls(**kwargs)
 
-    def to_dict(self, *, omit_none: bool = False) -> Dict[str, Any]:
+    def to_dict(self, *, omit_none: bool = False) -> dict[str, Any]:
         """Sérialise le modèle.
 
         ``omit_none=True`` retire les champs ``None`` (utile pour construire un corps de requête) ;
         par défaut tous les champs du contrat sont présents, ce qui rend l'aller-retour fidèle.
         """
-        out: Dict[str, Any] = {}
+        out: dict[str, Any] = {}
         for name in self._field_names():
             value = getattr(self, name)
             if value is None and omit_none:
@@ -126,9 +124,9 @@ class Model:
 class Page(Generic[T]):
     """Page de résultats (`limit` + `cursor`) renvoyée par les routes de liste."""
 
-    items: List[T] = field(default_factory=list)
-    next_cursor: Optional[str] = None
-    raw: Dict[str, Any] = field(default_factory=dict, repr=False)
+    items: list[T] = field(default_factory=list)
+    next_cursor: str | None = None
+    raw: dict[str, Any] = field(default_factory=dict, repr=False)
 
     def __iter__(self):
         return iter(self.items)
@@ -146,14 +144,14 @@ class Page(Generic[T]):
     def from_payload(
         cls,
         payload: Any,
-        model: Optional[type] = None,
+        model: type | None = None,
         *,
         items_key: str = "items",
-    ) -> "Page[Any]":
+    ) -> Page[Any]:
         """Normalise les formes de réponse possibles (``{"items":[...]}`` ou liste nue)."""
         if isinstance(payload, list):
             raw_items = payload
-            container: Dict[str, Any] = {}
+            container: dict[str, Any] = {}
         elif isinstance(payload, Mapping):
             container = dict(payload)
             raw_items = container.get(items_key)
@@ -166,7 +164,7 @@ class Page(Generic[T]):
             raw_items = []
         if not isinstance(raw_items, list):
             raw_items = [raw_items]
-        items: List[Any] = []
+        items: list[Any] = []
         for item in raw_items:
             if model is not None and isinstance(item, Mapping):
                 items.append(model.from_dict(item))
@@ -185,16 +183,16 @@ class Page(Generic[T]):
 class Event(Model):
     """Événement normalisé, immuable (contrat §3.1)."""
 
-    event_id: Optional[str] = None
-    schema_version: Optional[str] = None
-    tenant_id: Optional[str] = None
-    ts: Optional[str] = None
-    kind: Optional[str] = None
-    source: Dict[str, Any] = field(default_factory=dict)
-    severity_hint: Optional[str] = None
-    labels: Dict[str, Any] = field(default_factory=dict)
-    payload: Dict[str, Any] = field(default_factory=dict)
-    raw_ref: Optional[str] = None
+    event_id: str | None = None
+    schema_version: str | None = None
+    tenant_id: str | None = None
+    ts: str | None = None
+    kind: str | None = None
+    source: dict[str, Any] = field(default_factory=dict)
+    severity_hint: str | None = None
+    labels: dict[str, Any] = field(default_factory=dict)
+    payload: dict[str, Any] = field(default_factory=dict)
+    raw_ref: str | None = None
 
     #: Valeurs admises par le contrat pour ``kind``.
     KINDS: ClassVar[tuple] = (
@@ -209,7 +207,7 @@ class Event(Model):
     )
     SEVERITY_HINTS: ClassVar[tuple] = ("info", "low", "medium", "high", "critical")
 
-    def to_dict(self, *, omit_none: bool = False) -> Dict[str, Any]:
+    def to_dict(self, *, omit_none: bool = False) -> dict[str, Any]:
         out = super().to_dict(omit_none=omit_none)
         # Le contrat exige un `labels` plat à valeurs scalaires : on filtre par sécurité.
         labels = out.get("labels")
@@ -229,26 +227,26 @@ class Event(Model):
 class Finding(Model):
     """Agrégat d'événements porteur d'un ``risk_score`` (contrat §3.2)."""
 
-    finding_id: Optional[str] = None
-    tenant_id: Optional[str] = None
-    rule_id: Optional[str] = None
-    rule_name: Optional[str] = None
-    severity: Optional[str] = None
-    risk_score: Optional[float] = None
-    confidence: Optional[float] = None
-    status: Optional[str] = None
-    title: Optional[str] = None
-    description: Optional[str] = None
-    remediation: Optional[str] = None
-    tags: List[str] = field(default_factory=list)
-    mitre: List[str] = field(default_factory=list)
-    evidence: Dict[str, Any] = field(default_factory=dict)
-    first_seen: Optional[str] = None
-    last_seen: Optional[str] = None
-    count: Optional[int] = None
-    event_ids: List[str] = field(default_factory=list)
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
+    finding_id: str | None = None
+    tenant_id: str | None = None
+    rule_id: str | None = None
+    rule_name: str | None = None
+    severity: str | None = None
+    risk_score: float | None = None
+    confidence: float | None = None
+    status: str | None = None
+    title: str | None = None
+    description: str | None = None
+    remediation: str | None = None
+    tags: list[str] = field(default_factory=list)
+    mitre: list[str] = field(default_factory=list)
+    evidence: dict[str, Any] = field(default_factory=dict)
+    first_seen: str | None = None
+    last_seen: str | None = None
+    count: int | None = None
+    event_ids: list[str] = field(default_factory=list)
+    created_at: str | None = None
+    updated_at: str | None = None
 
     STATUSES: ClassVar[tuple] = ("open", "acked", "closed", "suppressed")
     SEVERITIES: ClassVar[tuple] = ("info", "low", "medium", "high", "critical")
@@ -263,15 +261,15 @@ class Finding(Model):
 class Decision(Model):
     """Décision rendue par le moteur policy-as-code (contrat §3.3)."""
 
-    decision: Optional[str] = None
-    policy_id: Optional[str] = None
-    playbook: Optional[str] = None
-    params: Dict[str, Any] = field(default_factory=dict)
-    reason: Optional[str] = None
-    risk_score: Optional[float] = None
-    expires_at: Optional[str] = None
-    cooldown_seconds: Optional[int] = None
-    dry_run: Optional[bool] = None
+    decision: str | None = None
+    policy_id: str | None = None
+    playbook: str | None = None
+    params: dict[str, Any] = field(default_factory=dict)
+    reason: str | None = None
+    risk_score: float | None = None
+    expires_at: str | None = None
+    cooldown_seconds: int | None = None
+    dry_run: bool | None = None
 
     DECISIONS: ClassVar[tuple] = ("auto", "require_approval", "notify_only", "ignore")
 
@@ -285,26 +283,26 @@ class Decision(Model):
 class Action(Model):
     """Instance d'exécution d'un playbook, avec cycle de vie et rollback (contrat §3.4)."""
 
-    action_id: Optional[str] = None
-    tenant_id: Optional[str] = None
-    finding_id: Optional[str] = None
-    policy_id: Optional[str] = None
-    playbook: Optional[str] = None
-    status: Optional[str] = None
-    mode: Optional[str] = None
-    dry_run: Optional[bool] = None
-    params: Dict[str, Any] = field(default_factory=dict)
-    target: Dict[str, Any] = field(default_factory=dict)
-    requested_by: Optional[str] = None
-    requested_at: Optional[str] = None
-    approved_by: Optional[str] = None
-    approved_at: Optional[str] = None
-    executed_at: Optional[str] = None
-    expires_at: Optional[str] = None
-    result: Optional[Dict[str, Any]] = None
-    rollback: Dict[str, Any] = field(default_factory=dict)
-    idempotency_key: Optional[str] = None
-    audit_seq: Optional[int] = None
+    action_id: str | None = None
+    tenant_id: str | None = None
+    finding_id: str | None = None
+    policy_id: str | None = None
+    playbook: str | None = None
+    status: str | None = None
+    mode: str | None = None
+    dry_run: bool | None = None
+    params: dict[str, Any] = field(default_factory=dict)
+    target: dict[str, Any] = field(default_factory=dict)
+    requested_by: str | None = None
+    requested_at: str | None = None
+    approved_by: str | None = None
+    approved_at: str | None = None
+    executed_at: str | None = None
+    expires_at: str | None = None
+    result: dict[str, Any] | None = None
+    rollback: dict[str, Any] = field(default_factory=dict)
+    idempotency_key: str | None = None
+    audit_seq: int | None = None
 
     STATUSES: ClassVar[tuple] = (
         "planned",
@@ -338,17 +336,17 @@ class Action(Model):
 class AuditRecord(Model):
     """Entrée du journal append-only chaîné par hash (contrat §3.5)."""
 
-    seq: Optional[int] = None
-    ts: Optional[str] = None
-    tenant_id: Optional[str] = None
-    actor: Optional[str] = None
-    actor_role: Optional[str] = None
-    action: Optional[str] = None
-    target: Dict[str, Any] = field(default_factory=dict)
-    before: Dict[str, Any] = field(default_factory=dict)
-    after: Dict[str, Any] = field(default_factory=dict)
-    prev_hash: Optional[str] = None
-    hash: Optional[str] = None
+    seq: int | None = None
+    ts: str | None = None
+    tenant_id: str | None = None
+    actor: str | None = None
+    actor_role: str | None = None
+    action: str | None = None
+    target: dict[str, Any] = field(default_factory=dict)
+    before: dict[str, Any] = field(default_factory=dict)
+    after: dict[str, Any] = field(default_factory=dict)
+    prev_hash: str | None = None
+    hash: str | None = None
 
 
 # --------------------------------------------------------------------------------------
@@ -360,13 +358,13 @@ class AuditRecord(Model):
 class Tenant(Model):
     """Frontière d'isolation multi-tenant (contrat §4.2)."""
 
-    tenant_id: Optional[str] = None
-    name: Optional[str] = None
-    mode: Optional[str] = None
-    dry_run: Optional[bool] = None
-    autonomy_allowlist: List[str] = field(default_factory=list)
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
+    tenant_id: str | None = None
+    name: str | None = None
+    mode: str | None = None
+    dry_run: bool | None = None
+    autonomy_allowlist: list[str] = field(default_factory=list)
+    created_at: str | None = None
+    updated_at: str | None = None
 
     MODES: ClassVar[tuple] = ("manual", "supervised", "auto")
 
@@ -375,13 +373,13 @@ class Tenant(Model):
 class ApiKey(Model):
     """Métadonnées d'une clé API (la valeur n'est jamais relue après création)."""
 
-    key_id: Optional[str] = None
-    api_key: Optional[str] = None
-    label: Optional[str] = None
-    role: Optional[str] = None
-    created_at: Optional[str] = None
-    last_used_at: Optional[str] = None
-    revoked_at: Optional[str] = None
+    key_id: str | None = None
+    api_key: str | None = None
+    label: str | None = None
+    role: str | None = None
+    created_at: str | None = None
+    last_used_at: str | None = None
+    revoked_at: str | None = None
 
 
 # --------------------------------------------------------------------------------------
@@ -393,25 +391,25 @@ class ApiKey(Model):
 class Rule(Model):
     """Résumé ou règle complète (le YAML source est conservé dans ``extra['yaml']``)."""
 
-    rule_id: Optional[str] = None
-    title: Optional[str] = None
-    description: Optional[str] = None
-    status: Optional[str] = None
-    severity: Optional[str] = None
-    confidence: Optional[float] = None
-    enabled: Optional[bool] = None
-    tags: List[str] = field(default_factory=list)
-    source_types: List[str] = field(default_factory=list)
-    kinds: List[str] = field(default_factory=list)
-    path: Optional[str] = None
-    match: Dict[str, Any] = field(default_factory=dict)
-    dedup: Dict[str, Any] = field(default_factory=dict)
-    risk: Dict[str, Any] = field(default_factory=dict)
-    remediation: Optional[str] = None
-    references: List[str] = field(default_factory=list)
+    rule_id: str | None = None
+    title: str | None = None
+    description: str | None = None
+    status: str | None = None
+    severity: str | None = None
+    confidence: float | None = None
+    enabled: bool | None = None
+    tags: list[str] = field(default_factory=list)
+    source_types: list[str] = field(default_factory=list)
+    kinds: list[str] = field(default_factory=list)
+    path: str | None = None
+    match: dict[str, Any] = field(default_factory=dict)
+    dedup: dict[str, Any] = field(default_factory=dict)
+    risk: dict[str, Any] = field(default_factory=dict)
+    remediation: str | None = None
+    references: list[str] = field(default_factory=list)
 
     @property
-    def yaml_source(self) -> Optional[str]:
+    def yaml_source(self) -> str | None:
         """YAML source renvoyé par ``GET /rules/{rule_id}``, si présent."""
         value = self.extra.get("yaml") or self.extra.get("yaml_source")
         return value if isinstance(value, str) else None
@@ -421,20 +419,20 @@ class Rule(Model):
 class RuleValidation(Model):
     """Résultat de ``POST /rules/validate``."""
 
-    valid: Optional[bool] = None
-    errors: List[Any] = field(default_factory=list)
+    valid: bool | None = None
+    errors: list[Any] = field(default_factory=list)
 
 
 @dataclass
 class Playbook(Model):
     """Procédure d'action nommée, toujours accompagnée d'un rollback (contrat §7)."""
 
-    name: Optional[str] = None
-    description: Optional[str] = None
-    params_schema: Dict[str, Any] = field(default_factory=dict)
-    reversible: Optional[bool] = None
-    dry_run_capable: Optional[bool] = None
-    connectors: List[str] = field(default_factory=list)
+    name: str | None = None
+    description: str | None = None
+    params_schema: dict[str, Any] = field(default_factory=dict)
+    reversible: bool | None = None
+    dry_run_capable: bool | None = None
+    connectors: list[str] = field(default_factory=list)
 
 
 # --------------------------------------------------------------------------------------
@@ -446,31 +444,31 @@ class Playbook(Model):
 class StatsOverview(Model):
     """Compteurs agrégés 24 h / 7 j exposés par ``GET /stats/overview``."""
 
-    window_24h: Dict[str, Any] = field(default_factory=dict)
-    window_7d: Dict[str, Any] = field(default_factory=dict)
-    events: Dict[str, Any] = field(default_factory=dict)
-    findings_by_severity: Dict[str, Any] = field(default_factory=dict)
-    mtta_seconds: Optional[float] = None
-    mttr_seconds: Optional[float] = None
-    top_rules: List[Any] = field(default_factory=list)
-    actions_succeeded: Optional[int] = None
-    actions_rolled_back: Optional[int] = None
-    autonomy_mode: Optional[str] = None
+    window_24h: dict[str, Any] = field(default_factory=dict)
+    window_7d: dict[str, Any] = field(default_factory=dict)
+    events: dict[str, Any] = field(default_factory=dict)
+    findings_by_severity: dict[str, Any] = field(default_factory=dict)
+    mtta_seconds: float | None = None
+    mttr_seconds: float | None = None
+    top_rules: list[Any] = field(default_factory=list)
+    actions_succeeded: int | None = None
+    actions_rolled_back: int | None = None
+    autonomy_mode: str | None = None
 
 
 @dataclass
 class CollectorStatus(Model):
     """État d'un collecteur (dernier run, items, erreurs)."""
 
-    name: Optional[str] = None
-    type: Optional[str] = None
-    enabled: Optional[bool] = None
-    status: Optional[str] = None
-    last_run_at: Optional[str] = None
-    last_success_at: Optional[str] = None
-    items: Optional[int] = None
-    errors: Optional[int] = None
-    error: Optional[str] = None
+    name: str | None = None
+    type: str | None = None
+    enabled: bool | None = None
+    status: str | None = None
+    last_run_at: str | None = None
+    last_success_at: str | None = None
+    items: int | None = None
+    errors: int | None = None
+    error: str | None = None
 
 
 # --------------------------------------------------------------------------------------
@@ -482,11 +480,11 @@ class CollectorStatus(Model):
 class IngestOutcome(Model):
     """Finding issu d'une ingestion (élément de ``findings[]`` du contrat §4.3)."""
 
-    finding_id: Optional[str] = None
-    rule_id: Optional[str] = None
-    severity: Optional[str] = None
-    risk_score: Optional[float] = None
-    decision: Optional[str] = None
+    finding_id: str | None = None
+    rule_id: str | None = None
+    severity: str | None = None
+    risk_score: float | None = None
+    decision: str | None = None
 
 
 @dataclass
@@ -495,12 +493,12 @@ class IngestResult(Model):
 
     accepted: int = 0
     rejected: int = 0
-    event_ids: List[str] = field(default_factory=list)
-    findings: List[IngestOutcome] = field(default_factory=list)
+    event_ids: list[str] = field(default_factory=list)
+    findings: list[IngestOutcome] = field(default_factory=list)
 
-    _NESTED_LISTS: ClassVar[Dict[str, type]] = {"findings": IngestOutcome}
+    _NESTED_LISTS: ClassVar[dict[str, type]] = {"findings": IngestOutcome}
 
-    def merge(self, other: "IngestResult") -> "IngestResult":
+    def merge(self, other: IngestResult) -> IngestResult:
         """Fusionne deux réponses d'ingestion (utilisé quand un lot est découpé)."""
         return IngestResult(
             accepted=self.accepted + other.accepted,
@@ -515,6 +513,6 @@ class IngestResult(Model):
 class AuditVerification(Model):
     """Réponse de ``GET /api/v1/audit/verify`` (contrat §4.7)."""
 
-    valid: Optional[bool] = None
-    records: Optional[int] = None
-    broken_at: Optional[Any] = None
+    valid: bool | None = None
+    records: int | None = None
+    broken_at: Any | None = None

@@ -130,7 +130,9 @@ def main(argv: list[str] | None = None) -> int:
     files = sorted(docs.rglob("*.md"))
     anchors_by_file: dict[Path, set[str]] = {}
     for path in files:
-        anchors_by_file[path] = collect_anchors(path, path.read_text(encoding="utf-8", errors="replace"))
+        anchors_by_file[path] = collect_anchors(
+            path, path.read_text(encoding="utf-8", errors="replace")
+        )
 
     broken: list[dict[str, object]] = []
     external = 0
@@ -187,7 +189,9 @@ def main(argv: list[str] | None = None) -> int:
             if anchor and resolved.suffix == ".md":
                 known = anchors_by_file.get(resolved)
                 if known is None:
-                    known = collect_anchors(resolved, resolved.read_text(encoding="utf-8", errors="replace"))
+                    known = collect_anchors(
+                        resolved, resolved.read_text(encoding="utf-8", errors="replace")
+                    )
                     anchors_by_file[resolved] = known
                 if anchor.lower() not in known:
                     broken.append(
@@ -200,7 +204,13 @@ def main(argv: list[str] | None = None) -> int:
                     )
 
     if args.json:
-        print(json.dumps({"files": len(files), "internal": internal, "external": external, "broken": broken}, ensure_ascii=False, indent=2))
+        print(
+            json.dumps(
+                {"files": len(files), "internal": internal, "external": external, "broken": broken},
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
     else:
         for item in broken:
             print(f"x {item['file']} -> {item['target']} : {item['reason']}")
@@ -208,9 +218,13 @@ def main(argv: list[str] | None = None) -> int:
             for hint in hints:
                 print(f"    suggestion : #{hint}")
         print()
-        print(f"{len(files)} fichier(s) analysé(s) — {internal} lien(s) interne(s), {external} lien(s) externe(s) ignoré(s)")
+        print(
+            f"{len(files)} fichier(s) analysé(s) — {internal} lien(s) interne(s), {external} lien(s) externe(s) ignoré(s)"
+        )
         if broken:
-            print(f"x {len(broken)} lien(s) cassé(s) : `mkdocs build --strict` échouerait sur ces avertissements")
+            print(
+                f"x {len(broken)} lien(s) cassé(s) : `mkdocs build --strict` échouerait sur ces avertissements"
+            )
         else:
             print("v aucun lien interne cassé")
 

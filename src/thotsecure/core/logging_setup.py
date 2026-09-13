@@ -22,9 +22,29 @@ _CTX: ContextVar[dict[str, Any]] = ContextVar("thotsecure_log_context", default=
 #: Attributs standards de ``logging`` : tout le reste est traité comme contexte applicatif.
 _RESERVED = frozenset(
     {
-        "args", "asctime", "created", "exc_info", "exc_text", "filename", "funcName", "levelname",
-        "levelno", "lineno", "module", "msecs", "message", "msg", "name", "pathname", "process",
-        "processName", "relativeCreated", "stack_info", "thread", "threadName", "taskName",
+        "args",
+        "asctime",
+        "created",
+        "exc_info",
+        "exc_text",
+        "filename",
+        "funcName",
+        "levelname",
+        "levelno",
+        "lineno",
+        "module",
+        "msecs",
+        "message",
+        "msg",
+        "name",
+        "pathname",
+        "process",
+        "processName",
+        "relativeCreated",
+        "stack_info",
+        "thread",
+        "threadName",
+        "taskName",
     }
 )
 
@@ -113,7 +133,9 @@ class JsonFormatter(logging.Formatter):
             if key not in _RESERVED and not key.startswith("_"):
                 payload[key] = _redact_value(value)
         if record.exc_info:
-            payload["exception"] = redact_secrets(self.formatException(record.exc_info), max_length=8192)
+            payload["exception"] = redact_secrets(
+                self.formatException(record.exc_info), max_length=8192
+            )
         return json.dumps(payload, ensure_ascii=False, default=str)
 
 
@@ -134,7 +156,9 @@ class ConsoleFormatter(logging.Formatter):
         context = _CTX.get()
         suffix = ""
         if context:
-            parts = [f"{k}={v}" for k, v in context.items() if k in {"tenant_id", "actor", "request_id"}]
+            parts = [
+                f"{k}={v}" for k, v in context.items() if k in {"tenant_id", "actor", "request_id"}
+            ]
             if parts:
                 suffix = " [" + " ".join(parts) + "]"
         message = redact_secrets(record.getMessage(), max_length=8192)

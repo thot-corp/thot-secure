@@ -45,9 +45,7 @@ class CompiledRule:
         """Filtre d'entrée bon marché : source et type d'événement."""
         if self.source_types and event.source.type not in self.source_types:
             return False
-        if self.kinds and event.kind not in self.kinds:
-            return False
-        return True
+        return not (self.kinds and event.kind not in self.kinds)
 
 
 @dataclass(slots=True)
@@ -179,10 +177,7 @@ class DetectionEngine:
                 return False
         if spec.any and not any(evaluate_condition(condition, context) for condition in spec.any):
             return False
-        for condition in spec.not_:
-            if evaluate_condition(condition, context):
-                return False
-        return True
+        return all(not evaluate_condition(condition, context) for condition in spec.not_)
 
     def _register_hit(self, entry: CompiledRule, group_key: str, now: float) -> int:
         """Enregistre une correspondance et retourne le compte dans la fenêtre.
@@ -280,7 +275,9 @@ class DetectionEngine:
                 "group_key": match.group_key,
                 "threshold": {
                     "count": rule.match.threshold.count if rule.match.threshold else 1,
-                    "window_seconds": rule.match.threshold.window_seconds if rule.match.threshold else 0,
+                    "window_seconds": rule.match.threshold.window_seconds
+                    if rule.match.threshold
+                    else 0,
                     "observed": match.threshold_count,
                 },
                 "rule": {"id": rule.id, "title": rule.title, "path": rule.path},

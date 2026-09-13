@@ -217,10 +217,10 @@ def fake_driver(
         fetch: bool = False,
     ) -> Any:
         rows = list(argslist)
-        cursor._database.statements.append(  # noqa: SLF001 - test : observation volontaire
+        cursor._database.statements.append(
             ("execute_values", sql, {"rows": rows, "template": template, "page_size": page_size})
         )
-        cursor._database.executed.append(sql)  # noqa: SLF001
+        cursor._database.executed.append(sql)
         cursor.rowcount = len(rows)
         return list(range(len(rows))) if fetch else None
 
@@ -357,9 +357,7 @@ class DriverLoadingTest(unittest.TestCase):
         self.assertIn('pip install "thotsecure[postgres]"', message)
         self.assertIn("psycopg", message)
         self.assertIn("sqlite", message.lower())
-        self.assertEqual(
-            ["psycopg", "psycopg2"], raised.exception.details.get("packages")
-        )
+        self.assertEqual(["psycopg", "psycopg2"], raised.exception.details.get("packages"))
 
     def test_psycopg2_is_used_as_fallback(self) -> None:
         psycopg2_module = mock.MagicMock(name="psycopg2")
@@ -403,8 +401,8 @@ class DriverLoadingTest(unittest.TestCase):
     def test_constructing_a_store_does_not_import_the_driver(self) -> None:
         """``create_store()`` doit fonctionner même sans pilote : la connexion est paresseuse."""
         store = PostgresStore(EXAMPLE_DSN)
-        self.assertIsNone(store._driver)  # noqa: SLF001 - vérification d'absence d'effet de bord
-        self.assertIsNone(store._pool)  # noqa: SLF001
+        self.assertIsNone(store._driver)
+        self.assertIsNone(store._pool)
         self.assertEqual("postgresql", store.backend_name)
 
     def test_health_is_false_when_nothing_can_connect(self) -> None:
@@ -472,7 +470,7 @@ class CreateStoreTest(unittest.TestCase):
         self.assertIsInstance(store, PostgresStore)
         self.assertEqual("postgresql", store.backend_name)
         # Aucune connexion n'a été tentée : le pilote n'est même pas importé.
-        self.assertIsNone(store._driver)  # noqa: SLF001
+        self.assertIsNone(store._driver)
         self.assertIn("sslmode=prefer", store.dsn)
 
     def test_create_store_refuses_an_unsupported_dsn(self) -> None:
@@ -570,8 +568,12 @@ class PostgresDdlTest(unittest.TestCase):
     def test_timescale_sections_are_named_and_ordered(self) -> None:
         """L'extension et l'hypertable précèdent ce qui en dépend."""
         names = [name for name, _ in POSTGRES_TIMESCALE_SECTIONS]
-        self.assertEqual(["extension", "hypertable", "compression", "retention", "aggregates"], names)
-        self.assertEqual(POSTGRES_TIMESCALE_DDL, "".join(section for _, section in POSTGRES_TIMESCALE_SECTIONS))
+        self.assertEqual(
+            ["extension", "hypertable", "compression", "retention", "aggregates"], names
+        )
+        self.assertEqual(
+            POSTGRES_TIMESCALE_DDL, "".join(section for _, section in POSTGRES_TIMESCALE_SECTIONS)
+        )
 
     def test_hypertable_primary_key_contains_the_partition_column(self) -> None:
         """TimescaleDB l'exige : la PK d'une hypertable contient la colonne de temps."""
@@ -698,7 +700,7 @@ class SqlBuildingTest(unittest.TestCase):
     def test_query_builders_use_native_placeholders_and_never_inline_values(self) -> None:
         """Aucun ``?`` ne subsiste, et aucune valeur utilisateur n'entre dans le texte SQL."""
         store = PostgresStore(EXAMPLE_DSN)
-        sql, params = store._query_events_sql(  # noqa: SLF001 - fonction pure, sans connexion
+        sql, params = store._query_events_sql(
             "acme",
             kinds=["http.request", "log.line"],
             source_types=["log_tail"],
@@ -716,13 +718,15 @@ class SqlBuildingTest(unittest.TestCase):
         self.assertIn("::timestamptz", sql)
         self.assertIn("ILIKE", sql)
         self.assertIn("ORDER BY ts DESC, event_id DESC", sql)
-        self.assertEqual(11, params[-1], "la limite demandée est augmentée de 1 pour détecter la suite")
+        self.assertEqual(
+            11, params[-1], "la limite demandée est augmentée de 1 pour détecter la suite"
+        )
         self.assertIn("acme", params)
         self.assertIn("%union select%", params)
 
     def test_findings_query_builder_handles_both_sort_orders(self) -> None:
         store = PostgresStore(EXAMPLE_DSN)
-        sql, params, primary = store._list_findings_sql(  # noqa: SLF001
+        sql, params, primary = store._list_findings_sql(
             "acme",
             status=["open"],
             severity=["high"],
@@ -738,7 +742,7 @@ class SqlBuildingTest(unittest.TestCase):
         self.assertEqual("risk_score", primary)
         self.assertIn("ORDER BY risk_score DESC, finding_id DESC", sql)
         self.assertEqual(70.0, params[4])
-        sql_seen, _, primary_seen = store._list_findings_sql(  # noqa: SLF001
+        sql_seen, _, primary_seen = store._list_findings_sql(
             "acme",
             status=None,
             severity=None,
@@ -756,8 +760,14 @@ class SqlBuildingTest(unittest.TestCase):
 
     def test_audit_query_builder_paginates_by_sequence(self) -> None:
         store = PostgresStore(EXAMPLE_DSN)
-        sql, params = store._list_audit_sql(  # noqa: SLF001
-            "acme", action="action.execute", actor="api-key:ci", since=None, until=None, limit=3, cursor="42"
+        sql, params = store._list_audit_sql(
+            "acme",
+            action="action.execute",
+            actor="api-key:ci",
+            since=None,
+            until=None,
+            limit=3,
+            cursor="42",
         )
         self.assertIn("seq < %s", sql)
         self.assertIn("ORDER BY seq DESC LIMIT %s", sql)
@@ -877,7 +887,9 @@ class PostgresStoreBehaviourTest(unittest.TestCase):
         tail_index = next(
             index for index, sql in enumerate(order) if "FROM audit_log ORDER BY seq DESC" in sql
         )
-        insert_index = next(index for index, sql in enumerate(order) if "INSERT INTO audit_log" in sql)
+        insert_index = next(
+            index for index, sql in enumerate(order) if "INSERT INTO audit_log" in sql
+        )
         self.assertLess(lock_index, tail_index, "le verrou doit être pris avant de lire le maillon")
         self.assertLess(tail_index, insert_index)
         self.assertEqual("BEGIN", order[0])
@@ -886,9 +898,7 @@ class PostgresStoreBehaviourTest(unittest.TestCase):
         self.assertIn("sha256:", record.hash)
 
     def test_append_audit_starts_from_genesis_on_an_empty_log(self) -> None:
-        self.database.responder = lambda sql, params: (
-            [{"seq": 1}] if "nextval" in sql else []
-        )
+        self.database.responder = lambda sql, params: [{"seq": 1}] if "nextval" in sql else []
         record = self.store.append_audit(tenant_id="acme", actor="system", action="system.start")
         self.assertEqual("sha256:genesis", record.prev_hash)
         params = self.database.params_for("INSERT INTO audit_log")
@@ -972,7 +982,9 @@ class PostgresStoreBehaviourTest(unittest.TestCase):
 
         def responder(sql: str, params: Any) -> Any:
             if "CREATE EXTENSION" in sql:
-                raise FakePostgresError('extension "timescaledb" is not available', sqlstate="0A000")
+                raise FakePostgresError(
+                    'extension "timescaledb" is not available', sqlstate="0A000"
+                )
             return []
 
         self.database.responder = responder
@@ -1169,16 +1181,14 @@ class PostgresStoreBehaviourTest(unittest.TestCase):
     def test_rollback_on_error_inside_a_transaction(self) -> None:
         """Une erreur dans une transaction explicite provoque un ``ROLLBACK``."""
         self.database.responder = lambda sql, params: []
-        with self.assertRaises(RuntimeError):
-            with self.store.transaction():
-                raise RuntimeError("échec métier")
+        with self.assertRaises(RuntimeError), self.store.transaction():
+            raise RuntimeError("échec métier")
         self.assertIn("ROLLBACK", self.database.executed)
 
     def test_nested_transaction_uses_a_savepoint(self) -> None:
         self.database.responder = lambda sql, params: []
-        with self.store.transaction():
-            with self.store.transaction():
-                pass
+        with self.store.transaction(), self.store.transaction():
+            pass
         joined = " ".join(self.database.executed)
         self.assertIn("SAVEPOINT thot_sp_1", joined)
         self.assertIn("RELEASE SAVEPOINT thot_sp_1", joined)
@@ -1252,7 +1262,7 @@ class ConnectionPoolTest(unittest.TestCase):
                 seen.append(id(connection))
                 time.sleep(0.01)
                 pool.release(connection)
-            except BaseException as exc:  # noqa: BLE001 - remonté à l'assertion
+            except BaseException as exc:
                 errors.append(exc)
 
         threads = [threading.Thread(target=worker, daemon=True) for _ in range(8)]
@@ -1270,7 +1280,9 @@ class ConnectionPoolTest(unittest.TestCase):
         store = make_store(database, max_size=3)
         try:
             self.assertTrue(store.health())
-            self.assertEqual(1, len(database.connect_calls), "une connexion par thread, pas par requête")
+            self.assertEqual(
+                1, len(database.connect_calls), "une connexion par thread, pas par requête"
+            )
             self.assertTrue(store.health())
             self.assertEqual(1, len(database.connect_calls))
             self.assertEqual(1, store.pool_stats.get("in_use"))
@@ -1454,7 +1466,11 @@ class SqlArityTest(unittest.TestCase):
         self.store.get_event("acme", "ev_1")
 
         finding = Finding(
-            finding_id="fi_1", tenant_id="acme", rule_id="AO-WEB-001", severity="high", risk_score=50.0
+            finding_id="fi_1",
+            tenant_id="acme",
+            rule_id="AO-WEB-001",
+            severity="high",
+            risk_score=50.0,
         )
         self.store.insert_finding(finding)
         self.store.update_finding("acme", "fi_1", status="acked", comment="vu", tags=["web"])
@@ -1522,7 +1538,9 @@ class SqlArityTest(unittest.TestCase):
                 continue
             checked += 1
             if sql.count("%s") != len(params):
-                mismatches.append(f"{sql.count('%s')} placeholders != {len(params)} paramètres : {sql}")
+                mismatches.append(
+                    f"{sql.count('%s')} placeholders != {len(params)} paramètres : {sql}"
+                )
         self.assertEqual([], mismatches)
         self.assertGreater(checked, 50, "l'exercice doit couvrir l'essentiel des écritures")
 

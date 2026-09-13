@@ -86,22 +86,21 @@ Codes de sortie
 """
 
 from __future__ import annotations
-import contextlib as _contextlib
-import sys as _sys
 
 import argparse
+import contextlib as _contextlib
 import json
 import os
 import re
 import sys
-import time
+import sys as _sys
 from collections.abc import Mapping, Sequence
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from urllib import error as urlerror
 from urllib import parse as urlparse
 from urllib import request as urlrequest
+
 
 # --- Sortie Unicode sûre ---------------------------------------------------------------
 # Sous Windows, une console en page de code cp1252 ne peut pas encoder « ✖ », « ✔ » ou « ─ » :
@@ -120,7 +119,7 @@ _configure_safe_output()
 # ----------------------------------------------------------------------------------------
 
 
-__all__ = ["main", "HttpApi", "SdkApi", "build_api", "describe_safety_state"]
+__all__ = ["HttpApi", "SdkApi", "build_api", "describe_safety_state", "main"]
 
 # --------------------------------------------------------------------------------------
 # Constantes du contrat (§4)
@@ -241,9 +240,11 @@ def http_request(
       erreurs normalisées ``409``/``429`` que le déroulé doit expliquer).
     """
     if params:
-        query = urlparse.urlencode({key: value for key, value in params.items() if value is not None})
+        query = urlparse.urlencode(
+            {key: value for key, value in params.items() if value is not None}
+        )
         if query:
-            url = "%s%s%s" % (url, "&" if "?" in url else "?", query)
+            url = "{}{}{}".format(url, "&" if "?" in url else "?", query)
 
     data = None
     headers = {"Accept": "application/json", "User-Agent": USER_AGENT}
@@ -262,7 +263,7 @@ def http_request(
         raw = exc.read()
         return exc.code, _decode(raw), _text(raw), exc.headers
     except (urlerror.URLError, OSError, ValueError) as exc:
-        raise TransportError("échec de la requête %s %s : %s" % (method, safe_url(url), exc)) from exc
+        raise TransportError(f"échec de la requête {method} {safe_url(url)} : {exc}") from exc
 
 
 def _decode(raw: bytes) -> Any:
@@ -313,7 +314,7 @@ class HttpApi:
         self._transport = transport or http_request
 
     def __repr__(self) -> str:  # pragma: no cover - jamais de secret dans le repr
-        return "HttpApi(base_url=%r, api_key=%s)" % (
+        return "HttpApi(base_url={!r}, api_key={})".format(
             safe_url(self.base_url),
             "'***'" if self.api_key else "None",
         )
@@ -373,7 +374,7 @@ class HttpApi:
 
     def get_finding(self, finding_id: str) -> dict[str, Any]:
         """``GET /api/v1/findings/{id}``."""
-        payload = self._request("GET", "/api/v1/findings/%s" % urlparse.quote(finding_id))
+        payload = self._request("GET", f"/api/v1/findings/{urlparse.quote(finding_id)}")
         return dict(payload) if isinstance(payload, Mapping) else {}
 
     # -- §4.5 playbooks ----------------------------------------------------------------
@@ -409,7 +410,7 @@ class HttpApi:
         """``POST /api/v1/actions/{id}/approve`` (capacité ``approve:actions``)."""
         payload = self._request(
             "POST",
-            "/api/v1/actions/%s/approve" % urlparse.quote(action_id),
+            f"/api/v1/actions/{urlparse.quote(action_id)}/approve",
             json_body={"comment": comment} if comment else {},
         )
         return dict(payload) if isinstance(payload, Mapping) else {}
@@ -417,7 +418,7 @@ class HttpApi:
     def execute_action(self, action_id: str) -> dict[str, Any]:
         """``POST /api/v1/actions/{id}/execute`` (capacité ``execute:actions``)."""
         payload = self._request(
-            "POST", "/api/v1/actions/%s/execute" % urlparse.quote(action_id), json_body={}
+            "POST", f"/api/v1/actions/{urlparse.quote(action_id)}/execute", json_body={}
         )
         return dict(payload) if isinstance(payload, Mapping) else {}
 
@@ -425,14 +426,14 @@ class HttpApi:
         """``POST /api/v1/actions/{id}/rollback`` (capacité ``execute:actions``)."""
         payload = self._request(
             "POST",
-            "/api/v1/actions/%s/rollback" % urlparse.quote(action_id),
+            f"/api/v1/actions/{urlparse.quote(action_id)}/rollback",
             json_body={"reason": reason} if reason else {},
         )
         return dict(payload) if isinstance(payload, Mapping) else {}
 
     def get_action(self, action_id: str) -> dict[str, Any]:
         """``GET /api/v1/actions/{id}`` (capacité ``read:findings``)."""
-        payload = self._request("GET", "/api/v1/actions/%s" % urlparse.quote(action_id))
+        payload = self._request("GET", f"/api/v1/actions/{urlparse.quote(action_id)}")
         return dict(payload) if isinstance(payload, Mapping) else {}
 
     def close(self) -> None:
@@ -454,7 +455,7 @@ class SdkApi:
         self._client = client
 
     def __repr__(self) -> str:  # pragma: no cover
-        return "SdkApi(client=%r)" % (self._client,)
+        return f"SdkApi(client={self._client!r})"
 
     @staticmethod
     def _as_dict(value: Any) -> dict[str, Any]:
@@ -517,7 +518,9 @@ class SdkApi:
     ) -> dict[str, Any]:
         """``POST /api/v1/actions/plan`` via le SDK (``dry_run=True`` par défaut)."""
         return self._as_dict(
-            self._client.plan_action(finding_id, playbook, params=dict(params or {}), dry_run=dry_run)
+            self._client.plan_action(
+                finding_id, playbook, params=dict(params or {}), dry_run=dry_run
+            )
         )
 
     def approve_action(self, action_id: str, *, comment: str | None = None) -> dict[str, Any]:
@@ -574,7 +577,7 @@ def load_sdk_client() -> Any | None:
     for module_name in ("thotsecure_sdk", "thotsecure_sdk"):
         try:
             module = __import__(module_name, fromlist=["*"])
-        except Exception:  # noqa: BLE001 - SDK absent ou incomplet : repli sur urllib
+        except Exception:
             continue
         for attribute in ("ThotSecureClient", "ThotSecureClient"):
             client_class = getattr(module, attribute, None)
@@ -596,8 +599,10 @@ def build_api(args: argparse.Namespace) -> Any:
                     timeout=args.timeout,
                 )
                 return SdkApi(client)
-            except Exception as exc:  # noqa: BLE001 - SDK présent mais inutilisable
-                warn("SDK Python présent mais inutilisable (%s) : repli sur le client embarqué." % exc)
+            except Exception as exc:
+                warn(
+                    f"SDK Python présent mais inutilisable ({exc}) : repli sur le client embarqué."
+                )
     return HttpApi(args.url, args.api_key, timeout=args.timeout)
 
 
@@ -608,12 +613,12 @@ def build_api(args: argparse.Namespace) -> Any:
 
 def warn(message: str) -> None:
     """Avertissement sur stderr (jamais de secret dans les messages)."""
-    print("[mitigation] %s" % message, file=sys.stderr, flush=True)
+    print(f"[mitigation] {message}", file=sys.stderr, flush=True)
 
 
 def info(message: str) -> None:
     """Information sur stderr."""
-    print("[mitigation] %s" % message, file=sys.stderr, flush=True)
+    print(f"[mitigation] {message}", file=sys.stderr, flush=True)
 
 
 def info_verbose(args: argparse.Namespace, message: str) -> None:
@@ -683,15 +688,15 @@ def print_safety_state(state: Mapping[str, Any], *, api_label: str, url: str) ->
     dans quel mode on se trouve est exactement ce qu'il ne faut pas faire.
     """
     rule("ÉTAT DE SÛRETÉ DE L'INSTANCE (GET /version, §4.1)")
-    print("  Instance            : %s" % safe_url(url))
-    print("  Client d'API        : %s" % api_label)
+    print(f"  Instance            : {safe_url(url)}")
+    print(f"  Client d'API        : {api_label}")
     print("  Version             : %s" % (state.get("version") or "inconnue"))
     if state.get("environment"):
-        print("  Environnement       : %s" % state["environment"])
+        print("  Environnement       : {}".format(state["environment"]))
     if state.get("role"):
-        print("  Rôle de la clé      : %s" % state["role"])
+        print("  Rôle de la clé      : {}".format(state["role"]))
     if state.get("capabilities"):
-        print("  Capacités           : %s" % ", ".join(str(c) for c in state["capabilities"]))
+        print("  Capacités           : {}".format(", ".join(str(c) for c in state["capabilities"])))
 
     autonomy = state.get("autonomy")
     print("  Mode d'autonomie    : %s" % (autonomy or "non annoncé par l'API"))
@@ -755,7 +760,7 @@ def _short_id(value: Any) -> str:
 def _format_score(value: Any) -> str:
     """Score de risque lisible (``78.5`` → ``78.5``, ``None`` → ``?``)."""
     try:
-        return "%.1f" % float(value)
+        return f"{float(value):.1f}"
     except (TypeError, ValueError):
         return "?"
 
@@ -791,7 +796,7 @@ def extract_target(finding: Mapping[str, Any]) -> str | None:
                             if isinstance(value, str) and value.strip():
                                 return value.strip()
 
-    haystack = "%s %s" % (finding.get("title") or "", finding.get("description") or "")
+    haystack = "{} {}".format(finding.get("title") or "", finding.get("description") or "")
     match = re.search(r"\b\d{1,3}(?:\.\d{1,3}){3}\b|\bip-[0-9a-f]{32}\b", haystack)
     return match.group(0) if match else None
 
@@ -826,18 +831,28 @@ def print_plan(action: Mapping[str, Any], *, live: bool) -> None:
     print("    statut           : %s" % (action.get("status") or "?"))
     print("    mode             : %s" % (action.get("mode") or "?"))
     print("    policy_id        : %s" % (action.get("policy_id") or "?"))
-    print("    cible            : %s (%s)" % (target.get("value") or params.get("target") or "?", target.get("type") or "?"))
+    print(
+        "    cible            : {} ({})".format(
+            target.get("value") or params.get("target") or "?", target.get("type") or "?"
+        )
+    )
     if params.get("duration_seconds") is not None:
-        print("    durée            : %s s" % params.get("duration_seconds"))
+        print("    durée            : {} s".format(params.get("duration_seconds")))
     print("    demandé par      : %s" % (action.get("requested_by") or "?"))
     print("    demandé le       : %s" % (action.get("requested_at") or "?"))
     print("    expire le        : %s" % (action.get("expires_at") or "?"))
     print("    idempotency_key  : %s" % (action.get("idempotency_key") or "?"))
-    print("    audit_seq        : %s" % (action.get("audit_seq") if action.get("audit_seq") is not None else "?"))
+    print(
+        "    audit_seq        : %s"
+        % (action.get("audit_seq") if action.get("audit_seq") is not None else "?")
+    )
     print("    rollback prévu   : %s" % ("oui" if rollback.get("available") else "NON"))
 
     plan_dry_run = read_bool(action, "dry_run")
-    print("    dry_run (plan)   : %s" % ("true — simulation" if plan_dry_run else "false — effet réel si exécuté"))
+    print(
+        "    dry_run (plan)   : %s"
+        % ("true — simulation" if plan_dry_run else "false — effet réel si exécuté")
+    )
     if plan_dry_run and live:
         print(
             "    ⚠ Vous avez demandé --live (dry_run=false) mais l'API a renvoyé un plan en\n"
@@ -898,7 +913,7 @@ def confirm_plan(args: argparse.Namespace) -> bool:
         )
         return False
 
-    print("\n  Pour approuver ce plan, tapez %s (toute autre réponse annule) :" % CONFIRMATION_WORD)
+    print(f"\n  Pour approuver ce plan, tapez {CONFIRMATION_WORD} (toute autre réponse annule) :")
     try:
         answer = input("  confirmation > ").strip()
     except (EOFError, KeyboardInterrupt):
@@ -906,7 +921,7 @@ def confirm_plan(args: argparse.Namespace) -> bool:
         warn("confirmation interrompue : plan non approuvé.")
         return False
     if answer != CONFIRMATION_WORD:
-        warn("confirmation refusée (réponse : %r) : plan non approuvé." % answer[:20])
+        warn(f"confirmation refusée (réponse : {answer[:20]!r}) : plan non approuvé.")
         return False
     return True
 
@@ -914,7 +929,9 @@ def confirm_plan(args: argparse.Namespace) -> bool:
 def ask_rollback(args: argparse.Namespace) -> bool:
     """Propose le rollback après une exécution réussie (``--rollback`` ou interaction)."""
     if args.no_rollback:
-        info("--no-rollback : action laissée en place (le rollback reste possible depuis l'API/CLI).")
+        info(
+            "--no-rollback : action laissée en place (le rollback reste possible depuis l'API/CLI)."
+        )
         return False
     if args.rollback:
         info("--rollback : rollback immédiat demandé.")
@@ -940,16 +957,22 @@ def ask_rollback(args: argparse.Namespace) -> bool:
 # --------------------------------------------------------------------------------------
 
 
-def select_finding(findings: Sequence[Mapping[str, Any]], args: argparse.Namespace) -> Mapping[str, Any] | None:
+def select_finding(
+    findings: Sequence[Mapping[str, Any]], args: argparse.Namespace
+) -> Mapping[str, Any] | None:
     """Sélectionne le finding à traiter : ``--finding-id``, ``--index``, sinon le plus risqué."""
     if not findings:
         return None
     if args.finding_id:
         wanted = str(args.finding_id)
         for finding in findings:
-            if str(finding.get("finding_id")) == wanted or str(finding.get("finding_id")).startswith(wanted):
+            if str(finding.get("finding_id")) == wanted or str(
+                finding.get("finding_id")
+            ).startswith(wanted):
                 return finding
-        warn("finding %s introuvable parmi les findings ouverts retournés (min_risk=%s)." % (wanted, args.min_risk))
+        warn(
+            f"finding {wanted} introuvable parmi les findings ouverts retournés (min_risk={args.min_risk})."
+        )
         return None
     index = max(0, int(args.index) - 1)
     if index >= len(findings):
@@ -972,18 +995,21 @@ def execute_workflow(args: argparse.Namespace, api: Any) -> int:
     try:
         version = api.version()
     except ApiError as exc:
-        warn("GET /version a échoué : %s" % exc)
+        warn(f"GET /version a échoué : {exc}")
         warn("vérifiez l'URL (--url) et que l'instance Thot Secure répond sur /version (§4.1).")
         return 2
     except TransportError as exc:
-        warn("instance injoignable : %s" % exc)
+        warn(f"instance injoignable : {exc}")
         return 1
 
     whoami: dict[str, Any] = {}
     try:
         whoami = api.whoami()
     except (ApiError, TransportError) as exc:
-        info_verbose(args, "GET /api/v1/auth/whoami indisponible (%s) : poursuite sans capacités détaillées." % exc)
+        info_verbose(
+            args,
+            f"GET /api/v1/auth/whoami indisponible ({exc}) : poursuite sans capacités détaillées.",
+        )
 
     state = describe_safety_state(version, whoami)
     print_safety_state(state, api_label=getattr(api, "label", "client inconnu"), url=args.url)
@@ -995,13 +1021,15 @@ def execute_workflow(args: argparse.Namespace, api: Any) -> int:
         )
 
     # ------------------------------------------------------------------ 2. findings ouverts
-    rule("FINDINGS OUVERTS (GET /api/v1/findings?status=%s&min_risk=%s, §4.4)" % (args.status, args.min_risk))
+    rule(
+        f"FINDINGS OUVERTS (GET /api/v1/findings?status={args.status}&min_risk={args.min_risk}, §4.4)"
+    )
     try:
         findings = api.list_findings(
             status=args.status, min_risk=args.min_risk, limit=args.limit, sort="risk_score"
         )
     except ApiError as exc:
-        warn("lecture des findings refusée : %s" % exc)
+        warn(f"lecture des findings refusée : {exc}")
         if exc.status in (401, 403):
             warn(
                 "capacité « read:findings » manquante : créez une clé de rôle responder+ "
@@ -1010,16 +1038,16 @@ def execute_workflow(args: argparse.Namespace, api: Any) -> int:
             return 2
         return 1
     except TransportError as exc:
-        warn("lecture des findings impossible : %s" % exc)
+        warn(f"lecture des findings impossible : {exc}")
         return 1
 
     if not findings:
-        print("  Aucun finding %s avec risk_score ≥ %s : rien à traiter." % (args.status, args.min_risk))
+        print(f"  Aucun finding {args.status} avec risk_score ≥ {args.min_risk} : rien à traiter.")
         print("  C'est le résultat attendu quand la détection n'a rien remonté au-dessus du seuil.")
         return 0
 
     for finding in findings:
-        print("  %s" % format_finding_line(finding))
+        print(f"  {format_finding_line(finding)}")
 
     finding = select_finding(findings, args)
     if finding is None:
@@ -1055,12 +1083,14 @@ def execute_workflow(args: argparse.Namespace, api: Any) -> int:
     try:
         playbooks = api.list_playbooks()
     except (ApiError, TransportError) as exc:
-        info_verbose(args, "liste des playbooks indisponible (%s) : poursuite sans validation du playbook." % exc)
+        info_verbose(
+            args,
+            f"liste des playbooks indisponible ({exc}) : poursuite sans validation du playbook.",
+        )
     flags = playbook_flags(playbooks, args.playbook)
     if flags:
         print(
-            "\n  Playbook « %s » : réversible=%s, dry_run_capable=%s, connecteurs=%s"
-            % (
+            "\n  Playbook « {} » : réversible={}, dry_run_capable={}, connecteurs={}".format(
                 args.playbook,
                 flags.get("reversible"),
                 flags.get("dry_run_capable"),
@@ -1076,7 +1106,9 @@ def execute_workflow(args: argparse.Namespace, api: Any) -> int:
                 warn("arrêt : ajoutez --force-irreversible après avoir assumé cette décision.")
                 return 3
     elif playbooks:
-        warn("playbook « %s » inconnu de l'instance : le plan sera refusé par le serveur." % args.playbook)
+        warn(
+            f"playbook « {args.playbook} » inconnu de l'instance : le plan sera refusé par le serveur."
+        )
 
     live = bool(args.live)
     if live:
@@ -1088,9 +1120,9 @@ def execute_workflow(args: argparse.Namespace, api: Any) -> int:
     try:
         action = api.plan_action(finding_id, args.playbook, params=params, dry_run=not live)
     except ApiError as exc:
-        warn("POST /api/v1/actions/plan refusé : %s" % exc)
+        warn(f"POST /api/v1/actions/plan refusé : {exc}")
         if exc.details:
-            warn("détails : %s" % json.dumps(exc.details, ensure_ascii=False, default=str)[:600])
+            warn(f"détails : {json.dumps(exc.details, ensure_ascii=False, default=str)[:600]}")
         if exc.status == 409:
             warn(
                 "conflit : cooldown en cours, plafond horaire atteint, ou cible protégée par "
@@ -1098,7 +1130,7 @@ def execute_workflow(args: argparse.Namespace, api: Any) -> int:
             )
         return 1 if exc.status >= 500 else 2
     except TransportError as exc:
-        warn("planification impossible : %s" % exc)
+        warn(f"planification impossible : {exc}")
         return 1
 
     if not action.get("action_id"):
@@ -1111,22 +1143,25 @@ def execute_workflow(args: argparse.Namespace, api: Any) -> int:
     # ------------------------------------------------------------------ 4. confirmation
     rule("CONFIRMATION HUMAINE OBLIGATOIRE")
     print(
-        "  Vous allez approuver puis exécuter le playbook « %s » sur la cible « %s ».\n"
+        "  Vous allez approuver puis exécuter le playbook « {} » sur la cible « {} ».\n"
         "  Vérifiez que cette cible est bien celle que vous voulez neutraliser, et qu'elle\n"
-        "  n'appartient pas à votre propre infrastructure."
-        % (action.get("playbook") or args.playbook, (action.get("target") or {}).get("value") or target or "?")
+        "  n'appartient pas à votre propre infrastructure.".format(
+            action.get("playbook") or args.playbook,
+            (action.get("target") or {}).get("value") or target or "?",
+        )
     )
     if not confirm_plan(args):
         warn(
-            "plan laissé à l'état « %s » : rien n'a été approuvé ni exécuté. L'action expire "
-            "d'elle-même et reste consultable via GET /api/v1/actions/%s."
-            % (action.get("status"), action_id)
+            "plan laissé à l'état « {} » : rien n'a été approuvé ni exécuté. L'action expire "
+            "d'elle-même et reste consultable via GET /api/v1/actions/{}.".format(
+                action.get("status"), action_id
+            )
         )
         return 3
 
     # ------------------------------------------------------------------ 5. approbation
     status = str(action.get("status") or "")
-    rule("APPROBATION (POST /api/v1/actions/%s/approve, §4.6)" % action_id)
+    rule(f"APPROBATION (POST /api/v1/actions/{action_id}/approve, §4.6)")
     if status in ("planned", "pending_approval"):
         try:
             approved = api.approve_action(
@@ -1136,15 +1171,18 @@ def execute_workflow(args: argparse.Namespace, api: Any) -> int:
                 % (state.get("role") or "inconnu"),
             )
         except ApiError as exc:
-            warn("approbation refusée : %s" % exc)
+            warn(f"approbation refusée : {exc}")
             if exc.status in (401, 403):
                 warn("capacité « approve:actions » manquante (rôle responder minimum, §4).")
             return 2 if exc.status < 500 else 1
         except TransportError as exc:
-            warn("approbation impossible : %s" % exc)
+            warn(f"approbation impossible : {exc}")
             return 1
-        print("  Statut après approbation : %s (approved_by=%s à %s)"
-              % (approved.get("status"), approved.get("approved_by"), approved.get("approved_at")))
+        print(
+            "  Statut après approbation : {} (approved_by={} à {})".format(
+                approved.get("status"), approved.get("approved_by"), approved.get("approved_at")
+            )
+        )
         action = approved or action
     elif status == "approved":
         warn(
@@ -1152,23 +1190,23 @@ def execute_workflow(args: argparse.Namespace, api: Any) -> int:
             "intervention. C'est exactement ce que fait le mode auto — vérifiez que c'est voulu."
         )
     else:
-        warn("statut inattendu avant exécution : %r — arrêt par prudence." % status)
+        warn(f"statut inattendu avant exécution : {status!r} — arrêt par prudence.")
         return 1
 
     # ------------------------------------------------------------------ 6. exécution
-    rule("EXÉCUTION (POST /api/v1/actions/%s/execute, §4.6)" % action_id)
+    rule(f"EXÉCUTION (POST /api/v1/actions/{action_id}/execute, §4.6)")
     try:
         executed = api.execute_action(action_id)
     except ApiError as exc:
-        warn("exécution refusée : %s" % exc)
+        warn(f"exécution refusée : {exc}")
         if exc.status == 409:
             warn("conflit : action non approuvée, déjà exécutée, ou rollback déjà effectué.")
         return 1
     except TransportError as exc:
-        warn("exécution impossible : %s" % exc)
+        warn(f"exécution impossible : {exc}")
         warn(
             "l'état réel de l'action est incertain : vérifiez avec "
-            "« thotsecure actions list » ou GET /api/v1/actions/%s avant toute nouvelle tentative." % action_id
+            f"« thotsecure actions list » ou GET /api/v1/actions/{action_id} avant toute nouvelle tentative."
         )
         return 1
 
@@ -1183,7 +1221,7 @@ def execute_workflow(args: argparse.Namespace, api: Any) -> int:
     print("    dry_run     : %s" % ("true (simulation)" if executed_dry_run else "false"))
     print("    executed_at : %s" % (executed.get("executed_at") or "?"))
     if isinstance(result, Mapping) and result:
-        print("    result      : %s" % json.dumps(result, ensure_ascii=False, default=str)[:600])
+        print(f"    result      : {json.dumps(result, ensure_ascii=False, default=str)[:600]}")
 
     if executed_dry_run or simulated:
         rule("⚠ SIMULATION — AUCUNE ACTION RÉELLE N'A ÉTÉ EXÉCUTÉE")
@@ -1195,41 +1233,52 @@ def execute_workflow(args: argparse.Namespace, api: Any) -> int:
             "    - puis relancer ce script avec --live."
         )
     elif final_status == "succeeded":
-        print("\n  ✔ Contre-mesure appliquée. Le rollback reste disponible jusqu'à %s."
-              % (executed.get("expires_at") or "l'expiration annoncée"))
+        print(
+            "\n  ✔ Contre-mesure appliquée. Le rollback reste disponible jusqu'à %s."
+            % (executed.get("expires_at") or "l'expiration annoncée")
+        )
     elif final_status in ("failed", "expired"):
-        warn("l'exécution s'est terminée en « %s » : inspectez « result » ci-dessus." % final_status)
+        warn(f"l'exécution s'est terminée en « {final_status} » : inspectez « result » ci-dessus.")
     else:
-        warn("statut final inattendu « %s » : vérifiez l'état de l'action." % final_status)
+        warn(f"statut final inattendu « {final_status} » : vérifiez l'état de l'action.")
 
     # ------------------------------------------------------------------ 7. rollback
-    rollback_info = executed.get("rollback") if isinstance(executed.get("rollback"), Mapping) else {}
-    rule("ROLLBACK (POST /api/v1/actions/%s/rollback, §4.6)" % action_id)
+    rollback_info = (
+        executed.get("rollback") if isinstance(executed.get("rollback"), Mapping) else {}
+    )
+    rule(f"ROLLBACK (POST /api/v1/actions/{action_id}/rollback, §4.6)")
     if not rollback_info.get("available"):
         print("  Ce playbook ne propose pas de rollback : l'action est définitive. Notez-le.")
         return 0
-    print("  Toute action doit rester réversible tant que le rollback n'a pas expiré (invariant 3).")
+    print(
+        "  Toute action doit rester réversible tant que le rollback n'a pas expiré (invariant 3)."
+    )
     if not ask_rollback(args):
         print(
             "  Rollback non déclenché. Pour l'annuler plus tard :\n"
-            "    thotsecure actions rollback %s\n"
-            "  ou : python auto_mitigation.py --rollback-action %s" % (action_id, action_id)
+            f"    thotsecure actions rollback {action_id}\n"
+            f"  ou : python auto_mitigation.py --rollback-action {action_id}"
         )
         return 0
 
     try:
-        rolled_back = api.rollback_action(action_id, reason=args.rollback_reason or "Rollback demandé par l'opérateur")
+        rolled_back = api.rollback_action(
+            action_id, reason=args.rollback_reason or "Rollback demandé par l'opérateur"
+        )
     except ApiError as exc:
-        warn("rollback refusé : %s" % exc)
+        warn(f"rollback refusé : {exc}")
         if exc.status == 409:
             warn("rollback déjà effectué ou expiré (409, §4.6).")
         return 1
     except TransportError as exc:
-        warn("rollback impossible : %s" % exc)
+        warn(f"rollback impossible : {exc}")
         return 1
 
-    print("  Statut après rollback : %s (performed_at=%s)"
-          % (rolled_back.get("status"), (rolled_back.get("rollback") or {}).get("performed_at")))
+    print(
+        "  Statut après rollback : {} (performed_at={})".format(
+            rolled_back.get("status"), (rolled_back.get("rollback") or {}).get("performed_at")
+        )
+    )
     if read_bool(rolled_back, "dry_run"):
         print("  (simulation : le rollback aussi a été parcouru à blanc, sans effet réel.)")
     return 0
@@ -1241,14 +1290,14 @@ def rollback_only(args: argparse.Namespace, api: Any) -> int:
     Utile en runbook d'incident : on annule d'abord, on analyse ensuite.
     """
     action_id = str(args.rollback_action)
-    rule("ROLLBACK DIRECT DE L'ACTION %s" % action_id)
+    rule(f"ROLLBACK DIRECT DE L'ACTION {action_id}")
     try:
         action = api.get_action(action_id)
     except ApiError as exc:
-        warn("action illisible : %s" % exc)
+        warn(f"action illisible : {exc}")
         return 1
     except TransportError as exc:
-        warn("action illisible (réseau) : %s" % exc)
+        warn(f"action illisible (réseau) : {exc}")
         return 1
 
     print(json.dumps(dict(action), ensure_ascii=False, indent=2, default=str))
@@ -1260,7 +1309,7 @@ def rollback_only(args: argparse.Namespace, api: Any) -> int:
         if not is_interactive():
             warn("--yes requis pour un rollback non interactif (l'annulation doit être assumée).")
             return 2
-        print("\n  Annuler cette action ? Tapez %s pour confirmer :" % CONFIRMATION_WORD)
+        print(f"\n  Annuler cette action ? Tapez {CONFIRMATION_WORD} pour confirmer :")
         try:
             answer = input("  confirmation > ").strip()
         except (EOFError, KeyboardInterrupt):
@@ -1272,14 +1321,16 @@ def rollback_only(args: argparse.Namespace, api: Any) -> int:
             return 3
 
     try:
-        rolled_back = api.rollback_action(action_id, reason=args.rollback_reason or "Rollback direct demandé")
+        rolled_back = api.rollback_action(
+            action_id, reason=args.rollback_reason or "Rollback direct demandé"
+        )
     except ApiError as exc:
-        warn("rollback refusé : %s" % exc)
+        warn(f"rollback refusé : {exc}")
         return 1
     except TransportError as exc:
-        warn("rollback impossible : %s" % exc)
+        warn(f"rollback impossible : {exc}")
         return 1
-    print("  Statut après rollback : %s" % rolled_back.get("status"))
+    print("  Statut après rollback : {}".format(rolled_back.get("status")))
     if read_bool(rolled_back, "dry_run"):
         print("  (simulation : aucun effet réel — l'instance est en dry_run.)")
     return 0
@@ -1306,8 +1357,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--url",
         default=env_first("THOT_SECURE_URL", "THOT_URL", default=DEFAULT_BASE_URL),
-        help="base de l'API (défaut : $env:THOT_SECURE_URL, sinon $env:THOT_URL, sinon %s)"
-        % DEFAULT_BASE_URL,
+        help=f"base de l'API (défaut : $env:THOT_SECURE_URL, sinon $env:THOT_URL, sinon {DEFAULT_BASE_URL})",
     )
     parser.add_argument(
         "--api-key",
@@ -1323,23 +1373,31 @@ def build_parser() -> argparse.ArgumentParser:
         "--min-risk",
         type=float,
         default=DEFAULT_MIN_RISK,
-        help="score de risque minimal des findings retenus (défaut %s)" % DEFAULT_MIN_RISK,
+        help=f"score de risque minimal des findings retenus (défaut {DEFAULT_MIN_RISK})",
     )
-    parser.add_argument("--status", default="open", help="statut des findings interrogés (défaut : open)")
-    parser.add_argument("--limit", type=int, default=50, help="nombre de findings demandés (défaut 50)")
+    parser.add_argument(
+        "--status", default="open", help="statut des findings interrogés (défaut : open)"
+    )
+    parser.add_argument(
+        "--limit", type=int, default=50, help="nombre de findings demandés (défaut 50)"
+    )
     parser.add_argument("--finding-id", help="traiter ce finding précis (préfixe accepté)")
-    parser.add_argument("--index", type=int, default=1, help="rang du finding à traiter (défaut 1 = plus risqué)")
+    parser.add_argument(
+        "--index", type=int, default=1, help="rang du finding à traiter (défaut 1 = plus risqué)"
+    )
     parser.add_argument(
         "--playbook",
         default=DEFAULT_PLAYBOOK,
-        help="playbook à planifier (défaut : %s, §7)" % DEFAULT_PLAYBOOK,
+        help=f"playbook à planifier (défaut : {DEFAULT_PLAYBOOK}, §7)",
     )
-    parser.add_argument("--target", help="cible explicite (IP/CIDR) ; par défaut : labels.src_ip du finding")
+    parser.add_argument(
+        "--target", help="cible explicite (IP/CIDR) ; par défaut : labels.src_ip du finding"
+    )
     parser.add_argument(
         "--duration-seconds",
         type=int,
         default=DEFAULT_DURATION_SECONDS,
-        help="durée de la contre-mesure en secondes (défaut %s ; 60 ≤ n ≤ 604800)" % DEFAULT_DURATION_SECONDS,
+        help=f"durée de la contre-mesure en secondes (défaut {DEFAULT_DURATION_SECONDS} ; 60 ≤ n ≤ 604800)",
     )
     parser.add_argument("--reason", help="motif transmis au playbook (journalisé)")
     parser.add_argument("--comment", help="commentaire d'approbation journalisé dans l'audit")
@@ -1353,11 +1411,13 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="confirmation explicite sans interaction (obligatoire en mode non interactif)",
     )
-    parser.add_argument("--rollback", action="store_true", help="déclencher le rollback juste après l'exécution")
-    parser.add_argument("--no-rollback", action="store_true", help="ne pas proposer de rollback en fin de déroulé")
     parser.add_argument(
-        "--rollback-reason", help="motif du rollback (journalisé dans l'audit)"
+        "--rollback", action="store_true", help="déclencher le rollback juste après l'exécution"
     )
+    parser.add_argument(
+        "--no-rollback", action="store_true", help="ne pas proposer de rollback en fin de déroulé"
+    )
+    parser.add_argument("--rollback-reason", help="motif du rollback (journalisé dans l'audit)")
     parser.add_argument(
         "--rollback-action",
         metavar="ACTION_ID",
@@ -1376,8 +1436,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--timeout",
         type=float,
-        default=float(env_first("THOT_SECURE_TIMEOUT", "THOT_TIMEOUT", default=str(DEFAULT_TIMEOUT))),
-        help="délai d'attente par requête, en secondes (défaut %s)" % DEFAULT_TIMEOUT,
+        default=float(
+            env_first("THOT_SECURE_TIMEOUT", "THOT_TIMEOUT", default=str(DEFAULT_TIMEOUT))
+        ),
+        help=f"délai d'attente par requête, en secondes (défaut {DEFAULT_TIMEOUT})",
     )
     parser.add_argument("-v", "--verbose", action="store_true", help="journalise les détails")
     parser.add_argument("--version", action="version", version="thotsecure-auto-mitigation 0.1.0")
@@ -1389,7 +1451,9 @@ def validate_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> 
     if args.timeout <= 0:
         return "--timeout doit être strictement positif"
     if args.duration_seconds and not (60 <= args.duration_seconds <= 604800):
-        return "--duration-seconds doit être compris entre 60 et 604800 (§7, playbook block-source-ip)"
+        return (
+            "--duration-seconds doit être compris entre 60 et 604800 (§7, playbook block-source-ip)"
+        )
     if args.index < 1:
         return "--index commence à 1"
     if args.limit < 1:
@@ -1415,8 +1479,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
 
     api = build_api(args)
-    info_verbose(args, "client d'API : %s" % getattr(api, "label", "inconnu"))
-    info_verbose(args, "instance : %s" % safe_url(args.url))
+    info_verbose(args, "client d'API : {}".format(getattr(api, "label", "inconnu")))
+    info_verbose(args, f"instance : {safe_url(args.url)}")
 
     try:
         if args.rollback_action:
@@ -1431,18 +1495,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return 130
     except TransportError as exc:
-        warn("échec réseau : %s" % exc)
+        warn(f"échec réseau : {exc}")
         return 1
     except ApiError as exc:
-        warn("erreur d'API : %s" % exc)
+        warn(f"erreur d'API : {exc}")
         return 1
     finally:
         closer = getattr(api, "close", None)
         if callable(closer):
-            try:
+            with _contextlib.suppress(Exception):
                 closer()
-            except Exception:  # noqa: BLE001 - la fermeture ne doit pas masquer le code de sortie
-                pass
 
 
 if __name__ == "__main__":

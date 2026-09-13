@@ -501,4 +501,3 @@ __all__ = [
     "SQLITE_DDL",
     "ddl_for",
 ]
-

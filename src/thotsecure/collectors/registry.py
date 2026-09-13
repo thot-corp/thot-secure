@@ -26,7 +26,9 @@ class CollectorRegistry:
 
     def register(self, collector: Collector) -> None:
         if collector.name in self._collectors:
-            log.warning("collecteur déjà enregistré, remplacement", extra={"collector": collector.name})
+            log.warning(
+                "collecteur déjà enregistré, remplacement", extra={"collector": collector.name}
+            )
         self._collectors[collector.name] = collector
 
     def get(self, name: str) -> Collector | None:
@@ -37,9 +39,7 @@ class CollectorRegistry:
         if collector is None:
             from ..core.errors import NotFoundError
 
-            raise NotFoundError(
-                f"collecteur inconnu: {name}", details={"available": self.names()}
-            )
+            raise NotFoundError(f"collecteur inconnu: {name}", details={"available": self.names()})
         return collector
 
     def all(self) -> list[Collector]:

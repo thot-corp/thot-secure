@@ -27,7 +27,7 @@ from typing import Any
 
 from ...core.logging_setup import get_logger
 from ...core.util import iso_z, new_id, now_iso, parse_dt, slugify, utcnow
-from .base import Connector, ConnectorNotConfiguredError, ConnectorResult
+from .base import Connector, ConnectorResult
 
 log = get_logger("actions.connector.local")
 
@@ -111,7 +111,9 @@ class NginxLocalConnector(Connector):
             "#     include /etc/nginx/conf.d/thotsecure-deny.conf;",
             "",
         ]
-        rate_entries = [entry for entry in state["entries"] if entry.get("operation") == "rate_limit"]
+        rate_entries = [
+            entry for entry in state["entries"] if entry.get("operation") == "rate_limit"
+        ]
         deny_entries = [entry for entry in state["entries"] if entry.get("operation") == "block_ip"]
 
         if rate_entries:
@@ -160,7 +162,10 @@ class NginxLocalConnector(Connector):
         except (OSError, subprocess.TimeoutExpired) as exc:
             return False, f"échec du rechargement: {exc}"
         if completed.returncode != 0:
-            return False, f"rechargement en erreur: {completed.stderr.decode('utf-8', 'replace')[:200]}"
+            return (
+                False,
+                f"rechargement en erreur: {completed.stderr.decode('utf-8', 'replace')[:200]}",
+            )
         return True, "rechargement Nginx effectué"
 
     # -- opérations --------------------------------------------------------------------
@@ -489,7 +494,9 @@ class LocalTicketConnector(Connector):
                 f"{params.get('resolution') or 'résolu'}\n"
                 f"- commentaire : {params.get('comment') or 'n/a'}\n"
             )
-        return ConnectorResult(ok=True, detail=f"ticket clôturé: {path}", data={"ticket_id": ticket_id})
+        return ConnectorResult(
+            ok=True, detail=f"ticket clôturé: {path}", data={"ticket_id": ticket_id}
+        )
 
     def op_notify(self, params: dict[str, Any]) -> ConnectorResult:
         """Une notification locale reste traceable : elle est écrite, pas seulement émise."""

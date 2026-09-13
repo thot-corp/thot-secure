@@ -75,7 +75,7 @@ class NatsBus(EventBus):
                 # sans JetStream, la base reste la source de vérité.
                 for event in self.store.pending_events(limit=1000):
                     self._dispatch(event)
-        except Exception as exc:  # noqa: BLE001 - jamais bloquant
+        except Exception as exc:
             self.degraded = True
             self.errors += 1
             log.error(
@@ -197,12 +197,12 @@ class NatsBus(EventBus):
                     continue
                 elif command.startswith(b"-ERR"):
                     self.errors += 1
-                    log.error("erreur NATS", extra={"error": command.decode('utf-8', 'replace')})
+                    log.error("erreur NATS", extra={"error": command.decode("utf-8", "replace")})
                 elif command.startswith(b"INFO"):
                     continue
             except asyncio.CancelledError:
                 raise
-            except Exception as exc:  # noqa: BLE001 - reconnexion gérée ci-dessous
+            except Exception as exc:
                 self.errors += 1
                 log.error("flux NATS interrompu", extra={"error": str(exc)})
                 await self._reconnect()
@@ -224,7 +224,7 @@ class NatsBus(EventBus):
         """Reconnexion avec backoff exponentiel borné (jamais de boucle serrée)."""
         while self.reconnect_attempts < self.max_reconnect_attempts:
             self.reconnect_attempts += 1
-            delay = min(2**self.reconnect_attempts * 0.2, 15.0) * (0.5 + random.random())  # noqa: S311
+            delay = min(2**self.reconnect_attempts * 0.2, 15.0) * (0.5 + random.random())
             log.warning(
                 "tentative de reconnexion NATS",
                 extra={"attempt": self.reconnect_attempts, "delay_s": round(delay, 2)},
@@ -236,7 +236,7 @@ class NatsBus(EventBus):
                 self.reconnect_attempts = 0
                 log.info("reconnexion NATS réussie")
                 return
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 log.error("reconnexion échouée", extra={"error": str(exc)})
         self.degraded = True
         log.error("NATS abandonné après plusieurs tentatives : mode dégradé permanent")
@@ -262,7 +262,7 @@ def parse_event(payload: bytes | str) -> Event | None:
         if isinstance(payload, bytes):
             payload = payload.decode("utf-8")
         return Event.model_validate_json(payload)
-    except Exception:  # noqa: BLE001 - un message corrompu ne doit pas tuer le consommateur
+    except Exception:
         log.warning("message de bus ignoré (charge invalide)", extra={"size": len(payload)})
         return None
 

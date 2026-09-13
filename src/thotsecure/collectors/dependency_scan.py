@@ -229,7 +229,7 @@ class DependencyScanCollector(Collector):
 def parse_manifest(filename: str, text: str) -> list[Dependency]:
     """Détecte le format d'après le nom du fichier et délègue à l'analyseur adapté."""
     lower = filename.lower()
-    if lower.startswith("requirements") or lower.endswith(".txt") and "requirements" in lower:
+    if lower.startswith("requirements") or (lower.endswith(".txt") and "requirements" in lower):
         return parse_requirements(text)
     if lower == "package.json":
         return parse_package_json(text)
@@ -309,7 +309,9 @@ def parse_go_mod(text: str) -> list[Dependency]:
             continue
         if not in_require_block and not stripped.startswith("require "):
             continue
-        candidate = stripped[len("require ") :].strip() if stripped.startswith("require ") else stripped
+        candidate = (
+            stripped[len("require ") :].strip() if stripped.startswith("require ") else stripped
+        )
         parts = candidate.split()
         if len(parts) < 2:
             continue

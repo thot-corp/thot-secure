@@ -764,6 +764,7 @@ toute installation.
 
 ```python
 """Ingestion, lecture des findings et cycle d'action complet — stdlib uniquement."""
+
 from __future__ import annotations
 
 import json

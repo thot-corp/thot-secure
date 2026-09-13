@@ -156,7 +156,7 @@ class Connector(ABC):
                 error=f"connecteur non configuré: {exc}",
                 duration_ms=(time.perf_counter() - started) * 1000,
             )
-        except Exception as exc:  # noqa: BLE001 - un connecteur ne casse jamais le moteur
+        except Exception as exc:
             self.failures += 1
             log.error(
                 "échec d'une opération de connecteur",

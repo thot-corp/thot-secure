@@ -22,7 +22,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from ..core.errors import ThotSecureError, RateLimitedError
+from ..core.errors import RateLimitedError, ThotSecureError
 from ..core.logging_setup import get_logger
 
 log = get_logger("api.errors")
@@ -71,7 +71,9 @@ def register_exception_handlers(app: FastAPI) -> None:
                     "request_id": getattr(request.state, "request_id", None),
                 },
             )
-        return error_response(exc.http_status, exc.code, exc.message, details=exc.details, headers=headers)
+        return error_response(
+            exc.http_status, exc.code, exc.message, details=exc.details, headers=headers
+        )
 
     @app.exception_handler(RequestValidationError)
     async def handle_validation(request: Request, exc: RequestValidationError) -> JSONResponse:

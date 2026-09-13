@@ -18,14 +18,14 @@ import socket
 import struct
 import sys
 import unittest
-from typing import Any, Dict, List
+from typing import Any
 
 _SDK_ROOT = pathlib.Path(__file__).resolve().parents[1]
 if str(_SDK_ROOT) not in sys.path:
     sys.path.insert(0, str(_SDK_ROOT))
 
-from thotsecure_sdk.errors import WebSocketError, redact_url  # noqa: E402
-from thotsecure_sdk.ws import (  # noqa: E402
+from thotsecure_sdk.errors import WebSocketError, redact_url
+from thotsecure_sdk.ws import (
     OPCODE_BINARY,
     OPCODE_CLOSE,
     OPCODE_CONTINUATION,
@@ -186,7 +186,7 @@ class TestMessageAssembly(unittest.TestCase):
         kind, _ = self.connection.read_message(timeout=1.0)
         self.assertEqual(kind, "text")
 
-        fin, opcode, payload = read_frame(self.server_end.recv)
+        _fin, opcode, payload = read_frame(self.server_end.recv)
         self.assertEqual(opcode, OPCODE_PONG)
         self.assertEqual(payload, b"ping-data")
 
@@ -215,8 +215,8 @@ class _StubConnection:
 
 class TestWebSocketClient(unittest.TestCase):
     def _client(self, **kwargs: Any) -> WebSocketClient:
-        self.sleeps: List[float] = []
-        params: Dict[str, Any] = {
+        self.sleeps: list[float] = []
+        params: dict[str, Any] = {
             "url": "ws://127.0.0.1:9/api/v1/ws/stream?api_key=ao_x&tenant_id=acme",
             "reconnect": False,
             "sleep": self.sleeps.append,
@@ -225,7 +225,7 @@ class TestWebSocketClient(unittest.TestCase):
         params.update(kwargs)
         return WebSocketClient(**params)
 
-    def _with_frames(self, client: WebSocketClient, frames: List[Frame]) -> None:
+    def _with_frames(self, client: WebSocketClient, frames: list[Frame]) -> None:
         client._connection = _StubConnection()  # type: ignore[assignment]
         iterator = iter(frames)
 

@@ -7,7 +7,6 @@ from typing import Any
 from fastapi import APIRouter, Response
 
 from ...core.models import Tenant
-from ...core.util import utcnow
 from ...tenancy.rbac import ROLE_DESCRIPTIONS, role_matrix
 from ..deps import PrincipalDep, ServiceDep, require
 from ..schemas import KeyCreateRequest, TenantCreateRequest, TenantUpdateRequest

@@ -14,7 +14,9 @@ from __future__ import annotations
 __version__ = "0.1.0"
 __license__ = "Apache-2.0"
 __title__ = "Thot Secure"
-__description__ = "SOAR/CSPM défensif : détection, décision policy-as-code et contre-mesures réversibles."
+__description__ = (
+    "SOAR/CSPM défensif : détection, décision policy-as-code et contre-mesures réversibles."
+)
 
 #: Adresses de dons officielles — source unique de vérité.
 #: Elles sont rappelées par ``thotsecure funding`` et par la page ``/ui/support``.

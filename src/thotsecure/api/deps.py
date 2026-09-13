@@ -12,7 +12,6 @@ from typing import Annotated, Any
 
 from fastapi import Depends, Header, Query, Request
 
-from ..core.errors import PermissionDeniedError
 from ..core.models import Principal, Tenant
 from ..service import Service
 from ..tenancy.rbac import require_capability
@@ -59,12 +58,16 @@ def current_principal(
             details={"header": "X-API-Key"},
         )
     try:
-        principal = service.keys.authenticate(api_key, request_id=getattr(request.state, "request_id", None))
+        principal = service.keys.authenticate(
+            api_key, request_id=getattr(request.state, "request_id", None)
+        )
     except AuthenticationError:
         service.metrics.inc("thotsecure_auth_failures_total")
         raise
     request.state.principal = principal
-    service.metrics.inc("thotsecure_api_requests_total", method=request.method, status="authenticated")
+    service.metrics.inc(
+        "thotsecure_api_requests_total", method=request.method, status="authenticated"
+    )
     return principal
 
 
@@ -138,8 +141,8 @@ PaginationDep = Annotated[dict[str, Any], Depends(pagination)]
 
 
 __all__ = [
-    "PrincipalDep",
     "PaginationDep",
+    "PrincipalDep",
     "ServiceDep",
     "TenantDep",
     "client_identifier",

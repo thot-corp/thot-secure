@@ -1736,6 +1736,7 @@ moteurs) :
 
 ```python
 """Migration SQLite → PostgreSQL, par l'interface de stockage (script d'exploitation)."""
+
 from thotsecure.audit.chain import AuditChain
 from thotsecure.core.config import Settings
 from thotsecure.storage import create_store
@@ -1808,9 +1809,7 @@ for tenant in source.list_tenants():
     tid = tenant.tenant_id
     assert target.count_events(tid) == source.count_events(tid), tid
     assert target.count_audit(tid) == source.count_audit(tid), tid
-    assert (
-        target.count_findings(tid)["by_status"] == source.count_findings(tid)["by_status"]
-    ), tid
+    assert target.count_findings(tid)["by_status"] == source.count_findings(tid)["by_status"], tid
     assert target.actions_by_status(tid) == source.actions_by_status(tid), tid
 print(f"migration vérifiée : {after.records} maillons d'audit, chaîne valide")
 ```

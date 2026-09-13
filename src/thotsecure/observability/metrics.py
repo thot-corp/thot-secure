@@ -18,7 +18,19 @@ from collections.abc import Callable, Iterable
 from typing import Any
 
 #: Buckets d'histogramme par défaut (secondes), adaptés à un pipeline de détection.
-DEFAULT_BUCKETS: tuple[float, ...] = (0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0)
+DEFAULT_BUCKETS: tuple[float, ...] = (
+    0.001,
+    0.005,
+    0.01,
+    0.025,
+    0.05,
+    0.1,
+    0.25,
+    0.5,
+    1.0,
+    2.5,
+    5.0,
+)
 
 MetricLabels = tuple[tuple[str, str], ...]
 
@@ -99,7 +111,7 @@ class MetricsRegistry:
                 if value <= bound:
                     entry["counts"][index] += 1
 
-    def track(self, name: str, **labels: str) -> "_Timer":
+    def track(self, name: str, **labels: str) -> _Timer:
         return _Timer(self, name, labels)
 
     # ----------------------------------------------------------------------------------
@@ -109,8 +121,14 @@ class MetricsRegistry:
     def snapshot(self) -> dict[str, Any]:
         with self._lock:
             return {
-                "counters": {f"{name}{_label_key(labels)}": value for (name, labels), value in self._counters.items()},
-                "gauges": {f"{name}{_label_key(labels)}": value for (name, labels), value in self._gauges.items()},
+                "counters": {
+                    f"{name}{_label_key(labels)}": value
+                    for (name, labels), value in self._counters.items()
+                },
+                "gauges": {
+                    f"{name}{_label_key(labels)}": value
+                    for (name, labels), value in self._gauges.items()
+                },
                 "histograms": {
                     f"{name}{_label_key(labels)}": {
                         "count": entry["count"],
@@ -133,7 +151,7 @@ class MetricsRegistry:
         for collector in list(self._collectors):
             try:
                 collector(self)
-            except Exception:  # noqa: BLE001 - un collecteur de métriques ne casse pas le scrape
+            except Exception:
                 continue
 
         lines: list[str] = []
@@ -168,9 +186,7 @@ class MetricsRegistry:
                 lines.append(
                     f"{name}_bucket{_format_labels(labels, {'le': repr(bound)})} {cumulative}"
                 )
-            lines.append(
-                f"{name}_bucket{_format_labels(labels, {'le': '+Inf'})} {entry['count']}"
-            )
+            lines.append(f"{name}_bucket{_format_labels(labels, {'le': '+Inf'})} {entry['count']}")
             lines.append(f"{name}_sum{_format_labels(labels)} {entry['sum']:g}")
             lines.append(f"{name}_count{_format_labels(labels)} {entry['count']}")
 
@@ -189,7 +205,7 @@ class MetricsRegistry:
 class _Timer:
     """Chronomètre contextuel qui alimente un histogramme."""
 
-    __slots__ = ("_registry", "_name", "_labels", "_started")
+    __slots__ = ("_labels", "_name", "_registry", "_started")
 
     def __init__(self, registry: MetricsRegistry, name: str, labels: dict[str, str]) -> None:
         self._registry = registry
@@ -197,7 +213,7 @@ class _Timer:
         self._labels = labels
         self._started = 0.0
 
-    def __enter__(self) -> "_Timer":
+    def __enter__(self) -> _Timer:
         self._started = time.perf_counter()
         return self
 

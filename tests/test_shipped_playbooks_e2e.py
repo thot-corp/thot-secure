@@ -205,7 +205,9 @@ class ShippedPlaybookEndToEndTest(StackTestCase):
 
                     render_params(step, {**context, "params": step_params})
                 except PlaybookError as exc:  # pragma: no cover - échec attendu si régression
-                    self.fail(f"playbook livré {name}: placeholder non résolu ({step.call}) — {exc}")
+                    self.fail(
+                        f"playbook livré {name}: placeholder non résolu ({step.call}) — {exc}"
+                    )
                 checked += 1
         self.assertGreaterEqual(checked, 20, "trop peu d'étapes vérifiées pour être utile")
 

@@ -30,7 +30,7 @@ from typing import Any
 from ..core.config import Settings
 from ..core.logging_setup import get_logger
 from ..core.models import Decision, Finding, Tenant, severity_rank
-from ..core.util import iso_z, utcnow
+from ..core.util import utcnow
 from ..detection.matchers import RegexTooComplexError, compile_regex
 from ..scope import TargetRegistry
 from ..storage import StoreProtocol
@@ -119,7 +119,9 @@ class DecisionEngine:
         registry: TargetRegistry | None = None,
     ) -> None:
         self.store = store
-        self.policies: list[Any] = sorted(policies or [], key=lambda item: (-item.priority, item.id))
+        self.policies: list[Any] = sorted(
+            policies or [], key=lambda item: (-item.priority, item.id)
+        )
         self.settings = settings
         self.registry = registry or TargetRegistry()
         self.evaluations = 0
@@ -178,7 +180,9 @@ class DecisionEngine:
             params=dict(selected.then.params or {}),
             reason=(
                 f"politique '{selected.id}' (priorité {selected.priority}) : "
-                + PolicyEvaluation(selected.id, True, evaluate_when(selected.when, context)[1]).explain()
+                + PolicyEvaluation(
+                    selected.id, True, evaluate_when(selected.when, context)[1]
+                ).explain()
             ),
             risk_score=context.finding.risk_score,
             cooldown_seconds=(
@@ -223,7 +227,9 @@ class DecisionEngine:
         dry_run_global = bool(settings.dry_run) if settings else True
 
         # 1. Cible protégée : aucune automatisation, jamais.
-        protected = tenant.is_protected(context.target_value) or tenant.is_protected(context.asset_host)
+        protected = tenant.is_protected(context.target_value) or tenant.is_protected(
+            context.asset_host
+        )
         if self.registry and not protected:
             scope = self.registry.for_tenant(tenant.tenant_id)
             protected = scope.is_protected(context.target_value or "") or scope.is_protected(
@@ -262,7 +268,9 @@ class DecisionEngine:
             if tenant.mode == "manual":
                 decision.guards.append("tenant_manual")
                 decision.decision = "require_approval"
-                decision.reason += " | garde-fou : tenant en mode 'manual' (approbation obligatoire)"
+                decision.reason += (
+                    " | garde-fou : tenant en mode 'manual' (approbation obligatoire)"
+                )
             elif tenant.mode == "supervised":
                 critical = settings.critical_score_threshold if settings else 85.0
                 if finding.risk_score >= critical:
@@ -296,7 +304,9 @@ class DecisionEngine:
         # 5. Cooldown sur la cible.
         cooldown = decision.cooldown_seconds or tenant.cooldown_seconds
         if cooldown and context.target_value and decision.playbook:
-            last = self.store.last_action_for(tenant.tenant_id, decision.playbook, context.target_value)
+            last = self.store.last_action_for(
+                tenant.tenant_id, decision.playbook, context.target_value
+            )
             if last is not None:
                 elapsed = (utcnow() - last.requested_at).total_seconds()
                 if elapsed < cooldown and last.status in {"succeeded", "executing", "approved"}:
@@ -396,7 +406,10 @@ def _evaluate_key(key: str, actual: Any, expected: Any) -> tuple[bool, str]:
             if key == "finding.tags":
                 missing = required - present
                 ok = not missing
-                return ok, f"{key}={sorted(present)} {'contient' if ok else 'ne contient pas'} {sorted(required)}"
+                return (
+                    ok,
+                    f"{key}={sorted(present)} {'contient' if ok else 'ne contient pas'} {sorted(required)}",
+                )
             ok = bool(required & present)
             return ok, f"{key} ∩ {sorted(required)} = {sorted(required & present)}"
         if key == "finding.tags_any":
@@ -568,7 +581,12 @@ def resolve_param_target(finding: Finding, path: str | None) -> str | None:
 
 
 def _target_type_for(playbook: str) -> str:
-    if playbook in {"block-source-ip", "rate-limit-source", "unblock-source-ip", "remove-rate-limit"}:
+    if playbook in {
+        "block-source-ip",
+        "rate-limit-source",
+        "unblock-source-ip",
+        "remove-rate-limit",
+    }:
         return "ip"
     if playbook in {"isolate-host", "unisolate-host", "harden-endpoint"}:
         return "host"
@@ -587,10 +605,10 @@ IPV4_PATTERN = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
 
 
 __all__ = [
+    "WEEKDAYS",
     "DecisionContext",
     "DecisionEngine",
     "PolicyEvaluation",
-    "WEEKDAYS",
     "evaluate_when",
     "extract_targets",
     "resolve_param_target",

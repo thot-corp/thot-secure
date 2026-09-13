@@ -143,7 +143,9 @@ class HttpWebhookConnector(Connector):
             except ValueError:
                 parsed = {"raw": raw[:500]}
 
-        token = parsed.get("rollback_token") or parsed.get("id") if isinstance(parsed, dict) else None
+        token = (
+            parsed.get("rollback_token") or parsed.get("id") if isinstance(parsed, dict) else None
+        )
         return ConnectorResult(
             ok=200 <= status < 300,
             detail=f"passerelle HTTP {status}",
@@ -152,7 +154,9 @@ class HttpWebhookConnector(Connector):
         )
 
     def _dispatch(self, operation: str, params: dict[str, Any]) -> ConnectorResult:
-        target_url = self.rollback_url if operation.startswith("undo_") and self.rollback_url else self.url
+        target_url = (
+            self.rollback_url if operation.startswith("undo_") and self.rollback_url else self.url
+        )
         payload = {
             "operation": operation,
             "params": params,

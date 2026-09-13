@@ -71,9 +71,7 @@ class AnomalyDetectorTest(unittest.TestCase):
         for bucket in range(40):
             for index in range(25):
                 signals.extend(
-                    detector.observe(
-                        make_event(), now=bucket * BUCKET + index * (BUCKET / 25)
-                    )
+                    detector.observe(make_event(), now=bucket * BUCKET + index * (BUCKET / 25))
                 )
         self.assertEqual([], signals, "trafic stationnaire signalé à tort")
 
@@ -174,7 +172,9 @@ class AnomalyDetectorTest(unittest.TestCase):
         # Attaque : 60 sources distinctes dans une minute.
         for offset in range(60):
             signals.extend(
-                detector.observe(make_event(src_ip=f"203.0.113.{offset}"), now=BUCKET * 10 + offset * 0.5)
+                detector.observe(
+                    make_event(src_ip=f"203.0.113.{offset}"), now=BUCKET * 10 + offset * 0.5
+                )
             )
         signals.extend(detector.observe(make_event(src_ip="203.0.113.250"), now=BUCKET * 11 + 1))
         cardinality = [s for s in signals if s.check == CHECK_CARDINALITY]
@@ -199,7 +199,9 @@ class AnomalyDetectorTest(unittest.TestCase):
         doit pas devenir lui-même un vecteur de saturation mémoire."""
         detector = self._detector(max_entities=50, entity_ttl_seconds=0)
         for index in range(500):
-            detector.observe(make_event(src_ip=f"203.0.113.{index % 256}.{index // 256}"), now=index * 0.1)
+            detector.observe(
+                make_event(src_ip=f"203.0.113.{index % 256}.{index // 256}"), now=index * 0.1
+            )
         stats = detector.stats()
         self.assertLessEqual(stats["tracked_entities"], 51)
         self.assertGreater(stats["evicted_entities"], 0)

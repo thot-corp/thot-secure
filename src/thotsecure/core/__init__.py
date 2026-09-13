@@ -8,9 +8,15 @@ job planifié ou dans un test unitaire, sans serveur HTTP.
 
 from __future__ import annotations
 
-from .config import DEFAULT_TENANT_SETTINGS, Autonomy, BusBackend, Settings, get_settings, set_settings
+from .config import (
+    DEFAULT_TENANT_SETTINGS,
+    Autonomy,
+    BusBackend,
+    Settings,
+    get_settings,
+    set_settings,
+)
 from .errors import (
-    ThotSecureError,
     AuditIntegrityError,
     AuthenticationError,
     AutonomyRefused,
@@ -27,13 +33,13 @@ from .errors import (
     RuleError,
     StorageError,
     TargetNotAllowedError,
+    ThotSecureError,
     ValidationError,
 )
 from .logging_setup import bind_context, configure_logging, get_logger
 
 __all__ = [
     "DEFAULT_TENANT_SETTINGS",
-    "ThotSecureError",
     "AuditIntegrityError",
     "AuthenticationError",
     "Autonomy",
@@ -53,6 +59,7 @@ __all__ = [
     "Settings",
     "StorageError",
     "TargetNotAllowedError",
+    "ThotSecureError",
     "ValidationError",
     "bind_context",
     "configure_logging",

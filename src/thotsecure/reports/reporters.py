@@ -20,7 +20,7 @@ import json
 from typing import Any
 
 from ..core.models import Action, AuditRecord, Finding, Tenant
-from ..core.util import canonical_json, iso_z, humanize_duration, parse_dt, strip_html, utcnow
+from ..core.util import canonical_json, humanize_duration, iso_z, strip_html, utcnow
 from ..scoring.risk import risk_band
 
 TOOL_NAME = "Thot Secure"
@@ -80,7 +80,12 @@ def finding_to_markdown(
     if finding.tags:
         lines.append(f"**Étiquettes** : {', '.join(f'`{tag}`' for tag in finding.tags)}")
 
-    lines += ["", "## Description", "", finding.description or "_Aucune description fournie par la règle._"]
+    lines += [
+        "",
+        "## Description",
+        "",
+        finding.description or "_Aucune description fournie par la règle._",
+    ]
 
     remediation = finding.remediation or "_Aucune remédiation documentée._"
     lines += ["", "## Remédiation recommandée", "", remediation]
@@ -133,7 +138,13 @@ def finding_to_markdown(
         lines += [f"- {item}" for item in false_positives]
 
     if actions:
-        lines += ["", "## Actions déclenchées", "", "| action | playbook | statut | dry-run | cible |", "| --- | --- | --- | --- | --- |"]
+        lines += [
+            "",
+            "## Actions déclenchées",
+            "",
+            "| action | playbook | statut | dry-run | cible |",
+            "| --- | --- | --- | --- | --- |",
+        ]
         for action in actions:
             lines.append(
                 f"| `{action.action_id}` | `{action.playbook}` | `{action.status}` | "
@@ -141,7 +152,13 @@ def finding_to_markdown(
             )
 
     if audit:
-        lines += ["", "## Piste d'audit", "", "| seq | horodatage | acteur | action |", "| --- | --- | --- | --- |"]
+        lines += [
+            "",
+            "## Piste d'audit",
+            "",
+            "| seq | horodatage | acteur | action |",
+            "| --- | --- | --- | --- |",
+        ]
         for record in audit[:20]:
             lines.append(
                 f"| {record.seq} | {iso_z(record.ts)} | `{record.actor}` | `{record.action}` |"
@@ -157,7 +174,7 @@ def finding_to_markdown(
         "---",
         "",
         f"_Rapport généré par {TOOL_NAME} {TOOL_VERSION} le {iso_z(utcnow())}._  ",
-        f"_Action défensive uniquement — aucun test offensif n'a été effectué._",
+        "_Action défensive uniquement — aucun test offensif n'a été effectué._",
     ]
     return "\n".join(lines)
 
@@ -260,7 +277,9 @@ def finding_to_html(
     if finding.mitre:
         meta_rows.append(("MITRE ATT&CK", ", ".join(strip_html(item) for item in finding.mitre)))
     if finding.tags:
-        meta_rows.append(("Étiquettes", ", ".join(f"<code>{strip_html(tag)}</code>" for tag in finding.tags)))
+        meta_rows.append(
+            ("Étiquettes", ", ".join(f"<code>{strip_html(tag)}</code>" for tag in finding.tags))
+        )
     meta_html = "".join(f"<dt>{key}</dt><dd>{value}</dd>" for key, value in meta_rows)
 
     risk = finding.evidence.get("risk") or {}
@@ -327,7 +346,15 @@ def finding_to_html(
         )
 
     score = finding.risk_score
-    gauge_color = "#dc2626" if score >= 85 else "#ea580c" if score >= 70 else "#ca8a04" if score >= 45 else "#0891b2"
+    gauge_color = (
+        "#dc2626"
+        if score >= 85
+        else "#ea580c"
+        if score >= 70
+        else "#ca8a04"
+        if score >= 45
+        else "#0891b2"
+    )
 
     return HTML_TEMPLATE.format(
         title=strip_html(finding.title),
@@ -383,7 +410,9 @@ def findings_to_sarif(findings: list[Finding], *, tenant_id: str | None = None) 
                 "id": finding.rule_id,
                 "name": finding.rule_id,
                 "shortDescription": {"text": finding.rule_name or finding.rule_id},
-                "fullDescription": {"text": finding.description or finding.rule_name or finding.rule_id},
+                "fullDescription": {
+                    "text": finding.description or finding.rule_name or finding.rule_id
+                },
                 "help": {
                     "text": finding.remediation or "Aucune remédiation documentée.",
                     "markdown": finding.remediation or "Aucune remédiation documentée.",
@@ -398,12 +427,16 @@ def findings_to_sarif(findings: list[Finding], *, tenant_id: str | None = None) 
         samples = finding.evidence.get("samples") or []
         if samples:
             source = samples[-1].get("source") or {}
-            sample_host = str(source.get("host") or (samples[-1].get("labels") or {}).get("host") or "")
+            sample_host = str(
+                source.get("host") or (samples[-1].get("labels") or {}).get("host") or ""
+            )
         results.append(
             {
                 "ruleId": finding.rule_id,
                 "level": SARIF_LEVELS.get(finding.severity, "warning"),
-                "message": {"text": f"{finding.title} (score de risque {finding.risk_score:.1f}/100)"},
+                "message": {
+                    "text": f"{finding.title} (score de risque {finding.risk_score:.1f}/100)"
+                },
                 "locations": [
                     {
                         "physicalLocation": {
@@ -515,9 +548,13 @@ def render(
     """Retourne ``(contenu, type MIME)`` pour le format demandé."""
     normalized = (fmt or "md").lower()
     if normalized in {"md", "markdown"}:
-        return finding_to_markdown(finding, tenant=tenant, actions=actions, audit=audit), "text/markdown; charset=utf-8"
+        return finding_to_markdown(
+            finding, tenant=tenant, actions=actions, audit=audit
+        ), "text/markdown; charset=utf-8"
     if normalized in {"html", "htm"}:
-        return finding_to_html(finding, tenant=tenant, actions=actions, audit=audit), "text/html; charset=utf-8"
+        return finding_to_html(
+            finding, tenant=tenant, actions=actions, audit=audit
+        ), "text/html; charset=utf-8"
     if normalized == "json":
         return finding_to_json(finding, tenant=tenant, actions=actions), "application/json"
     if normalized == "sarif":

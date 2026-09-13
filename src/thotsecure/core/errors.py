@@ -159,7 +159,6 @@ class AutonomyRefused(ThotSecureError):
 
 
 __all__ = [
-    "ThotSecureError",
     "AuditIntegrityError",
     "AuthenticationError",
     "AutonomyRefused",
@@ -176,5 +175,6 @@ __all__ = [
     "RuleError",
     "StorageError",
     "TargetNotAllowedError",
+    "ThotSecureError",
     "ValidationError",
 ]

@@ -32,8 +32,9 @@ import socket
 import socketserver
 import threading
 import unittest
+from collections.abc import Callable
 from http.server import BaseHTTPRequestHandler
-from typing import Any, Callable
+from typing import Any
 from urllib.parse import parse_qsl, urlsplit
 
 from thotsecure.actions.connectors.aws_waf import (
@@ -189,7 +190,7 @@ def reference_sigv4(
             hashlib.sha256(canonical_request.encode("utf-8")).hexdigest(),
         ]
     )
-    key = _ref_hmac(f"AWS4{secret_access_key}".encode("utf-8"), amz_date[:8])
+    key = _ref_hmac(f"AWS4{secret_access_key}".encode(), amz_date[:8])
     for element in (region, service, "aws4_request"):
         key = _ref_hmac(key, element)
     signature = hmac.new(key, string_to_sign.encode("utf-8"), hashlib.sha256).hexdigest()
@@ -236,7 +237,9 @@ def verify_received_signature(
         host=request.headers.get("host", ""),
         path=parts.path,
         query="&".join(
-            sorted(f"{key}={value}" for key, value in parse_qsl(parts.query, keep_blank_values=True))
+            sorted(
+                f"{key}={value}" for key, value in parse_qsl(parts.query, keep_blank_values=True)
+            )
         ),
         region=match.group("region"),
         service=match.group("service"),
@@ -325,9 +328,11 @@ class FakeApiServer:
                 with outer._lock:
                     outer.requests.append(recorded)
                 status, payload, extra = outer._respond(recorded)
-                body = payload if isinstance(payload, bytes) else json.dumps(
-                    payload, ensure_ascii=False
-                ).encode("utf-8")
+                body = (
+                    payload
+                    if isinstance(payload, bytes)
+                    else json.dumps(payload, ensure_ascii=False).encode("utf-8")
+                )
                 self.send_response(status)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(body)))
@@ -606,9 +611,7 @@ class CloudflareBlockTest(NativeConnectorTestCase):
         self.assertEqual(1, server.calls)
         request = server.requests[0]
         self.assertEqual("POST", request.method)
-        self.assertEqual(
-            "/client/v4/accounts/acct-42/firewall/access_rules/rules", request.path
-        )
+        self.assertEqual("/client/v4/accounts/acct-42/firewall/access_rules/rules", request.path)
         self.assertEqual(f"Bearer {CLOUDFLARE_TOKEN}", request.headers["authorization"])
         self.assertTrue(request.headers["user-agent"].startswith("ThotSecure/"))
         self.assertEqual("block", request.json_body["mode"])
@@ -735,7 +738,9 @@ class CloudflareBlockTest(NativeConnectorTestCase):
     def test_error_codes_helper_is_used_for_all_shapes(self) -> None:
         self.assertEqual(
             "code 1: un; code 2: deux",
-            CloudflareConnector.format_errors([{"code": 1, "message": "un"}, {"code": 2, "message": "deux"}]),
+            CloudflareConnector.format_errors(
+                [{"code": 1, "message": "un"}, {"code": 2, "message": "deux"}]
+            ),
         )
         self.assertEqual("brut", CloudflareConnector.format_errors(["brut"]))
         self.assertEqual("", CloudflareConnector.format_errors(None))
@@ -974,7 +979,9 @@ class CloudflareRateLimitTest(NativeConnectorTestCase):
                 "errors": [],
                 "result": {
                     "id": CLOUDFLARE_RULESET_ID,
-                    "rules": [{**rule, "id": rule.get("id") or CLOUDFLARE_RULE_LIMIT_ID} for rule in rules],
+                    "rules": [
+                        {**rule, "id": rule.get("id") or CLOUDFLARE_RULE_LIMIT_ID} for rule in rules
+                    ],
                 },
             }
 
@@ -1116,12 +1123,14 @@ class AwsWafTest(NativeConnectorTestCase):
         self.assertEqual("POST", server.requests[0].method)
         self.assertEqual(CONTENT_TYPE, server.requests[0].headers["content-type"])
         self.assertEqual(
-            {"Id": AWS_SETTINGS["ip_set_id"], "Name": AWS_SETTINGS["ip_set_name"], "Scope": "REGIONAL"},
+            {
+                "Id": AWS_SETTINGS["ip_set_id"],
+                "Name": AWS_SETTINGS["ip_set_name"],
+                "Scope": "REGIONAL",
+            },
             server.requests[0].json_body,
         )
-        self.assertEqual(
-            TARGET_UPDATE_IPSET, server.requests[1].headers["x-amz-target"]
-        )
+        self.assertEqual(TARGET_UPDATE_IPSET, server.requests[1].headers["x-amz-target"])
         update = server.requests[1].json_body
         self.assertEqual(sorted([AWS_EXISTING, AWS_ADDRESS]), update["Addresses"])
         self.assertEqual("lock-token-1", update["LockToken"])
@@ -1215,9 +1224,11 @@ class AwsWafTest(NativeConnectorTestCase):
 
     def test_unblock_ip_removes_the_address_from_the_rollback_token(self) -> None:
         server = self.fake_server(
-            lambda request: aws_ipset_body([AWS_ADDRESS])
-            if request.headers.get("x-amz-target") == TARGET_GET_IPSET
-            else {"NextLockToken": "lock-token-4"}
+            lambda request: (
+                aws_ipset_body([AWS_ADDRESS])
+                if request.headers.get("x-amz-target") == TARGET_GET_IPSET
+                else {"NextLockToken": "lock-token-4"}
+            )
         )
         connector = self.connector(server)
 
@@ -1492,9 +1503,7 @@ class GithubIssueTest(NativeConnectorTestCase):
         self.assertNoSecret(self.GITHUB_TOKEN, result.to_dict())
 
     def test_close_ticket_comments_then_closes(self) -> None:
-        server = self.fake_server(
-            lambda request: (200, {"number": 42, "state": "closed"})
-        )
+        server = self.fake_server(lambda request: (200, {"number": 42, "state": "closed"}))
         connector = self.connector(server)
 
         result = connector.call(
@@ -1504,10 +1513,10 @@ class GithubIssueTest(NativeConnectorTestCase):
 
         self.assertTrue(result.ok, result.error)
         self.assertEqual(2, server.calls)
-        self.assertEqual("/repos/acme/api/issues/42/comments", urlsplit(server.requests[0].path).path)
         self.assertEqual(
-            {"body": "annulé : faux positif confirmé"}, server.requests[0].json_body
+            "/repos/acme/api/issues/42/comments", urlsplit(server.requests[0].path).path
         )
+        self.assertEqual({"body": "annulé : faux positif confirmé"}, server.requests[0].json_body)
         self.assertEqual("PATCH", server.requests[1].method)
         self.assertEqual("/repos/acme/api/issues/42", urlsplit(server.requests[1].path).path)
         self.assertEqual(
@@ -1890,7 +1899,9 @@ class NativeDryRunTest(NativeConnectorTestCase):
             GithubIssueConnector({}, dry_run=True),
         ):
             with self.subTest(connector=connector.driver):
-                results = [connector.call(op, {"ip": "203.0.113.9"}) for op in connector.capabilities]
+                results = [
+                    connector.call(op, {"ip": "203.0.113.9"}) for op in connector.capabilities
+                ]
                 self.assertTrue(all(item.ok for item in results))
                 self.assertTrue(all(item.simulated for item in results))
 

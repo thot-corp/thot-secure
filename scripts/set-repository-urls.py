@@ -51,15 +51,47 @@ PATTERN_TEMPLATES: tuple[tuple[str, str], ...] = (
 )
 
 SCANNED_SUFFIXES = (
-    ".md", ".markdown", ".yml", ".yaml", ".json", ".toml", ".cfg", ".ini", ".txt",
-    ".py", ".sh", ".ps1", ".psm1", ".ts", ".tsx", ".js", ".go", ".mod", ".tf", ".tfvars",
-    ".cff", ".html", ".css", ".service", ".example",
+    ".md",
+    ".markdown",
+    ".yml",
+    ".yaml",
+    ".json",
+    ".toml",
+    ".cfg",
+    ".ini",
+    ".txt",
+    ".py",
+    ".sh",
+    ".ps1",
+    ".psm1",
+    ".ts",
+    ".tsx",
+    ".js",
+    ".go",
+    ".mod",
+    ".tf",
+    ".tfvars",
+    ".cff",
+    ".html",
+    ".css",
+    ".service",
+    ".example",
 )
 SCANNED_NAMES = ("Dockerfile", "Makefile", "NOTICE", "CITATION.cff", "CODEOWNERS")
 
 #: Fichiers jamais modifiés par ce script.
 PROTECTED = ("LICENSE", "NOTICE")
-PROTECTED_DIRS = (".git", "node_modules", "__pycache__", "data", ".venv", "venv", "dist", "build", "site")
+PROTECTED_DIRS = (
+    ".git",
+    "node_modules",
+    "__pycache__",
+    "data",
+    ".venv",
+    "venv",
+    "dist",
+    "build",
+    "site",
+)
 
 
 def tracked_files(root: Path) -> list[Path]:
@@ -76,7 +108,9 @@ def tracked_files(root: Path) -> list[Path]:
     except OSError:
         return []
     if completed.returncode != 0:
-        print("! git ls-files a échoué : le script doit être lancé dans un dépôt Git", file=sys.stderr)
+        print(
+            "! git ls-files a échoué : le script doit être lancé dans un dépôt Git", file=sys.stderr
+        )
         return []
     return [root / line for line in completed.stdout.splitlines() if line.strip()]
 
@@ -114,7 +148,9 @@ def main(argv: list[str] | None = None) -> int:
         help="compte GitHub Sponsors (par défaut : le même que --owner)",
     )
     parser.add_argument("--root", default=".", help="racine du dépôt (défaut : répertoire courant)")
-    parser.add_argument("--check", action="store_true", help="n'écrit rien, affiche les changements")
+    parser.add_argument(
+        "--check", action="store_true", help="n'écrit rien, affiche les changements"
+    )
     args = parser.parse_args(argv)
 
     owner = args.owner.strip().lstrip("@").lower()
@@ -168,7 +204,7 @@ def main(argv: list[str] | None = None) -> int:
             path.write_text(text, encoding="utf-8", newline="")
 
     for path, count in sorted(details):
-        print(f"  {str(path):<58} {count:>3} remplacement(s)")
+        print(f"  {path!s:<58} {count:>3} remplacement(s)")
 
     print()
     print(f"Bilan : {changed_files} fichier(s), {total_replacements} remplacement(s)")
@@ -176,7 +212,7 @@ def main(argv: list[str] | None = None) -> int:
         print("Relancez sans --check pour appliquer.")
     else:
         print("Vérifiez ensuite :  git diff --stat")
-        print("Puis committez :     git commit -am \"chore: aligner les URL sur le dépôt publié\"")
+        print('Puis committez :     git commit -am "chore: aligner les URL sur le dépôt publié"')
     return 0
 
 

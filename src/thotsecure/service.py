@@ -21,13 +21,11 @@ from typing import Any
 
 from .actions.engine import ActionEngine
 from .actions.executor import PlaybookExecutor
-from .actions.playbook_loader import PlaybookLoadError, load_playbooks_from_dir
+from .actions.playbook_loader import load_playbooks_from_dir
 from .actions.registry import ConnectorRegistry
-from .observability.metrics import MetricsRegistry, register_catalog
-from .observability.ratelimit import RateLimiter
 from .audit.chain import AuditChain
-from .bus.base import EventBus
 from .bus import create_bus
+from .bus.base import EventBus
 from .collectors.registry import CollectorRegistry, default_registry
 from .collectors.runner import CollectorRunner
 from .core.config import Settings, get_settings
@@ -37,9 +35,11 @@ from .core.util import iso_z, utcnow
 from .decision.engine import DecisionEngine
 from .decision.opa import OpaEvaluator
 from .decision.policy_loader import load_policies_from_dir
-from .detection.engine import DetectionEngine
 from .detection.anomaly import build_detector
+from .detection.engine import DetectionEngine
 from .detection.rule_loader import load_rules_from_dir
+from .observability.metrics import MetricsRegistry, register_catalog
+from .observability.ratelimit import RateLimiter
 from .pipeline import Pipeline
 from .scope import TargetRegistry
 from .storage import StoreProtocol, create_store
@@ -154,7 +154,9 @@ class Service:
         self.keys.bootstrap()
         self._record_startup_audit()
 
-        self._tasks.append(asyncio.create_task(self.pipeline.run_worker(), name="thotsecure-pipeline"))
+        self._tasks.append(
+            asyncio.create_task(self.pipeline.run_worker(), name="thotsecure-pipeline")
+        )
         self._tasks.append(
             asyncio.create_task(self._maintenance_loop(), name="thotsecure-maintenance")
         )
@@ -216,7 +218,7 @@ class Service:
                 await asyncio.to_thread(self._maintenance_pass)
             except asyncio.CancelledError:
                 raise
-            except Exception as exc:  # noqa: BLE001 - boucle de fond : on journalise et continue
+            except Exception as exc:
                 log.error("erreur de maintenance", extra={"error": str(exc)})
 
     def _maintenance_pass(self) -> dict[str, Any]:
@@ -224,7 +226,7 @@ class Service:
         result: dict[str, Any] = {}
         try:
             result["actions"] = self.actions.reap()
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             log.error("échec de l'expiration des actions", extra={"error": str(exc)})
         if self._last_purge is None or (utcnow() - self._last_purge) > timedelta(
             seconds=PURGE_INTERVAL_SECONDS
@@ -232,7 +234,7 @@ class Service:
             try:
                 result["purge"] = self.pipeline.purge_expired()
                 self._last_purge = utcnow()
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 log.error("échec de la purge de rétention", extra={"error": str(exc)})
         self.refresh_metrics()
         return result
@@ -243,7 +245,7 @@ class Service:
             await self.collectors.scheduler(self._stop_event)
         except asyncio.CancelledError:
             raise
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             log.error("planificateur de collecte arrêté sur erreur", extra={"error": str(exc)})
 
     # ----------------------------------------------------------------------------------
@@ -255,7 +257,7 @@ class Service:
         metrics = self.metrics
         try:
             tenants = self.store.list_tenants()
-        except Exception:  # noqa: BLE001 - le scrape ne doit jamais échouer
+        except Exception:
             return
         total_open = 0
         total_pending = 0
@@ -265,24 +267,37 @@ class Service:
             total_open += findings["by_status"].get("open", 0)
             total_findings += sum(findings["by_status"].values())
             for severity, count in findings["by_severity"].items():
-                metrics.set("thotsecure_findings_total", count, tenant=tenant.tenant_id, severity=severity)
+                metrics.set(
+                    "thotsecure_findings_total", count, tenant=tenant.tenant_id, severity=severity
+                )
             actions = self.store.actions_by_status(tenant.tenant_id)
             total_pending += actions.get("pending_approval", 0)
             for status, count in actions.items():
-                metrics.set("thotsecure_actions_total", count, tenant=tenant.tenant_id, status=status)
-            metrics.set("thotsecure_dry_run", 1 if (self.settings.dry_run or tenant.dry_run) else 0, tenant=tenant.tenant_id)
+                metrics.set(
+                    "thotsecure_actions_total", count, tenant=tenant.tenant_id, status=status
+                )
+            metrics.set(
+                "thotsecure_dry_run",
+                1 if (self.settings.dry_run or tenant.dry_run) else 0,
+                tenant=tenant.tenant_id,
+            )
 
         metrics.set("thotsecure_findings_open", total_open)
         metrics.set("thotsecure_actions_pending_approval", total_pending)
         metrics.set("thotsecure_up", 1)
         metrics.set("thotsecure_start_time_seconds", self.started_at.timestamp())
-        metrics.set("thotsecure_audit_records_total", self.store.count_audit(self._primary_tenant()))
+        metrics.set(
+            "thotsecure_audit_records_total", self.store.count_audit(self._primary_tenant())
+        )
         try:
             verdict = self.audit.verify()
             metrics.set("thotsecure_audit_chain_valid", 1 if verdict.valid else 0)
             if not verdict.valid:
-                log.error("chaîne d'audit invalide détectée au scrape", extra={"broken_at": verdict.broken_at})
-        except Exception:  # noqa: BLE001
+                log.error(
+                    "chaîne d'audit invalide détectée au scrape",
+                    extra={"broken_at": verdict.broken_at},
+                )
+        except Exception:
             metrics.set("thotsecure_audit_chain_valid", 0)
         for key, value in self.bus.stats().items():
             if isinstance(value, (int, float)):
@@ -292,8 +307,12 @@ class Service:
     def record_pipeline_metrics(self) -> None:
         stats = self.pipeline.stats()
         detection = stats.get("detection", {})
-        self.metrics.set("thotsecure_rule_eval_seconds_avg_ms", float(detection.get("avg_eval_ms", 0.0)))
-        self.metrics.set("thotsecure_pipeline_processed_total", float(stats.get("processed_events", 0)))
+        self.metrics.set(
+            "thotsecure_rule_eval_seconds_avg_ms", float(detection.get("avg_eval_ms", 0.0))
+        )
+        self.metrics.set(
+            "thotsecure_pipeline_processed_total", float(stats.get("processed_events", 0))
+        )
 
     # ----------------------------------------------------------------------------------
     # Introspection
@@ -308,9 +327,13 @@ class Service:
             "autonomy_global": self.settings.autonomy,
             "require_target_declaration": self.settings.require_target_declaration,
             "unsafe_defaults": self.settings.safety_warnings(),
-            "connectors": {name: conn.driver for name, conn in (
-                (name, self.connectors.get(name)) for name in sorted(self.connectors.configuration)
-            )},
+            "connectors": {
+                name: conn.driver
+                for name, conn in (
+                    (name, self.connectors.get(name))
+                    for name in sorted(self.connectors.configuration)
+                )
+            },
             "simulated_connectors_only": self.connectors.stats().get("simulated_only", True),
             "protected_scope_configured": bool(self.targets.tenants()),
         }
@@ -405,7 +428,10 @@ def build_service(settings: Settings | None = None) -> Service:
         settings.policies_path, known_playbooks=set(playbooks)
     )
     for diagnostic in [*rule_diagnostics, *playbook_diagnostics, *policy_diagnostics]:
-        log.error("élément de configuration rejeté", extra={"path": diagnostic.path, "error": diagnostic.error})
+        log.error(
+            "élément de configuration rejeté",
+            extra={"path": diagnostic.path, "error": diagnostic.error},
+        )
 
     detection = DetectionEngine(rules)
     #: Détecteur d'anomalie statistique : construit uniquement s'il est activé. Il complète

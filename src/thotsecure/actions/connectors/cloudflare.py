@@ -89,9 +89,21 @@ _RATE_RE = re.compile(
 )
 
 _UNIT_SECONDS = {
-    "s": 1, "sec": 1, "secs": 1, "second": 1, "seconds": 1,
-    "m": 60, "min": 60, "mins": 60, "minute": 60, "minutes": 60,
-    "h": 3600, "hr": 3600, "hrs": 3600, "hour": 3600, "hours": 3600,
+    "s": 1,
+    "sec": 1,
+    "secs": 1,
+    "second": 1,
+    "seconds": 1,
+    "m": 60,
+    "min": 60,
+    "mins": 60,
+    "minute": 60,
+    "minutes": 60,
+    "h": 3600,
+    "hr": 3600,
+    "hrs": 3600,
+    "hour": 3600,
+    "hours": 3600,
 }
 
 
@@ -177,9 +189,7 @@ class CloudflareConnector(Connector):
         if query:
             filtered = {key: value for key, value in query.items() if value is not None}
             url = f"{url}?{urllib.parse.urlencode(filtered)}"
-        return self._client().request(
-            method, url, headers=self._headers(), json_body=json_body
-        )
+        return self._client().request(method, url, headers=self._headers(), json_body=json_body)
 
     # -- diagnostic --------------------------------------------------------------------
 
@@ -212,10 +222,7 @@ class CloudflareConnector(Connector):
             return f"{status}Cloudflare a refusé la requête: {cloudflare_errors}"
         if not result.ok:
             detail = (result.text or "").strip().replace("\n", " ")[:200]
-            return (
-                f"Cloudflare: HTTP {result.status}"
-                + (f" — {detail}" if detail else "")
-            )
+            return f"Cloudflare: HTTP {result.status}" + (f" — {detail}" if detail else "")
         return None
 
     # -- validation des cibles ---------------------------------------------------------
@@ -266,9 +273,9 @@ class CloudflareConnector(Connector):
             )
 
         expires_at = iso_z(utcnow() + timedelta(seconds=duration))
-        notes = (
-            f"Thot Secure {action_id} | {note} | TTL {duration}s | lever avant {expires_at}"
-        )[:MAX_NOTES_LENGTH]
+        notes = (f"Thot Secure {action_id} | {note} | TTL {duration}s | lever avant {expires_at}")[
+            :MAX_NOTES_LENGTH
+        ]
         body = {
             "mode": mode,
             "notes": notes,
@@ -371,8 +378,7 @@ class CloudflareConnector(Connector):
         return ConnectorResult(
             ok=True,
             detail=(
-                f"règle Cloudflare {rule_id} supprimée"
-                + (f" (adresse {target})" if target else "")
+                f"règle Cloudflare {rule_id} supprimée" + (f" (adresse {target})" if target else "")
             ),
             data={"rule_id": rule_id, "target": target, "removed": 1, "match": "rule_id"},
         )
@@ -470,7 +476,7 @@ class CloudflareConnector(Connector):
             period = min(
                 ALLOWED_PERIODS, key=lambda candidate: (abs(candidate - window), candidate)
             )
-            requests = max(1, int(round(count * period / window)))
+            requests = max(1, round(count * period / window))
 
         if period not in ALLOWED_PERIODS:
             return None, (

@@ -14,7 +14,7 @@ from typing import Any
 
 from fastapi import APIRouter, Query
 
-from ...core.errors import ConflictError, NotFoundError
+from ...core.errors import NotFoundError
 from ...core.models import Action
 from ..deps import PrincipalDep, ServiceDep, require
 from ..schemas import ActionDecisionRequest, ActionPlanRequest, ActionRejectRequest
@@ -175,7 +175,11 @@ def rollback_action(
     require("execute:actions")(principal)
     tenant = service.store.require_tenant(principal.tenant_id)
     action = service.actions.rollback(
-        tenant=tenant, action_id=action_id, actor=principal.actor, actor_role=principal.role, reason=reason
+        tenant=tenant,
+        action_id=action_id,
+        actor=principal.actor,
+        actor_role=principal.role,
+        reason=reason,
     )
     service.metrics.inc("thotsecure_rollbacks_total", playbook=action.playbook)
     return _action_payload(service, action, tenant)
@@ -209,15 +213,16 @@ def _action_payload(service: ServiceDep, action: Action, tenant: Any) -> dict[st
     """Réponse enrichie : l'appelant doit savoir ce qui va *réellement* se passer."""
     playbook = service.playbooks.get(action.playbook)
     payload = action.model_dump(mode="json")
-    payload["effective_dry_run"] = bool(service.settings.dry_run or tenant.dry_run or action.dry_run)
+    payload["effective_dry_run"] = bool(
+        service.settings.dry_run or tenant.dry_run or action.dry_run
+    )
     payload["playbook_reversible"] = bool(playbook.reversible) if playbook else None
     payload["playbook_params_schema"] = (
         {name: spec.model_dump() for name, spec in playbook.params.items()} if playbook else {}
     )
-    payload["target_in_declared_scope"] = (
-        service.targets.for_tenant(action.tenant_id).owns(action.target.value)
-        or bool(service.targets.for_tenant(action.tenant_id).assets)
-    )
+    payload["target_in_declared_scope"] = service.targets.for_tenant(action.tenant_id).owns(
+        action.target.value
+    ) or bool(service.targets.for_tenant(action.tenant_id).assets)
     payload["protected_target"] = tenant.is_protected(action.target.value)
     if action.status == "pending_approval":
         payload["next_step"] = f"POST /api/v1/actions/{action.action_id}/approve"

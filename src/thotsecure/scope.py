@@ -182,7 +182,9 @@ class TargetRegistry:
     bloquer la mauvaise chose.
     """
 
-    def __init__(self, scopes: dict[str, TenantScope] | None = None, *, source: str | None = None) -> None:
+    def __init__(
+        self, scopes: dict[str, TenantScope] | None = None, *, source: str | None = None
+    ) -> None:
         self._scopes = scopes or {}
         self.source = source
 
@@ -234,7 +236,9 @@ class TargetRegistry:
                         "actif ignoré (format invalide)",
                         extra={"tenant_id": tenant_id, "item": str(item)[:120]},
                     )
-            owned = [str(item) for item in body.get("owned_cidrs") or [] if is_valid_cidr(str(item))]
+            owned = [
+                str(item) for item in body.get("owned_cidrs") or [] if is_valid_cidr(str(item))
+            ]
             protected = [
                 str(item)
                 for item in body.get("protected_targets") or []
@@ -400,8 +404,8 @@ class TargetRegistry:
 
 
 __all__ = [
-    "INFRASTRUCTURE_PLAYBOOKS",
     "INBOUND_MITIGATION_PLAYBOOKS",
+    "INFRASTRUCTURE_PLAYBOOKS",
     "Asset",
     "ConfigFile",
     "LogSource",

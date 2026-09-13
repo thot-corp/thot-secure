@@ -34,11 +34,11 @@ import os
 from thotsecure_sdk import ThotSecureClient, normalize_event
 
 with ThotSecureClient(
-    base_url=os.environ["THOT_URL"],        # http://127.0.0.1:8080 par défaut
-    api_key=os.environ["THOT_API_KEY"],     # ao_… — jamais en dur dans le code
+    base_url=os.environ["THOT_URL"],  # http://127.0.0.1:8080 par défaut
+    api_key=os.environ["THOT_API_KEY"],  # ao_… — jamais en dur dans le code
     tenant_id="acme",
 ) as client:
-    print(client.whoami())                       # rôle, capacités, mode d'autonomie
+    print(client.whoami())  # rôle, capacités, mode d'autonomie
     print(client.healthz(), client.version())
 
     # 1) ingestion d'un événement normalisé depuis un log Nginx
@@ -46,7 +46,7 @@ with ThotSecureClient(
         '203.0.113.9 - - [14/Feb/2026:10:00:00 +0000] "POST /login HTTP/1.1" 403 512 "-" "curl/8.5"',
         tenant_id="acme",
         source_name="prod-edge",
-        ip_salt=os.environ.get("THOT_IP_SALT"),   # pseudonymisation RGPD des IP
+        ip_salt=os.environ.get("THOT_IP_SALT"),  # pseudonymisation RGPD des IP
     )
     print(client.ingest_event(event))
 
@@ -101,7 +101,7 @@ au développement local. En production, laissez la vérification active et utili
 # --- tenants et clés (admin) ---
 client.create_tenant("acme", "ACME SAS", mode="supervised", autonomy_allowlist=["10.0.0.0/8"])
 created = client.create_key(role="responder", label="ci", tenant_id="acme")
-print(created.key_id, created.api_key)     # api_key n'est affichée qu'UNE seule fois
+print(created.key_id, created.api_key)  # api_key n'est affichée qu'UNE seule fois
 for key in client.list_keys("acme"):
     print(key.key_id, key.role, key.revoked_at)
 client.revoke_key(created.key_id)
@@ -113,16 +113,16 @@ for batch in chunked(iter_jsonl("events.jsonl"), 500):
 
 # --- règles et politiques (admin) ---
 print(client.validate_rule("id: AO-WEB-001\ntitle: Injection SQL\n").valid)
-print(client.reload_rules())        # {"loaded": 12, "errors": []}
-print(client.list_policies())       # politiques + ordre de priorité
+print(client.reload_rules())  # {"loaded": 12, "errors": []}
+print(client.list_policies())  # politiques + ordre de priorité
 print([p.name for p in client.list_playbooks()])
 
 # --- rapport exploitable (Markdown/HTML/JSON/SARIF) ---
-sarif = client.get_report("f1c2", format="sarif")           # à écrire dans un artefact CI
+sarif = client.get_report("f1c2", format="sarif")  # à écrire dans un artefact CI
 html = client.get_report("f1c2", format="html")
 
 # --- audit ---
-verification = client.verify_audit()                        # {"valid", "records", "broken_at"}
+verification = client.verify_audit()  # {"valid", "records", "broken_at"}
 print(verification.valid, verification.records)
 with open("audit.cef", "w", encoding="utf-8") as fh:
     fh.write(client.export_audit(format="cef", since="2026-02-14T00:00:00Z"))
@@ -140,7 +140,7 @@ client.run_collector("nginx")
 ### Flux temps réel (WebSocket stdlib pur)
 
 ```python
-for frame in client.stream(types=["finding", "action"]):     # heartbeat filtré par défaut
+for frame in client.stream(types=["finding", "action"]):  # heartbeat filtré par défaut
     if frame.type == "finding":
         print(frame.data["finding_id"], frame.data["severity"], frame.data["risk_score"])
 ```
@@ -171,26 +171,33 @@ utilisez `thotsecure_sdk.errors.redact_url(url)` **avant tout log**.
 
 ```python
 finding = client.get_finding("f1c2")
-print(finding.risk_score, finding.extra.get("actions"))   # actions liées
+print(finding.risk_score, finding.extra.get("actions"))  # actions liées
 ```
 
 ## Erreurs
 
 ```python
 from thotsecure_sdk import (
-    ThotSecureError, AuthenticationError, PermissionDeniedError, NotFoundError,
-    ConflictError, ValidationError, RateLimitedError, ServerError, TransportError,
+    ThotSecureError,
+    AuthenticationError,
+    PermissionDeniedError,
+    NotFoundError,
+    ConflictError,
+    ValidationError,
+    RateLimitedError,
+    ServerError,
+    TransportError,
 )
 
 try:
     client.execute_action(action_id)
-except ConflictError as exc:              # 409 : action non approuvée / déjà exécutée
+except ConflictError as exc:  # 409 : action non approuvée / déjà exécutée
     print(exc.code, exc.message, exc.details)
-except RateLimitedError as exc:           # 429 : respectez `retry_after`
+except RateLimitedError as exc:  # 429 : respectez `retry_after`
     time.sleep(exc.retry_after or 5)
-except PermissionDeniedError:             # 403 : capacité RBAC manquante
+except PermissionDeniedError:  # 403 : capacité RBAC manquante
     ...
-except ServerError:                       # 5xx
+except ServerError:  # 5xx
     ...
 ```
 
@@ -224,8 +231,14 @@ client.execute_action(action_id, idempotency_key="acme:block-source-ip:203.0.113
 
 ```python
 from thotsecure_sdk import (
-    normalize_event, from_syslog_line, redact_secrets,
-    pseudonymize_ip, pseudonymize_ip_fields, iter_jsonl, chunked, truncate_payload,
+    normalize_event,
+    from_syslog_line,
+    redact_secrets,
+    pseudonymize_ip,
+    pseudonymize_ip_fields,
+    iter_jsonl,
+    chunked,
+    truncate_payload,
 )
 
 # Log HTTP (Nginx/Apache combined & common, ou ligne JSON structurée) → Event conforme

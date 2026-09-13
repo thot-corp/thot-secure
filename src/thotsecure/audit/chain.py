@@ -166,7 +166,11 @@ class AuditChain:
             if not valid:
                 log.error(
                     "INTÉGRITÉ DE L'AUDIT COMPROMISE",
-                    extra={"audit_seq": record.seq, "reason": reason, "tenant_id": record.tenant_id},
+                    extra={
+                        "audit_seq": record.seq,
+                        "reason": reason,
+                        "tenant_id": record.tenant_id,
+                    },
                 )
                 return AuditVerifyResult(
                     valid=False,

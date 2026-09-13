@@ -32,9 +32,9 @@ from .. import (
     __license__,
     __version__,
 )
-from ..core.errors import ThotSecureError, AuthenticationError, PermissionDeniedError
+from ..core.errors import AuthenticationError, PermissionDeniedError, ThotSecureError
 from ..core.logging_setup import get_logger
-from ..core.util import humanize_duration, iso_z, parse_dt, utcnow
+from ..core.util import humanize_duration, iso_z, utcnow
 from ..scoring.risk import risk_band
 from ..service import Service
 
@@ -59,7 +59,7 @@ def _csrf_token(service: Service, session_token: str) -> str:
     """Jeton CSRF dérivé de la session : un jeton volé sur une autre session est inutilisable."""
     return hmac.new(
         service.settings.secret_key.encode("utf-8"),
-        f"csrf:{session_token}".encode("utf-8"),
+        f"csrf:{session_token}".encode(),
         sha256,
     ).hexdigest()[:32]
 
@@ -257,7 +257,11 @@ def build_ui_router() -> APIRouter:
             service=service,
             principal=principal,
             findings=items,
-            filters={"status": status or "", "severity": severity or "", "min_risk": min_risk or ""},
+            filters={
+                "status": status or "",
+                "severity": severity or "",
+                "min_risk": min_risk or "",
+            },
             risk_band=risk_band,
             humanize=humanize_duration,
         )
@@ -346,13 +350,19 @@ def build_ui_router() -> APIRouter:
         try:
             if operation == "approve":
                 service.actions.approve(
-                    tenant=tenant, action_id=action_id, actor=actor,
-                    actor_role=principal.role, comment=comment,
+                    tenant=tenant,
+                    action_id=action_id,
+                    actor=actor,
+                    actor_role=principal.role,
+                    comment=comment,
                 )
             elif operation == "reject":
                 service.actions.reject(
-                    tenant=tenant, action_id=action_id, actor=actor,
-                    actor_role=principal.role, reason=comment,
+                    tenant=tenant,
+                    action_id=action_id,
+                    actor=actor,
+                    actor_role=principal.role,
+                    reason=comment,
                 )
             elif operation == "execute":
                 service.actions.execute(
@@ -360,8 +370,11 @@ def build_ui_router() -> APIRouter:
                 )
             elif operation == "rollback":
                 service.actions.rollback(
-                    tenant=tenant, action_id=action_id, actor=actor,
-                    actor_role=principal.role, reason=comment or "annulation depuis la console",
+                    tenant=tenant,
+                    action_id=action_id,
+                    actor=actor,
+                    actor_role=principal.role,
+                    reason=comment or "annulation depuis la console",
                 )
             else:
                 raise PermissionDeniedError(f"opération inconnue: {operation}")
@@ -458,7 +471,9 @@ def build_ui_router() -> APIRouter:
         principal = _principal(request, service)
         _require_ui(service, principal, "execute:actions")
         _check_csrf(service, request, csrf_token)
-        service.collectors.run(collector_name, principal.tenant_id, actor=f"console:{principal.role}")
+        service.collectors.run(
+            collector_name, principal.tenant_id, actor=f"console:{principal.role}"
+        )
         return RedirectResponse("/ui/collectors", status_code=303)
 
     # -- soutien -----------------------------------------------------------------------

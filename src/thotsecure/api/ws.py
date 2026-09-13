@@ -184,7 +184,9 @@ class ConnectionManager:
         )
 
     def heartbeat(self) -> None:
-        self.broadcast({"type": "heartbeat", "ts": iso_z(utcnow()), "data": {"clients": self.client_count()}})
+        self.broadcast(
+            {"type": "heartbeat", "ts": iso_z(utcnow()), "data": {"clients": self.client_count()}}
+        )
 
     def stats(self) -> dict[str, Any]:
         return {
@@ -201,9 +203,7 @@ async def stream_frames(client: Client, *, heartbeat_seconds: float = HEARTBEAT_
         try:
             frame = await asyncio.wait_for(client.queue.get(), timeout=heartbeat_seconds)
         except TimeoutError:
-            yield json.dumps(
-                {"type": "heartbeat", "ts": iso_z(utcnow()), "data": {"quiet": True}}
-            )
+            yield json.dumps({"type": "heartbeat", "ts": iso_z(utcnow()), "data": {"quiet": True}})
             continue
         yield json.dumps(frame, ensure_ascii=False, default=str)
 

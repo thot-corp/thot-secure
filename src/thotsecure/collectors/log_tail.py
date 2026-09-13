@@ -31,9 +31,9 @@ MAX_EVENTS_PER_FILE = 5000
 
 #: Journal combiné Nginx/Apache.
 COMBINED_LOG = re.compile(
-    r'^(?P<src_ip>\S+)\s+\S+\s+(?P<user>\S+)\s+\[(?P<ts>[^\]]+)\]\s+'
+    r"^(?P<src_ip>\S+)\s+\S+\s+(?P<user>\S+)\s+\[(?P<ts>[^\]]+)\]\s+"
     r'"(?P<method>[A-Z]+)\s+(?P<path>[^"]*?)\s*(?P<protocol>HTTP/[0-9.]+)?"\s+'
-    r'(?P<status>\d{3})\s+(?P<bytes>\d+|-)\s*'
+    r"(?P<status>\d{3})\s+(?P<bytes>\d+|-)\s*"
     r'(?:"(?P<referer>[^"]*)"\s*"(?P<user_agent>[^"]*)")?'
 )
 
@@ -266,7 +266,9 @@ def parse_json_log(line: str) -> ParsedLine | None:
         for candidate in candidates:
             if candidate in document and document[candidate] is not None:
                 value = document[candidate]
-                labels[label] = value if isinstance(value, (int, float, bool)) else str(value)[:1024]
+                labels[label] = (
+                    value if isinstance(value, (int, float, bool)) else str(value)[:1024]
+                )
                 break
 
     severity = None

@@ -215,7 +215,7 @@ class Pipeline:
 
             self.processed_events += 1
             self.store.mark_events_processed([event.event_id])
-        except Exception as exc:  # noqa: BLE001 - un événement ne doit jamais tuer le pipeline
+        except Exception as exc:
             self.errors += 1
             result.error = f"{type(exc).__name__}: {exc}"
             log.error(

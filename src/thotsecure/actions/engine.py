@@ -51,11 +51,11 @@ from ..core.models import (
     Playbook,
     Tenant,
 )
-from ..core.util import expiry_from_now, iso_z, new_id, safe_int, utcnow
+from ..core.util import expiry_from_now, new_id, safe_int, utcnow
 from ..decision.engine import extract_targets, resolve_param_target
 from ..scope import TargetRegistry
 from ..storage import StoreProtocol
-from .executor import ExecutionOutcome, PlaybookExecutor
+from .executor import PlaybookExecutor
 from .registry import ConnectorRegistry
 
 log = get_logger("actions.engine")
@@ -147,7 +147,9 @@ class ActionEngine:
         # Un playbook irréversible ne peut jamais être automatique.
         if not playbook.reversible and mode == "auto":
             mode = "manual"
-            reason = f"{reason} | playbook non réversible : approbation humaine obligatoire".strip(" |")
+            reason = f"{reason} | playbook non réversible : approbation humaine obligatoire".strip(
+                " |"
+            )
 
         effective_dry_run = (
             self.settings.dry_run or tenant.dry_run if dry_run is None else bool(dry_run)
@@ -177,7 +179,9 @@ class ActionEngine:
             requested_at=utcnow(),
             expires_at=_parse_expiry(expiry_from_now(ticket_ttl)),
             rollback=ActionRollback(available=playbook.reversible),
-            idempotency_key=self._idempotency_key(tenant.tenant_id, playbook.name, target_value, cooldown),
+            idempotency_key=self._idempotency_key(
+                tenant.tenant_id, playbook.name, target_value, cooldown
+            ),
             reason=reason or f"planification manuelle du playbook '{playbook.name}'",
         )
 
@@ -194,7 +198,9 @@ class ActionEngine:
             except ConflictError as exc:
                 existing_id = (exc.details or {}).get("action_id")
                 existing = (
-                    self.store.get_action(tenant.tenant_id, str(existing_id)) if existing_id else None
+                    self.store.get_action(tenant.tenant_id, str(existing_id))
+                    if existing_id
+                    else None
                 )
                 if existing is not None and not existing.is_terminal:
                     log.info(
@@ -283,7 +289,13 @@ class ActionEngine:
     # ----------------------------------------------------------------------------------
 
     def approve(
-        self, *, tenant: Tenant, action_id: str, actor: str, actor_role: str = "responder", comment: str = ""
+        self,
+        *,
+        tenant: Tenant,
+        action_id: str,
+        actor: str,
+        actor_role: str = "responder",
+        comment: str = "",
     ) -> Action:
         action = self.require(tenant.tenant_id, action_id)
         if action.status not in {"planned", "pending_approval"}:
@@ -307,7 +319,13 @@ class ActionEngine:
         return action
 
     def reject(
-        self, *, tenant: Tenant, action_id: str, actor: str, actor_role: str = "responder", reason: str = ""
+        self,
+        *,
+        tenant: Tenant,
+        action_id: str,
+        actor: str,
+        actor_role: str = "responder",
+        reason: str = "",
     ) -> Action:
         action = self.require(tenant.tenant_id, action_id)
         if action.is_terminal:
@@ -417,7 +435,11 @@ class ActionEngine:
                 f"la cible '{action.target.value}' est protégée par le tenant : exécution refusée",
                 details={"action_id": action.action_id, "target": action.target.value},
             )
-        if action.expires_at and action.expires_at < utcnow() and action.status == "pending_approval":
+        if (
+            action.expires_at
+            and action.expires_at < utcnow()
+            and action.status == "pending_approval"
+        ):
             self._set_status(
                 action, "expired", actor="system", actor_role="system", audit_action="action.fail"
             )
@@ -483,7 +505,10 @@ class ActionEngine:
             actor_role=actor_role,
             audit_action="action.rollback",
             before=before,
-            extra={"rollback_result": result, "rollback_performed_at": action.rollback.performed_at},
+            extra={
+                "rollback_result": result,
+                "rollback_performed_at": action.rollback.performed_at,
+            },
         )
         log.info(
             "action annulée",
@@ -510,7 +535,9 @@ class ActionEngine:
         now = utcnow()
         expired = 0
         rolled_back = 0
-        tenants = [tenant_id] if tenant_id else [tenant.tenant_id for tenant in self.store.list_tenants()]
+        tenants = (
+            [tenant_id] if tenant_id else [tenant.tenant_id for tenant in self.store.list_tenants()]
+        )
 
         for current_tenant_id in tenants:
             tenant = self.store.get_tenant(current_tenant_id)
@@ -531,7 +558,9 @@ class ActionEngine:
                     )
                     expired += 1
 
-            succeeded, _ = self.store.list_actions(current_tenant_id, status=["succeeded"], limit=500)
+            succeeded, _ = self.store.list_actions(
+                current_tenant_id, status=["succeeded"], limit=500
+            )
             for action in succeeded:
                 deadline = action.rollback.expires_at
                 if (
@@ -563,7 +592,9 @@ class ActionEngine:
     def require(self, tenant_id: str, action_id: str) -> Action:
         action = self.store.get_action(tenant_id, action_id)
         if action is None:
-            raise NotFoundError(f"action introuvable: {action_id}", details={"action_id": action_id})
+            raise NotFoundError(
+                f"action introuvable: {action_id}", details={"action_id": action_id}
+            )
         return action
 
     def list(
@@ -654,7 +685,9 @@ class ActionEngine:
         être.
         """
         finding = (
-            self.store.get_finding(tenant.tenant_id, action.finding_id) if action.finding_id else None
+            self.store.get_finding(tenant.tenant_id, action.finding_id)
+            if action.finding_id
+            else None
         )
         asset_host, _ = extract_targets(finding) if finding else (None, None)
         return {
@@ -729,7 +762,11 @@ class ActionEngine:
         )
         log.error(
             "action en échec",
-            extra={"tenant_id": action.tenant_id, "action_id": action.action_id, "error": error[:300]},
+            extra={
+                "tenant_id": action.tenant_id,
+                "action_id": action.action_id,
+                "error": error[:300],
+            },
         )
         return action
 
@@ -786,7 +823,7 @@ class ActionEngine:
             return
         try:
             self.on_change(action, event)
-        except Exception as exc:  # noqa: BLE001 - une notification ne casse jamais une action
+        except Exception as exc:
             log.warning("notification d'action échouée", extra={"error": str(exc)})
 
 

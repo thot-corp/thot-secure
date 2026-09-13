@@ -12,14 +12,14 @@ import pathlib
 import sys
 import tempfile
 import unittest
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 _SDK_ROOT = pathlib.Path(__file__).resolve().parents[1]
 if str(_SDK_ROOT) not in sys.path:
     sys.path.insert(0, str(_SDK_ROOT))
 
-from thotsecure_sdk import Event, Finding, Page, Tenant  # noqa: E402
-from thotsecure_sdk.helpers import (  # noqa: E402
+from thotsecure_sdk import Event, Finding, Page, Tenant
+from thotsecure_sdk.helpers import (
     MAX_PAYLOAD_BYTES,
     chunked,
     env,
@@ -39,12 +39,10 @@ NGINX_LINE = (
     '403 512 "https://shop.acme.fr/" "curl/8.5.0"'
 )
 
-APACHE_COMMON_LINE = (
-    '198.51.100.7 - - [14/Feb/2026:09:59:58 +0000] "GET /index.html HTTP/1.0" 200 2326'
-)
+APACHE_COMMON_LINE = '198.51.100.7 - - [14/Feb/2026:09:59:58 +0000] "GET /index.html HTTP/1.0" 200 2326'
 
 NGINX_VHOST_LINE = (
-    'shop.acme.fr:443 203.0.113.42 - - [14/Feb/2026:10:01:02 +0000] '
+    "shop.acme.fr:443 203.0.113.42 - - [14/Feb/2026:10:01:02 +0000] "
     '"GET /search?q=union+select HTTP/2.0" 500 1234 "-" "Mozilla/5.0"'
 )
 
@@ -90,9 +88,7 @@ class TestParseHttpLogLine(unittest.TestCase):
 
 class TestNormalizeEvent(unittest.TestCase):
     def test_nginx_line_becomes_contract_event(self) -> None:
-        event = normalize_event(
-            NGINX_LINE, tenant_id="acme", source_name="prod-edge", source_type="log_tail"
-        )
+        event = normalize_event(NGINX_LINE, tenant_id="acme", source_name="prod-edge", source_type="log_tail")
 
         payload = event.to_dict()
         self.assertEqual(payload["tenant_id"], "acme")
@@ -108,7 +104,9 @@ class TestNormalizeEvent(unittest.TestCase):
         self.assertEqual(payload["ts"], "2026-02-14T09:00:00.000Z")  # +0100 → UTC
         self.assertIsNone(payload["raw_ref"])
         # event_id : UUID v4 bien formé
-        self.assertRegex(payload["event_id"], r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
+        self.assertRegex(
+            payload["event_id"], r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        )
         # labels plats à valeurs scalaires (contrat §3.1)
         for value in payload["labels"].values():
             self.assertIsInstance(value, (str, int, float, bool))
@@ -151,8 +149,8 @@ class TestNormalizeEvent(unittest.TestCase):
 
     def test_secrets_are_redacted_from_log_lines(self) -> None:
         line = (
-            '203.0.113.9 - - [14/Feb/2026:10:00:00 +0000] '
-            '"GET /api?token=%s HTTP/1.1" 403 12 "-" "curl/8.5.0"' % JWT
+            "203.0.113.9 - - [14/Feb/2026:10:00:00 +0000] "
+            f'"GET /api?token={JWT} HTTP/1.1" 403 12 "-" "curl/8.5.0"'
         )
         event = normalize_event(line, tenant_id="acme")
         serialized = json.dumps(event.to_dict())
@@ -277,7 +275,7 @@ class TestRedactSecrets(unittest.TestCase):
         self.assertEqual(data["password"], "hunter2")
 
     def test_jwt_inside_arbitrary_value(self) -> None:
-        redacted = redact_secrets({"raw": "Authorization: Bearer %s" % JWT})
+        redacted = redact_secrets({"raw": f"Authorization: Bearer {JWT}"})
         self.assertNotIn(JWT, redacted["raw"])
         self.assertIn("REDACTED", redacted["raw"])
 
@@ -295,7 +293,14 @@ class TestRedactSecrets(unittest.TestCase):
         self.assertEqual(redacted["pair"], ["a", "b"])
 
     def test_case_and_separator_insensitivity(self) -> None:
-        for key in ("AUTHORIZATION", "Authorization", "authorization", "X-API-KEY", "x_api_key", "set-cookie"):
+        for key in (
+            "AUTHORIZATION",
+            "Authorization",
+            "authorization",
+            "X-API-KEY",
+            "x_api_key",
+            "set-cookie",
+        ):
             self.assertEqual(redact_secrets({key: "valeur"})[key], "[REDACTED]", key)
 
 
@@ -373,7 +378,7 @@ class TestUtilities(unittest.TestCase):
         self.assertEqual(parse_timestamp("2026-02-14T10:00:00Z").year, 2026)  # type: ignore[union-attr]
         self.assertEqual(
             parse_timestamp("14/Feb/2026:10:00:00 +0000").isoformat(),  # type: ignore[union-attr]
-            datetime(2026, 2, 14, 10, 0, tzinfo=timezone.utc).isoformat(),
+            datetime(2026, 2, 14, 10, 0, tzinfo=UTC).isoformat(),
         )
         self.assertEqual(parse_timestamp(1771063200).year, 2026)  # type: ignore[union-attr]
         self.assertEqual(parse_timestamp(1771063200000).year, 2026)  # type: ignore[union-attr]

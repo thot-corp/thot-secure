@@ -57,15 +57,15 @@ def compute_risk(
 
     confidence_factor = 0.5 + 0.5 * clamp(rule.confidence, 0.0, 1.0)
 
-    criticality = asset_criticality if asset_criticality is not None else (
-        tenant.asset_criticality if tenant else 1.0
+    criticality = (
+        asset_criticality
+        if asset_criticality is not None
+        else (tenant.asset_criticality if tenant else 1.0)
     )
     asset_factor = clamp(criticality * rule.risk.asset_criticality, 0.1, 3.0)
 
     effective_count = max(1, int(count))
-    repetition_factor = 1.0 + min(
-        MAX_REPETITION_BONUS, math.log10(effective_count) * 0.25
-    )
+    repetition_factor = 1.0 + min(MAX_REPETITION_BONUS, math.log10(effective_count) * 0.25)
 
     raw = base * confidence_factor * asset_factor * repetition_factor
     final = round(clamp(raw, 0.0, 100.0), 2)

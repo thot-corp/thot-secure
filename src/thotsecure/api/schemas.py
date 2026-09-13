@@ -80,7 +80,9 @@ class FindingSuppressRequest(BaseModel):
 
     duration_seconds: int = Field(default=86400, ge=60, le=31_536_000)
     reason: str = Field(default="", max_length=500)
-    dedup_key: str = Field(default="", max_length=128, description="Cible précise (vide = toute la règle)")
+    dedup_key: str = Field(
+        default="", max_length=128, description="Cible précise (vide = toute la règle)"
+    )
 
 
 class RuleValidateRequest(BaseModel):

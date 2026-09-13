@@ -85,7 +85,10 @@ def ingest_events(
                     "index": index,
                     "error": "validation_error",
                     "details": [
-                        {"location": ".".join(str(part) for part in error.get("loc", ())), "message": error.get("msg")}
+                        {
+                            "location": ".".join(str(part) for part in error.get("loc", ())),
+                            "message": error.get("msg"),
+                        }
                         for error in exc.errors()[:5]
                     ],
                 }
@@ -94,9 +97,7 @@ def ingest_events(
     if errors and not events:
         raise ValidationError("aucun événement valide dans le lot", details={"errors": errors[:20]})
 
-    outcome = service.pipeline.ingest(
-        events, actor=principal.actor, actor_role=principal.role
-    )
+    outcome = service.pipeline.ingest(events, actor=principal.actor, actor_role=principal.role)
     service.metrics.inc("thotsecure_events_ingested_total", len(events), tenant=principal.tenant_id)
     if outcome.result.rejected:
         service.metrics.inc(

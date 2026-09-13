@@ -109,7 +109,9 @@ def verify_record(
     return True, None
 
 
-def to_cef(record: dict[str, Any], *, vendor: str = "Thot Secure", product: str = "Thot Secure") -> str:
+def to_cef(
+    record: dict[str, Any], *, vendor: str = "Thot Secure", product: str = "Thot Secure"
+) -> str:
     """Sérialise un enregistrement d'audit au format ArcSight CEF (export SIEM).
 
     CEF: ``CEF:0|Vendor|Product|Version|SignatureID|Name|Severity|Extension``

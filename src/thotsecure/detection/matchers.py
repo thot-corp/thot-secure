@@ -60,7 +60,9 @@ def compile_regex(pattern: str, *, case_sensitive: bool = True) -> re.Pattern[st
     if len(pattern) > MAX_REGEX_PATTERN:
         raise RegexTooComplexError(f"motif trop long ({len(pattern)} > {MAX_REGEX_PATTERN})")
     if looks_like_redos(pattern):
-        raise RegexTooComplexError(f"motif à risque de retour arrière catastrophique refusé: {pattern!r}")
+        raise RegexTooComplexError(
+            f"motif à risque de retour arrière catastrophique refusé: {pattern!r}"
+        )
     flags = 0 if case_sensitive else re.IGNORECASE
     try:
         return re.compile(pattern, flags)
@@ -140,7 +142,11 @@ def _evaluate(condition: Condition, context: dict[str, Any]) -> bool:
 
     try:
         if op == "eq":
-            if isinstance(actual, str) and isinstance(expected, str) and not condition.case_sensitive:
+            if (
+                isinstance(actual, str)
+                and isinstance(expected, str)
+                and not condition.case_sensitive
+            ):
                 return actual.lower() == expected.lower()
             if isinstance(actual, bool) or isinstance(expected, bool):
                 return _as_text(actual).lower() == _as_text(expected).lower()
@@ -148,7 +154,11 @@ def _evaluate(condition: Condition, context: dict[str, Any]) -> bool:
             return comparison == 0 if comparison is not None else actual == expected
 
         if op == "ne":
-            if isinstance(actual, str) and isinstance(expected, str) and not condition.case_sensitive:
+            if (
+                isinstance(actual, str)
+                and isinstance(expected, str)
+                and not condition.case_sensitive
+            ):
                 return actual.lower() != expected.lower()
             comparison = _compare(actual, expected)
             return comparison != 0 if comparison is not None else actual != expected
@@ -229,7 +239,7 @@ def _evaluate(condition: Condition, context: dict[str, Any]) -> bool:
             length = _length_of(actual)
             return length is not None and length < safe_float(expected)
 
-    except Exception:  # noqa: BLE001 - un opérateur ne doit jamais interrompre la détection
+    except Exception:
         return False
 
     return False
@@ -268,7 +278,9 @@ def condition_is_coherent(condition: Condition) -> tuple[bool, str | None]:
         return True, None
     if op in {"in", "not_in"} and not isinstance(value, (list, tuple, set, str, int, float, bool)):
         return False, f"op={op} exige une liste ou un scalaire (reçu {type(value).__name__})"
-    if op in {"contains", "icontains", "startswith", "endswith"} and not isinstance(value, (str, int, float)):
+    if op in {"contains", "icontains", "startswith", "endswith"} and not isinstance(
+        value, (str, int, float)
+    ):
         return False, f"op={op} exige une valeur textuelle (reçu {type(value).__name__})"
     return True, None
 

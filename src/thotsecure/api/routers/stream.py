@@ -29,7 +29,9 @@ async def stream(
     api_key: str | None = Query(default=None),
     token: str | None = Query(default=None),
     tenant_id: str | None = Query(default=None),
-    types: str | None = Query(default=None, description="Types à recevoir, séparés par des virgules"),
+    types: str | None = Query(
+        default=None, description="Types à recevoir, séparés par des virgules"
+    ),
 ) -> None:
     """Flux d'événements en temps réel."""
     service = getattr(websocket.app.state, "service", None)
@@ -81,7 +83,8 @@ async def stream(
                 "client_id": client_id,
                 "tenant_id": target_tenant,
                 "role": principal.role,
-                "types": sorted(allowed_types) or ["event", "finding", "action", "audit", "heartbeat"],
+                "types": sorted(allowed_types)
+                or ["event", "finding", "action", "audit", "heartbeat"],
             },
         }
     )
@@ -105,7 +108,7 @@ async def stream(
             task.cancel()
     except WebSocketDisconnect:
         pass
-    except Exception as exc:  # noqa: BLE001 - une déconnexion brutale est normale
+    except Exception as exc:
         log.debug("flux WebSocket interrompu", extra={"client_id": client_id, "error": str(exc)})
     finally:
         for task in tasks:

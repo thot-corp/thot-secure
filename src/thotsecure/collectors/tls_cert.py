@@ -71,7 +71,7 @@ class TlsCertCollector(Collector):
         for host, port in unique:
             try:
                 result.events.extend(self._check(host, port, context))
-            except Exception as exc:  # noqa: BLE001 - une cible en erreur n'arrête pas le reste
+            except Exception as exc:
                 result.add_error(f"{host}:{port}: {exc}")
 
         result.finished_at = result.finished_at or _now()
@@ -108,7 +108,9 @@ class TlsCertCollector(Collector):
                     "check": "certificate",
                     "host": host,
                     "port": port,
-                    "days_to_expiry": info.days_to_expiry if info.days_to_expiry is not None else -1,
+                    "days_to_expiry": info.days_to_expiry
+                    if info.days_to_expiry is not None
+                    else -1,
                     "protocol": info.protocol,
                 },
                 payload=info.to_dict(),
@@ -243,7 +245,7 @@ class TlsCertCollector(Collector):
             size = getattr(public_key, "key_size", None)
             if size and size < MIN_RSA_BITS:
                 return int(size)
-        except Exception:  # noqa: BLE001 - contrôle optionnel, jamais bloquant
+        except Exception:
             return None
         return None
 

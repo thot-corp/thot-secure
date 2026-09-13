@@ -17,19 +17,20 @@ WebSocket transporte la clé en paramètre de requête.
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, Mapping, Optional
+from collections.abc import Mapping
+from typing import Any
 
 __all__ = [
-    "ThotSecureError",
-    "TransportError",
-    "WebSocketError",
     "AuthenticationError",
-    "PermissionDeniedError",
-    "NotFoundError",
     "ConflictError",
-    "ValidationError",
+    "NotFoundError",
+    "PermissionDeniedError",
     "RateLimitedError",
     "ServerError",
+    "ThotSecureError",
+    "TransportError",
+    "ValidationError",
+    "WebSocketError",
     "error_from_response",
     "error_from_status",
     "redact_url",
@@ -40,7 +41,7 @@ __all__ = [
 _SENSITIVE_QUERY_PARAMS = ("api_key", "apikey", "token", "access_token", "key", "password")
 
 
-def redact_url(url: Optional[str]) -> Optional[str]:
+def redact_url(url: str | None) -> str | None:
     """Retourne *url* avec les paramètres sensibles masqués.
 
     ``https://h/api/v1/ws/stream?api_key=ao_secret&tenant_id=acme`` devient
@@ -51,7 +52,7 @@ def redact_url(url: Optional[str]) -> Optional[str]:
     result = url
     for param in _SENSITIVE_QUERY_PARAMS:
         result = re.sub(
-            r"([?&]%s=)[^&#\s]*" % re.escape(param),
+            rf"([?&]{re.escape(param)}=)[^&#\s]*",
             r"\1***",
             result,
             flags=re.IGNORECASE,
@@ -74,19 +75,19 @@ class ThotSecureError(Exception):
     """
 
     code: str = "internal_error"
-    status_code: Optional[int] = None
+    status_code: int | None = None
     retryable: bool = False
 
     def __init__(
         self,
         message: str,
         *,
-        code: Optional[str] = None,
-        status_code: Optional[int] = None,
-        details: Optional[Mapping[str, Any]] = None,
-        method: Optional[str] = None,
-        url: Optional[str] = None,
-        request_id: Optional[str] = None,
+        code: str | None = None,
+        status_code: int | None = None,
+        details: Mapping[str, Any] | None = None,
+        method: str | None = None,
+        url: str | None = None,
+        request_id: str | None = None,
     ) -> None:
         super().__init__(message)
         self.message = message
@@ -94,7 +95,7 @@ class ThotSecureError(Exception):
             self.code = code
         if status_code is not None:
             self.status_code = status_code
-        self.details: Dict[str, Any] = dict(details) if details else {}
+        self.details: dict[str, Any] = dict(details) if details else {}
         self.method = method
         self.url = redact_url(url)
         self.request_id = request_id
@@ -103,13 +104,13 @@ class ThotSecureError(Exception):
         parts = [self.message]
         meta = []
         if self.status_code is not None:
-            meta.append("status=%s" % self.status_code)
+            meta.append(f"status={self.status_code}")
         if self.code:
-            meta.append("code=%s" % self.code)
+            meta.append(f"code={self.code}")
         if self.method:
-            meta.append("%s %s" % (self.method, self.url or ""))
+            meta.append("{} {}".format(self.method, self.url or ""))
         if self.request_id:
-            meta.append("request_id=%s" % self.request_id)
+            meta.append(f"request_id={self.request_id}")
         if meta:
             parts.append("(" + ", ".join(meta) + ")")
         return " ".join(parts)
@@ -170,13 +171,13 @@ class RateLimitedError(ThotSecureError):
     status_code = 429
     retryable = True
 
-    def __init__(self, message: str, *, retry_after: Optional[float] = None, **kwargs: Any) -> None:
+    def __init__(self, message: str, *, retry_after: float | None = None, **kwargs: Any) -> None:
         # On extrait les métadonnées AVANT super() pour ne pas les écraser ensuite.
         details = kwargs.get("details") or {}
         if retry_after is None:
             retry_after = _coerce_float(details.get("retry_after"))
         super().__init__(message, **kwargs)
-        self.retry_after: Optional[float] = retry_after
+        self.retry_after: float | None = retry_after
 
 
 class ServerError(ThotSecureError):
@@ -191,7 +192,7 @@ class ServerError(ThotSecureError):
 # Mapping contrat -> exceptions
 # --------------------------------------------------------------------------------------
 
-_STATUS_TO_ERROR: Dict[int, type] = {
+_STATUS_TO_ERROR: dict[int, type] = {
     400: ValidationError,
     401: AuthenticationError,
     403: PermissionDeniedError,
@@ -201,7 +202,7 @@ _STATUS_TO_ERROR: Dict[int, type] = {
     429: RateLimitedError,
 }
 
-_CODE_TO_ERROR: Dict[str, type] = {
+_CODE_TO_ERROR: dict[str, type] = {
     "validation_error": ValidationError,
     "invalid_request": ValidationError,
     "unauthenticated": AuthenticationError,
@@ -224,7 +225,7 @@ def error_from_status(status_code: int) -> type:
     return ThotSecureError
 
 
-def _coerce_float(value: Any) -> Optional[float]:
+def _coerce_float(value: Any) -> float | None:
     if value is None or isinstance(value, bool):
         return None
     try:
@@ -237,18 +238,18 @@ def error_from_response(
     status_code: int,
     payload: Any = None,
     *,
-    method: Optional[str] = None,
-    url: Optional[str] = None,
-    headers: Optional[Mapping[str, str]] = None,
-    raw_text: Optional[str] = None,
+    method: str | None = None,
+    url: str | None = None,
+    headers: Mapping[str, str] | None = None,
+    raw_text: str | None = None,
 ) -> ThotSecureError:
     """Construit l'exception adéquate depuis une réponse HTTP en erreur.
 
     La priorité est donnée au ``error.code`` du contrat, puis au code HTTP, puis au texte brut.
     """
-    code: Optional[str] = None
-    message: Optional[str] = None
-    details: Dict[str, Any] = {}
+    code: str | None = None
+    message: str | None = None
+    details: dict[str, Any] = {}
 
     if isinstance(payload, Mapping):
         error = payload.get("error")
@@ -266,7 +267,7 @@ def error_from_response(
             details = {"errors": payload["detail"]}
 
     if message is None:
-        message = raw_text.strip()[:500] if raw_text and raw_text.strip() else "HTTP %s" % status_code
+        message = raw_text.strip()[:500] if raw_text and raw_text.strip() else f"HTTP {status_code}"
 
     cls = _CODE_TO_ERROR.get(code or "", None) or error_from_status(status_code)
 
@@ -274,7 +275,7 @@ def error_from_response(
     if headers:
         request_id = _header(headers, "x-request-id") or _header(headers, "x-correlation-id")
 
-    kwargs: Dict[str, Any] = {
+    kwargs: dict[str, Any] = {
         "code": code or getattr(cls, "code", None),
         "status_code": status_code,
         "details": details,
@@ -292,7 +293,7 @@ def error_from_response(
     return cls(message, **kwargs)  # type: ignore[arg-type]
 
 
-def _header(headers: Mapping[str, str], name: str) -> Optional[str]:
+def _header(headers: Mapping[str, str], name: str) -> str | None:
     """Lecture d'en-tête insensible à la casse."""
     if name in headers:
         return headers[name]

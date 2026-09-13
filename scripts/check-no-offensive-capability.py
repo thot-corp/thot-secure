@@ -55,20 +55,48 @@ EXCLUDED_DIRECTORIES = ("rules", "policies", "playbooks", "node_modules", "__pyc
 #: bloquerait une contribution légitime et décrédibiliserait le contrôle.
 FORBIDDEN_PATTERNS: tuple[tuple[str, str, str], ...] = (
     (r"/dev/tcp/", "accès shell inversé via les pseudo-fichiers de Bash", "error"),
-    (r"pty\.spawn|os\.openpty|import\s+pty\b", "allocation de terminal pour une session interactive", "error"),
-    (r"dup2\s*\(\s*\w+\.fileno", "redirection de descripteurs vers un socket (shell inversé)", "error"),
-    (r"shellcode|reverse[_ ]shell|bind[_ ]shell|meterpreter|beacon\.dll", "charge utile d'exploitation", "error"),
-    (r"\bmsfconsole\b|\bmetasploit\b|cobalt\s*strike|sliver\s*>", "cadriciel d'exploitation", "error"),
+    (
+        r"pty\.spawn|os\.openpty|import\s+pty\b",
+        "allocation de terminal pour une session interactive",
+        "error",
+    ),
+    (
+        r"dup2\s*\(\s*\w+\.fileno",
+        "redirection de descripteurs vers un socket (shell inversé)",
+        "error",
+    ),
+    (
+        r"shellcode|reverse[_ ]shell|bind[_ ]shell|meterpreter|beacon\.dll",
+        "charge utile d'exploitation",
+        "error",
+    ),
+    (
+        r"\bmsfconsole\b|\bmetasploit\b|cobalt\s*strike|sliver\s*>",
+        "cadriciel d'exploitation",
+        "error",
+    ),
     # Les invocations peuvent être écrites en ligne de commande (`sqlmap -u …`) ou en liste
     # d'arguments (`["sqlmap", "-u", …]`) : on couvre les deux formes.
     (r"\bsqlmap\b[^\n]{0,24}(-u\b|--url)", "invocation de l'outil d'injection SQL", "error"),
     (r"\bhydra\b[^\n]{0,24}-[lLPp]", "invocation de l'outil de force brute", "error"),
     (r"\bnmap\b[^\n]{0,24}-s[SsUu]", "invocation de scan de ports", "error"),
     (r"\bmasscan\b|\bzgrab\b|\bunicornscan\b", "invocation d'outil de balayage massif", "error"),
-    (r"\bnikto\b[^\n]{0,24}-host|\bwfuzz\b[^\n]{0,16}-c\b|\bgobuster\b[^\n]{0,16}dir", "invocation de scanner de vulnérabilités", "error"),
+    (
+        r"\bnikto\b[^\n]{0,24}-host|\bwfuzz\b[^\n]{0,16}-c\b|\bgobuster\b[^\n]{0,16}dir",
+        "invocation de scanner de vulnérabilités",
+        "error",
+    ),
     (r"exploit\s*\(\s*(target|victim|host)", "appel d'exploitation d'une cible", "error"),
-    (r"while\s+True\s*:\s*\n\s*[^\n]*requests\.(get|post)\s*\(", "boucle de requêtes non bornée (déni de service)", "error"),
-    (r"ThreadPoolExecutor\s*\(\s*max_workers\s*=\s*None", "parallélisme non borné sur une opération réseau", "warning"),
+    (
+        r"while\s+True\s*:\s*\n\s*[^\n]*requests\.(get|post)\s*\(",
+        "boucle de requêtes non bornée (déni de service)",
+        "error",
+    ),
+    (
+        r"ThreadPoolExecutor\s*\(\s*max_workers\s*=\s*None",
+        "parallélisme non borné sur une opération réseau",
+        "warning",
+    ),
 )
 
 #: Marqueur explicite permettant de justifier une exception dans le code lui-même.
@@ -76,8 +104,22 @@ ALLOWLIST_MARKER = "thotsecure: defensive-detection-pattern"
 
 #: Extensions analysées.
 SCANNED_SUFFIXES = (
-    ".py", ".pyi", ".ts", ".tsx", ".js", ".jsx", ".go", ".sh", ".bash", ".ps1",
-    ".yaml", ".yml", ".json", ".tf", ".rego", ".conf",
+    ".py",
+    ".pyi",
+    ".ts",
+    ".tsx",
+    ".js",
+    ".jsx",
+    ".go",
+    ".sh",
+    ".bash",
+    ".ps1",
+    ".yaml",
+    ".yml",
+    ".json",
+    ".tf",
+    ".rego",
+    ".conf",
 )
 
 
@@ -97,7 +139,9 @@ def scan_file(path: Path) -> list[tuple[int, str, str, str]]:
     for line_number, line in enumerate(text.splitlines(), start=1):
         stripped = line.strip()
         # Les commentaires qui décrivent une interdiction ne sont pas une infraction.
-        if stripped.startswith(("#", "//", "*", "/*")) and not re.search(r"(curl|wget|nc)\s", stripped):
+        if stripped.startswith(("#", "//", "*", "/*")) and not re.search(
+            r"(curl|wget|nc)\s", stripped
+        ):
             continue
         for pattern, reason, severity in FORBIDDEN_PATTERNS:
             if re.search(pattern, line):
@@ -147,7 +191,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Thot Secure est strictement défensif — {scanned} fichier(s) analysé(s)")
     if errors:
         print(f"x {errors} construction(s) offensive(s) détectée(s) : la contribution est refusée")
-        print(f"  Si ce code est un MOTIF DE DÉTECTION légitime, ajoutez le marqueur")
+        print("  Si ce code est un MOTIF DE DÉTECTION légitime, ajoutez le marqueur")
         print(f"  « {ALLOWLIST_MARKER} » dans le fichier et expliquez-le en commentaire.")
         return 3
     if warnings:

@@ -11,11 +11,10 @@ import asyncio
 import contextlib
 import time
 from collections.abc import AsyncIterator
-from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import __license__, __version__
@@ -23,9 +22,8 @@ from .api.errors import register_exception_handlers
 from .api.routers import ALL_ROUTERS
 from .api.ws import ConnectionManager
 from .core.config import Settings, get_settings
-from .core.errors import ThotSecureError
 from .core.logging_setup import configure_logging, get_logger, new_request_id
-from .core.util import iso_z, utcnow
+from .core.util import utcnow
 from .service import Service, build_service
 from .ui.routes import STATIC_DIR, build_ui_router
 
@@ -57,9 +55,18 @@ def create_app(settings: Settings | None = None, *, service: Service | None = No
             {"name": "santé", "description": "Sondes, version, métriques Prometheus."},
             {"name": "tenants", "description": "Tenants, clés API, périmètre déclaré."},
             {"name": "événements", "description": "Ingestion et consultation des événements."},
-            {"name": "findings", "description": "Qualification et rapports (md, html, sarif, cef)."},
-            {"name": "actions", "description": "Playbooks : planification, approbation, exécution, rollback."},
-            {"name": "détection et configuration", "description": "Règles, politiques, audit, collecteurs."},
+            {
+                "name": "findings",
+                "description": "Qualification et rapports (md, html, sarif, cef).",
+            },
+            {
+                "name": "actions",
+                "description": "Playbooks : planification, approbation, exécution, rollback.",
+            },
+            {
+                "name": "détection et configuration",
+                "description": "Règles, politiques, audit, collecteurs.",
+            },
             {"name": "flux temps réel", "description": "WebSocket temps réel."},
         ],
         docs_url="/docs",
@@ -146,9 +153,7 @@ def _register_middleware(application: FastAPI, settings: Settings) -> None:
         return response
 
 
-def _register_lifespan(
-    application: FastAPI, settings: Settings, injected: Service | None
-) -> None:
+def _register_lifespan(application: FastAPI, settings: Settings, injected: Service | None) -> None:
     @contextlib.asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         service = injected or build_service(settings)
@@ -213,4 +218,4 @@ async def _forward_bus_to_streams(service: Service, streams: ConnectionManager) 
 app = create_app()
 
 
-__all__ = ["app", "create_app", "MAX_BODY_BYTES"]
+__all__ = ["MAX_BODY_BYTES", "app", "create_app"]

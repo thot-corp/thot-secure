@@ -71,14 +71,14 @@ Codes de sortie
 """
 
 from __future__ import annotations
-import contextlib as _contextlib
-import sys as _sys
 
 import argparse
+import contextlib as _contextlib
 import json
 import os
 import re
 import sys
+import sys as _sys
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -86,6 +86,7 @@ from typing import Any
 from urllib import error as urlerror
 from urllib import parse as urlparse
 from urllib import request as urlrequest
+
 
 # --- Sortie Unicode sûre ---------------------------------------------------------------
 # Sous Windows, une console en page de code cp1252 ne peut pas encoder « ✖ », « ✔ » ou « ─ » :
@@ -104,7 +105,7 @@ _configure_safe_output()
 # ----------------------------------------------------------------------------------------
 
 
-__all__ = ["main", "build_sarif", "evaluate_gate", "finding_to_result", "severity_level"]
+__all__ = ["build_sarif", "evaluate_gate", "finding_to_result", "main", "severity_level"]
 
 # --------------------------------------------------------------------------------------
 # Constantes du contrat (§3.2, §4.4, §4.8)
@@ -183,13 +184,13 @@ def safe_url(url: str) -> str:
 
 def warn(message: str) -> None:
     """Message d'avertissement sur stderr (stdout reste réservé au rapport)."""
-    print("[sarif-gate] %s" % message, file=sys.stderr, flush=True)
+    print(f"[sarif-gate] {message}", file=sys.stderr, flush=True)
 
 
 def info(args: argparse.Namespace, message: str) -> None:
     """Message d'information, uniquement avec ``--verbose``."""
     if getattr(args, "verbose", False):
-        print("[sarif-gate] %s" % message, file=sys.stderr, flush=True)
+        print(f"[sarif-gate] {message}", file=sys.stderr, flush=True)
 
 
 # --------------------------------------------------------------------------------------
@@ -240,9 +241,11 @@ def http_request(
     Aucune exception n'est levée pour un statut ≥ 400 : l'appelant décide.
     """
     if params:
-        query = urlparse.urlencode({key: value for key, value in params.items() if value is not None})
+        query = urlparse.urlencode(
+            {key: value for key, value in params.items() if value is not None}
+        )
         if query:
-            url = "%s%s%s" % (url, "&" if "?" in url else "?", query)
+            url = "{}{}{}".format(url, "&" if "?" in url else "?", query)
 
     headers = {"Accept": "application/json, application/sarif+json", "User-Agent": USER_AGENT}
     if api_key:
@@ -257,7 +260,7 @@ def http_request(
         raw = exc.read()
         return exc.code, _decode(raw), _text(raw)
     except (urlerror.URLError, OSError, ValueError) as exc:
-        raise TransportError("échec de la requête %s %s : %s" % (method, safe_url(url), exc)) from exc
+        raise TransportError(f"échec de la requête {method} {safe_url(url)} : {exc}") from exc
 
 
 def _decode(raw: bytes) -> Any:
@@ -339,7 +342,9 @@ class FindingsClient:
 
     def _get(self, path: str, params: Mapping[str, Any] | None = None) -> tuple[int, Any, str]:
         url = path if path.startswith(("http://", "https://")) else self.base_url + path
-        return self._transport("GET", url, api_key=self.api_key, params=params, timeout=self.timeout)
+        return self._transport(
+            "GET", url, api_key=self.api_key, params=params, timeout=self.timeout
+        )
 
     def list_findings(
         self,
@@ -358,7 +363,7 @@ class FindingsClient:
         cursor: str | None = None
         seen_cursors: set[str] = set()
 
-        for page_number in range(1, max_pages + 1):
+        for _page_number in range(1, max_pages + 1):
             status_code, payload, raw = self._get(
                 "/api/v1/findings",
                 {
@@ -378,12 +383,14 @@ class FindingsClient:
             if not next_cursor:
                 return findings
             if next_cursor in seen_cursors:
-                warn("curseur répété (%s) : pagination interrompue par prudence." % next_cursor[:32])
+                warn(f"curseur répété ({next_cursor[:32]}) : pagination interrompue par prudence.")
                 return findings
             seen_cursors.add(next_cursor)
             cursor = next_cursor
 
-        warn("limite de %d pages atteinte : la liste peut être incomplète (--max-pages)." % max_pages)
+        warn(
+            "limite de %d pages atteinte : la liste peut être incomplète (--max-pages)." % max_pages
+        )
         return findings
 
     def get_server_sarif(self, finding_id: str) -> str | None:
@@ -393,7 +400,7 @@ class FindingsClient:
         pas une erreur fatale, la conversion locale prend le relais.
         """
         status_code, _payload, raw = self._get(
-            "/api/v1/findings/%s/report" % urlparse.quote(str(finding_id)), {"format": "sarif"}
+            f"/api/v1/findings/{urlparse.quote(str(finding_id))}/report", {"format": "sarif"}
         )
         if status_code in (200, 201):
             return raw
@@ -413,7 +420,11 @@ def _split_page(payload: Any) -> tuple[list[dict[str, Any]], str | None]:
     if isinstance(payload, Mapping):
         items = payload.get("items")
         next_cursor = payload.get("next_cursor") or payload.get("cursor")
-        found = [dict(item) for item in items if isinstance(item, Mapping)] if isinstance(items, list) else []
+        found = (
+            [dict(item) for item in items if isinstance(item, Mapping)]
+            if isinstance(items, list)
+            else []
+        )
         return found, str(next_cursor) if next_cursor else None
     if isinstance(payload, list):
         return [dict(item) for item in payload if isinstance(item, Mapping)], None
@@ -455,7 +466,7 @@ def finding_message(finding: Mapping[str, Any]) -> str:
         parts.append(description.strip())
     remediation = finding.get("remediation")
     if isinstance(remediation, str) and remediation.strip():
-        parts.append("Remédiation : %s" % remediation.strip())
+        parts.append(f"Remédiation : {remediation.strip()}")
     labels = finding.get("labels")
     if isinstance(labels, Mapping):
         interesting = {
@@ -464,7 +475,9 @@ def finding_message(finding: Mapping[str, Any]) -> str:
             if key in ("src_ip", "path", "host", "user", "resource_id", "check_id")
         }
         if interesting:
-            parts.append("Contexte : %s" % json.dumps(interesting, ensure_ascii=False, sort_keys=True))
+            parts.append(
+                f"Contexte : {json.dumps(interesting, ensure_ascii=False, sort_keys=True)}"
+            )
     return "\n".join(parts)
 
 
@@ -516,7 +529,9 @@ def finding_to_result(
                 "physicalLocation": {
                     "artifactLocation": {
                         "uri": uri,
-                        "description": {"text": "Constat Thot Secure (non rattaché à un fichier du dépôt)"},
+                        "description": {
+                            "text": "Constat Thot Secure (non rattaché à un fichier du dépôt)"
+                        },
                     },
                     "region": {"startLine": 1, "startColumn": 1},
                 }
@@ -547,7 +562,7 @@ def finding_to_result(
             {
                 "kind": "external",
                 "status": "accepted",
-                "justification": "Finding « %s » côté Thot Secure : hors périmètre du portail CI." % status,
+                "justification": f"Finding « {status} » côté Thot Secure : hors périmètre du portail CI.",
             }
         ]
 
@@ -570,7 +585,9 @@ def finding_to_rule(finding: Mapping[str, Any]) -> dict[str, Any]:
         },
         "defaultConfiguration": {"level": severity_level(severity)},
         "properties": {
-            "tags": sorted({"security", "thotsecure", *tags, *(("mitre:%s" % item) for item in mitre)}),
+            "tags": sorted(
+                {"security", "thotsecure", *tags, *((f"mitre:{item}") for item in mitre)}
+            ),
             "security-severity": SECURITY_SEVERITY.get(severity, "5.5"),
             "problem.severity": severity_level(severity),
             "precision": "high" if as_float(finding.get("confidence")) >= 0.8 else "medium",
@@ -602,7 +619,11 @@ def extract_from_server_sarif(text: str) -> tuple[list[dict[str, Any]], list[dic
     for run in runs:
         if not isinstance(run, Mapping):
             continue
-        driver = ((run.get("tool") or {}).get("driver") or {}) if isinstance(run.get("tool"), Mapping) else {}
+        driver = (
+            ((run.get("tool") or {}).get("driver") or {})
+            if isinstance(run.get("tool"), Mapping)
+            else {}
+        )
         run_rules = driver.get("rules") if isinstance(driver, Mapping) else None
         if isinstance(run_rules, list):
             rules.extend([dict(rule) for rule in run_rules if isinstance(rule, Mapping)])
@@ -640,7 +661,9 @@ def build_sarif(
     rule_index: dict[str, int] = {}
     results: list[dict[str, Any]] = []
 
-    def ensure_rule(finding: Mapping[str, Any], fallback_rule: Mapping[str, Any] | None = None) -> int:
+    def ensure_rule(
+        finding: Mapping[str, Any], fallback_rule: Mapping[str, Any] | None = None
+    ) -> int:
         """Enregistre (une seule fois) la règle associée et retourne son index.
 
         L'identifiant de la règle agrégée est **toujours** le ``rule_id`` du finding (§3.2). Un
@@ -652,7 +675,9 @@ def build_sarif(
         rule_id = str(finding.get("rule_id") or "THOTSECURE-UNKNOWN")
         if rule_id in rule_index:
             return rule_index[rule_id]
-        rule = dict(fallback_rule) if isinstance(fallback_rule, Mapping) else finding_to_rule(finding)
+        rule = (
+            dict(fallback_rule) if isinstance(fallback_rule, Mapping) else finding_to_rule(finding)
+        )
         rule["id"] = rule_id
         rule.setdefault("name", rule_id)
         rule.setdefault("shortDescription", {"text": finding_title(finding)})
@@ -789,8 +814,8 @@ def print_summary(
         if severity not in SEVERITIES:
             print("    %-8s : %d" % (severity, total))
     if sarif_path:
-        print("  SARIF agrégé      : %s" % sarif_path)
-    print("  Sévérités bloquantes : %s" % ", ".join(fail_on))
+        print(f"  SARIF agrégé      : {sarif_path}")
+    print("  Sévérités bloquantes : {}".format(", ".join(fail_on)))
 
     if not blocking:
         print("\n  ✔ Aucun finding bloquant non acquitté : portail franchi.")
@@ -799,18 +824,18 @@ def print_summary(
     print("\n  ✖ %d finding(s) bloquant(s) non acquitté(s) :" % len(blocking))
     for finding in blocking:
         print(
-            "    - [%s] risque %s · %s · %s"
-            % (
+            "    - [{}] risque {} · {} · {}".format(
                 finding.get("severity"),
                 finding.get("risk_score"),
                 finding.get("rule_id"),
                 str(finding.get("title") or "")[:70],
             )
         )
-        print("      finding_id : %s" % finding.get("finding_id"))
+        print("      finding_id : {}".format(finding.get("finding_id")))
         print(
-            "      régularisation : thotsecure findings show %s  (puis ack/close, ou correction)"
-            % finding.get("finding_id")
+            "      régularisation : thotsecure findings show {}  (puis ack/close, ou correction)".format(
+                finding.get("finding_id")
+            )
         )
 
 
@@ -828,7 +853,7 @@ def step_summary_markdown(
         verdict = "⚠️ avertissement seul (`--warn-only`)" if warn_only else "❌ **portail échoué**"
     else:
         verdict = "✅ portail franchi"
-    lines.append("**Verdict** : %s" % verdict)
+    lines.append(f"**Verdict** : {verdict}")
     lines.append("")
     lines.append("| Sévérité | Findings |")
     lines.append("|---|---|")
@@ -836,7 +861,7 @@ def step_summary_markdown(
         lines.append("| %s | %d |" % (severity, counts.get(severity, 0)))
     lines.append("| **total** | **%d** |" % len(findings))
     lines.append("")
-    lines.append("Sévérités bloquantes configurées : `%s`" % ", ".join(fail_on))
+    lines.append("Sévérités bloquantes configurées : `{}`".format(", ".join(fail_on)))
     lines.append("")
     if blocking:
         lines.append("### Findings bloquants")
@@ -845,8 +870,7 @@ def step_summary_markdown(
         lines.append("|---|---|---|---|---|")
         for finding in blocking:
             lines.append(
-                "| %s | %s | `%s` | %s | `%s` |"
-                % (
+                "| {} | {} | `{}` | {} | `{}` |".format(
                     finding.get("severity"),
                     finding.get("risk_score"),
                     finding.get("rule_id"),
@@ -889,16 +913,16 @@ def emit_github_annotations(
     for finding in blocking:
         command = "warning" if warn_only else "error"
         print(
-            "::%s title=%s::%s"
-            % (
+            "::{} title={}::{}".format(
                 command,
                 github_escape(
-                    "Thot Secure %s (risque %s)" % (finding.get("severity"), finding.get("risk_score")),
+                    "Thot Secure {} (risque {})".format(
+                        finding.get("severity"), finding.get("risk_score")
+                    ),
                     property_value=True,
                 ),
                 github_escape(
-                    "%s — règle %s — finding_id %s"
-                    % (
+                    "{} — règle {} — finding_id {}".format(
                         finding_title(finding),
                         finding.get("rule_id"),
                         finding.get("finding_id"),
@@ -908,8 +932,7 @@ def emit_github_annotations(
         )
     if not blocking and findings:
         print(
-            "::notice title=%s::%s"
-            % (
+            "::notice title={}::{}".format(
                 github_escape("Thot Secure", property_value=True),
                 github_escape("%d finding(s) examiné(s), aucun bloquant." % len(findings)),
             )
@@ -937,8 +960,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--url",
         default=env_first("THOT_SECURE_URL", "THOT_URL", default=DEFAULT_BASE_URL),
-        help="base de l'API (défaut : $env:THOT_SECURE_URL, sinon $env:THOT_URL, sinon %s)"
-        % DEFAULT_BASE_URL,
+        help=f"base de l'API (défaut : $env:THOT_SECURE_URL, sinon $env:THOT_URL, sinon {DEFAULT_BASE_URL})",
     )
     parser.add_argument(
         "--api-key",
@@ -970,7 +992,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--fail-on",
         default=DEFAULT_FAIL_ON,
         help="sévérités qui font échouer le pipeline, séparées par des virgules "
-        "(défaut : %s ; « any » = toutes)" % DEFAULT_FAIL_ON,
+        f"(défaut : {DEFAULT_FAIL_ON} ; « any » = toutes)",
     )
     parser.add_argument(
         "--warn-only",
@@ -998,7 +1020,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--artifact-uri-template",
         default=DEFAULT_URI_TEMPLATE,
         help="gabarit d'URI des localisations ; variables : {finding_id}, {rule_id}, {severity}, "
-        "{tenant_id} (défaut : %s)" % DEFAULT_URI_TEMPLATE,
+        f"{{tenant_id}} (défaut : {DEFAULT_URI_TEMPLATE})",
     )
     parser.add_argument(
         "--github-annotations",
@@ -1010,12 +1032,16 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="écrit un résumé Markdown dans le fichier de $GITHUB_STEP_SUMMARY",
     )
-    parser.add_argument("--max-pages", type=int, default=MAX_PAGES, help="pages maximales parcourues")
+    parser.add_argument(
+        "--max-pages", type=int, default=MAX_PAGES, help="pages maximales parcourues"
+    )
     parser.add_argument(
         "--timeout",
         type=float,
-        default=float(env_first("THOT_SECURE_TIMEOUT", "THOT_TIMEOUT", default=str(DEFAULT_TIMEOUT))),
-        help="délai d'attente par requête, en secondes (défaut %s)" % DEFAULT_TIMEOUT,
+        default=float(
+            env_first("THOT_SECURE_TIMEOUT", "THOT_TIMEOUT", default=str(DEFAULT_TIMEOUT))
+        ),
+        help=f"délai d'attente par requête, en secondes (défaut {DEFAULT_TIMEOUT})",
     )
     parser.add_argument("-v", "--verbose", action="store_true", help="journalise les détails")
     parser.add_argument("--version", action="version", version="thotsecure-ci-sarif-gate 0.1.0")
@@ -1032,8 +1058,9 @@ def parse_fail_on(value: str) -> list[str]:
     unknown = [item for item in items if item not in SEVERITIES]
     if unknown:
         raise ValueError(
-            "sévérité(s) inconnue(s) : %s (attendu : %s, ou « any »)"
-            % (", ".join(unknown), ", ".join(SEVERITIES))
+            "sévérité(s) inconnue(s) : {} (attendu : {}, ou « any »)".format(
+                ", ".join(unknown), ", ".join(SEVERITIES)
+            )
         )
     return items
 
@@ -1070,24 +1097,28 @@ def main(argv: Sequence[str] | None = None) -> int:
         try:
             findings = read_findings_file(args.from_file)
         except (OSError, ValueError) as exc:
-            warn("lecture de %s impossible : %s" % (args.from_file, exc))
+            warn(f"lecture de {args.from_file} impossible : {exc}")
             return 2
         info(args, "%d finding(s) lus depuis %s" % (len(findings), args.from_file))
     else:
         try:
-            findings = client.list_findings(status=args.status, min_risk=args.min_risk, max_pages=args.max_pages)
+            findings = client.list_findings(
+                status=args.status, min_risk=args.min_risk, max_pages=args.max_pages
+            )
             if args.include_acked:
                 findings.extend(
-                    client.list_findings(status="acked", min_risk=args.min_risk, max_pages=args.max_pages)
+                    client.list_findings(
+                        status="acked", min_risk=args.min_risk, max_pages=args.max_pages
+                    )
                 )
         except ApiError as exc:
-            warn("lecture des findings refusée : %s" % exc)
+            warn(f"lecture des findings refusée : {exc}")
             if exc.status in (401, 403):
                 warn("capacité « read:findings » manquante : rôle viewer minimum (§4).")
                 return 2
             return 1
         except TransportError as exc:
-            warn("instance injoignable : %s" % exc)
+            warn(f"instance injoignable : {exc}")
             return 1
 
     # ------------------------------------------------------------------ 2. SARIF
@@ -1103,10 +1134,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 try:
                     text = client.get_server_sarif(finding_id)
                 except ApiError as exc:
-                    warn("rapport SARIF serveur refusé (%s)" % exc)
+                    warn(f"rapport SARIF serveur refusé ({exc})")
                     text = None
                 except TransportError as exc:
-                    warn("rapport SARIF serveur injoignable (%s)" % exc)
+                    warn(f"rapport SARIF serveur injoignable ({exc})")
                     text = None
                 if text:
                     server_sarif[finding_id] = text
@@ -1138,7 +1169,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             sarif_path = args.out
         except OSError as exc:
-            warn("écriture du SARIF impossible (%s) : le portail continue, l'artefact sera absent." % exc)
+            warn(
+                f"écriture du SARIF impossible ({exc}) : le portail continue, l'artefact sera absent."
+            )
             sarif_path = None
         else:
             info(
@@ -1169,14 +1202,15 @@ def main(argv: Sequence[str] | None = None) -> int:
                         )
                     )
             except OSError as exc:
-                warn("résumé d'étape non écrit (%s)" % exc)
+                warn(f"résumé d'étape non écrit ({exc})")
         else:
             info(args, "GITHUB_STEP_SUMMARY non défini : aucun résumé d'étape écrit.")
 
     if blocking and args.warn_only:
         warn(
             "%d finding(s) bloquant(s) détecté(s), mais --warn-only est actif : sortie en succès. "
-            "Retirez --warn-only (et continue-on-error) une fois les findings traités." % len(blocking)
+            "Retirez --warn-only (et continue-on-error) une fois les findings traités."
+            % len(blocking)
         )
         return 0
     if blocking:

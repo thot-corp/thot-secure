@@ -60,7 +60,11 @@ class ApiTestCase(unittest.TestCase):
             {
                 "kind": "http.request",
                 "source": {"type": "webhook", "host": "shop.acme.fr"},
-                "labels": {"src_ip": src_ip, "path": f"/p?id=1 UNION SELECT {index}--", "host": "shop.acme.fr"},
+                "labels": {
+                    "src_ip": src_ip,
+                    "path": f"/p?id=1 UNION SELECT {index}--",
+                    "host": "shop.acme.fr",
+                },
                 "payload": {"status": 403},
             }
             for index in range(3)
@@ -110,7 +114,9 @@ class AuthenticationTest(ApiTestCase):
         self.assertEqual("unauthenticated", response.json()["error"]["code"])
 
     def test_invalid_key_is_rejected(self) -> None:
-        response = self.client.get("/api/v1/findings", headers={"X-API-Key": "thot_INEXISTANT_abcdefghijkl"})
+        response = self.client.get(
+            "/api/v1/findings", headers={"X-API-Key": "thot_INEXISTANT_abcdefghijkl"}
+        )
         self.assertEqual(401, response.status_code)
 
     def test_whoami_reflects_role(self) -> None:
@@ -137,8 +143,12 @@ class RbacTest(ApiTestCase):
         self.assertEqual(403, response.status_code)
 
     def test_admin_only_routes(self) -> None:
-        self.assertEqual(403, self.client.get("/api/v1/tenants", headers=self.auth("responder")).status_code)
-        self.assertEqual(200, self.client.get("/api/v1/tenants", headers=self.auth("admin")).status_code)
+        self.assertEqual(
+            403, self.client.get("/api/v1/tenants", headers=self.auth("responder")).status_code
+        )
+        self.assertEqual(
+            200, self.client.get("/api/v1/tenants", headers=self.auth("admin")).status_code
+        )
 
 
 class IngestionTest(ApiTestCase):
@@ -206,7 +216,9 @@ class IngestionTest(ApiTestCase):
         self.assertTrue(acme["items"])
         finding_id = acme["items"][0]["finding_id"]
         # Un autre tenant ne peut ni lire ni deviner l'existence du finding.
-        detail = self.client.get(f"/api/v1/findings/{finding_id}", headers={"X-API-Key": globex_key})
+        detail = self.client.get(
+            f"/api/v1/findings/{finding_id}", headers={"X-API-Key": globex_key}
+        )
         self.assertEqual(404, detail.status_code)
 
 
@@ -256,7 +268,11 @@ class ActionLifecycleTest(ApiTestCase):
         ]
         planned = self.client.post(
             "/api/v1/actions/plan",
-            json={"finding_id": finding_id, "playbook": "block-source-ip", "params": {"target": "203.0.113.9"}},
+            json={
+                "finding_id": finding_id,
+                "playbook": "block-source-ip",
+                "params": {"target": "203.0.113.9"},
+            },
             headers=self.auth(),
         )
         self.assertEqual(201, planned.status_code, planned.text)
@@ -347,7 +363,9 @@ class FindersAndReportsTest(ApiTestCase):
         ]
 
         ack = self.client.post(
-            f"/api/v1/findings/{finding_id}/ack", json={"comment": "pris en charge"}, headers=self.auth()
+            f"/api/v1/findings/{finding_id}/ack",
+            json={"comment": "pris en charge"},
+            headers=self.auth(),
         )
         self.assertEqual(200, ack.status_code)
         self.assertEqual("acked", ack.json()["status"])

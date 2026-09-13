@@ -53,7 +53,9 @@ ALLOWED_WHEN_KEYS = frozenset(
 )
 
 #: Opérateurs autorisés dans une condition comparateur (``{gte: 70}``).
-ALLOWED_WHEN_OPERATORS = frozenset({"eq", "ne", "gt", "gte", "lt", "lte", "in", "not_in", "matches"})
+ALLOWED_WHEN_OPERATORS = frozenset(
+    {"eq", "ne", "gt", "gte", "lt", "lte", "in", "not_in", "matches"}
+)
 
 #: Décisions valides, du plus permissif au plus conservateur (documentation).
 DECISION_ORDER = ("auto", "require_approval", "notify_only", "ignore")
@@ -71,7 +73,9 @@ def load_policies_from_dir(
     policies: list[Policy] = []
     diagnostics: list[RuleDiagnostic] = []
     if not root.exists():
-        diagnostics.append(RuleDiagnostic(path=str(root), error="répertoire de politiques inexistant"))
+        diagnostics.append(
+            RuleDiagnostic(path=str(root), error="répertoire de politiques inexistant")
+        )
         log.warning("répertoire de politiques inexistant", extra={"path": str(root)})
         return policies, diagnostics
 
@@ -93,17 +97,27 @@ def load_policies_from_dir(
 
         for document in documents:
             if not isinstance(document, dict):
-                diagnostics.append(RuleDiagnostic(path=str(file_path), error="la politique doit être un mapping"))
+                diagnostics.append(
+                    RuleDiagnostic(path=str(file_path), error="la politique doit être un mapping")
+                )
                 continue
             try:
-                policy = parse_policy(document, path=str(file_path), known_playbooks=known_playbooks)
+                policy = parse_policy(
+                    document, path=str(file_path), known_playbooks=known_playbooks
+                )
             except PolicyLoadError as exc:
                 diagnostics.append(
-                    RuleDiagnostic(path=str(file_path), rule_id=str(document.get("id")), error=str(exc))
+                    RuleDiagnostic(
+                        path=str(file_path), rule_id=str(document.get("id")), error=str(exc)
+                    )
                 )
                 log.error(
                     "politique rejetée",
-                    extra={"path": str(file_path), "policy_id": document.get("id"), "error": str(exc)},
+                    extra={
+                        "path": str(file_path),
+                        "policy_id": document.get("id"),
+                        "error": str(exc),
+                    },
                 )
                 continue
             if policy.id in seen:
@@ -150,8 +164,7 @@ def validate_policy(policy: Policy, *, known_playbooks: set[str] | None = None) 
     unknown = sorted(set(policy.when) - ALLOWED_WHEN_KEYS)
     if unknown:
         problems.append(
-            f"clés inconnues dans 'when': {unknown} "
-            f"(autorisées: {sorted(ALLOWED_WHEN_KEYS)})"
+            f"clés inconnues dans 'when': {unknown} (autorisées: {sorted(ALLOWED_WHEN_KEYS)})"
         )
 
     for key, value in policy.when.items():

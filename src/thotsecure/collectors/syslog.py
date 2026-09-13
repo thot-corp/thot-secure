@@ -39,7 +39,9 @@ RFC3164 = re.compile(
 )
 
 #: Sans en-tête PRI : on accepte quand même (beaucoup d'équipements en omettent).
-BARE = re.compile(r"^(?P<ts>[A-Z][a-z]{2}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})\s+(?P<rest>.*)$", re.DOTALL)
+BARE = re.compile(
+    r"^(?P<ts>[A-Z][a-z]{2}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})\s+(?P<rest>.*)$", re.DOTALL
+)
 
 #: Composantes d'un horodatage RFC 3164 : « Mon dd hh:mm:ss », **sans année** (c'est le
 #: format). Analysé par composantes plutôt qu'avec ``strptime`` : depuis Python 3.13,
@@ -271,7 +273,7 @@ class _SyslogProtocol(asyncio.DatagramProtocol):
                 severity_hint=parsed.get("severity"),  # type: ignore[arg-type]
                 ts=parsed.get("ts"),
             )
-        except Exception as exc:  # noqa: BLE001 - un datagramme malformé ne tue pas l'écoute
+        except Exception as exc:
             self.errors += 1
             log.warning("datagramme syslog ignoré", extra={"error": str(exc), "from": addr[0]})
 
@@ -352,7 +354,11 @@ class SyslogCollector(Collector):
             )
 
     def describe(self) -> dict[str, Any]:
-        return {**super().describe(), "mode": "listener", "state": "started" if self.started else "stopped"}
+        return {
+            **super().describe(),
+            "mode": "listener",
+            "state": "started" if self.started else "stopped",
+        }
 
 
 __all__ = [

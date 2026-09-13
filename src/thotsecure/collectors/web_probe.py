@@ -67,12 +67,24 @@ SECURITY_HEADERS: dict[str, tuple[str, Severity, str]] = {
 #: Chemins de configuration fréquemment exposés par erreur. Ce sont des fichiers **statiques**
 #: attendus ; on ne sonde aucun point d'entrée applicatif et on n'envoie aucune charge utile.
 EXPOSED_PATHS: tuple[tuple[str, Severity, str], ...] = (
-    ("/.git/config", "high", "Dépôt Git exposé : le code source et l'historique sont téléchargeables."),
-    ("/.env", "critical", "Fichier d'environnement exposé : secrets et identifiants de base de données."),
+    (
+        "/.git/config",
+        "high",
+        "Dépôt Git exposé : le code source et l'historique sont téléchargeables.",
+    ),
+    (
+        "/.env",
+        "critical",
+        "Fichier d'environnement exposé : secrets et identifiants de base de données.",
+    ),
     ("/.svn/entries", "medium", "Métadonnées Subversion exposées."),
     ("/server-status", "medium", "Page d'état du serveur web exposée publiquement."),
     ("/phpinfo.php", "high", "Page phpinfo exposée : configuration, chemins et versions révélés."),
-    ("/actuator/env", "high", "Point d'entrée Spring Boot Actuator exposé : variables d'environnement."),
+    (
+        "/actuator/env",
+        "high",
+        "Point d'entrée Spring Boot Actuator exposé : variables d'environnement.",
+    ),
     ("/server-info", "medium", "Page d'information serveur Apache exposée."),
     ("/web.config", "medium", "Fichier de configuration IIS exposé."),
     ("/.DS_Store", "low", "Fichier macOS exposé : révèle l'arborescence du site."),
@@ -102,8 +114,7 @@ class WebProbeCollector(Collector):
         max_targets = settings.http_probe_max_targets
         if len(urls) > max_targets:
             result.add_error(
-                f"{len(urls)} URLs déclarées, limité à {max_targets} "
-                "(THOT_HTTP_PROBE_MAX_TARGETS)"
+                f"{len(urls)} URLs déclarées, limité à {max_targets} (THOT_HTTP_PROBE_MAX_TARGETS)"
             )
             urls = urls[:max_targets]
 
@@ -113,7 +124,7 @@ class WebProbeCollector(Collector):
         for url in urls:
             try:
                 result.events.extend(self._probe_url(url, context))
-            except Exception as exc:  # noqa: BLE001 - un actif en erreur ne bloque pas les autres
+            except Exception as exc:
                 result.add_error(f"{url}: {exc}")
             if delay:
                 # Espacement volontaire : on n'inflige pas de charge à la cible.
@@ -193,7 +204,9 @@ class WebProbeCollector(Collector):
                     source_name=self.name,
                     source_host=host,
                     labels={"check": "no_https", "url": url, "host": host},
-                    payload={"explanation": "L'actif est déclaré en HTTP : le trafic n'est pas chiffré."},
+                    payload={
+                        "explanation": "L'actif est déclaré en HTTP : le trafic n'est pas chiffré."
+                    },
                     severity_hint="high",
                 )
             )
@@ -235,7 +248,9 @@ class WebProbeCollector(Collector):
                     source_name=self.name,
                     source_host=host,
                     labels={"check": "cookie_without_secure", "url": url, "host": host},
-                    payload={"explanation": "Un cookie de session sans attribut Secure peut fuiter en HTTP."},
+                    payload={
+                        "explanation": "Un cookie de session sans attribut Secure peut fuiter en HTTP."
+                    },
                     severity_hint="medium",
                 )
             )
@@ -261,7 +276,9 @@ class WebProbeCollector(Collector):
                     source_name=self.name,
                     source_host=host,
                     labels={"check": "cookie_without_samesite", "url": url, "host": host},
-                    payload={"explanation": "Sans SameSite, le site est exposé aux requêtes forgées (CSRF)."},
+                    payload={
+                        "explanation": "Sans SameSite, le site est exposé aux requêtes forgées (CSRF)."
+                    },
                     severity_hint="low",
                 )
             )
@@ -308,7 +325,9 @@ class WebProbeCollector(Collector):
         delay = max(0.0, context.settings.http_probe_delay_seconds)
         for path, severity, explanation in EXPOSED_PATHS:
             target = urljoin(base, path.lstrip("/"))
-            response = fetch(target, timeout=context.settings.http_probe_timeout_seconds, method="GET")
+            response = fetch(
+                target, timeout=context.settings.http_probe_timeout_seconds, method="GET"
+            )
             if delay:
                 time.sleep(delay)
             if response.status in {200, 301, 302, 401, 403} and response.status != 404:

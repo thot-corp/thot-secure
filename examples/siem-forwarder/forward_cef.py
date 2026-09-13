@@ -70,24 +70,25 @@ Codes de sortie
 """
 
 from __future__ import annotations
-import contextlib as _contextlib
-import sys as _sys
 
 import argparse
+import contextlib as _contextlib
 import hashlib
 import json
 import os
 import re
 import sys
+import sys as _sys
 import time
 from collections import deque
 from collections.abc import Iterable, Mapping, Sequence
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from urllib import error as urlerror
 from urllib import parse as urlparse
 from urllib import request as urlrequest
+
 
 # --- Sortie Unicode sûre ---------------------------------------------------------------
 # Sous Windows, une console en page de code cp1252 ne peut pas encoder « ✖ », « ✔ » ou « ─ » :
@@ -107,13 +108,13 @@ _configure_safe_output()
 
 
 __all__ = [
-    "main",
-    "RotatingFile",
-    "ForwardState",
     "Dedupe",
+    "ForwardState",
+    "RotatingFile",
     "audit_to_cef",
-    "finding_to_cef",
     "cef_escape_value",
+    "finding_to_cef",
+    "main",
 ]
 
 # --------------------------------------------------------------------------------------
@@ -178,14 +179,14 @@ def safe_url(url: str) -> str:
 
 def now_iso() -> str:
     """Horodatage courant au format du contrat §3.1 (UTC, millisecondes)."""
-    return _to_iso_utc(datetime.now(timezone.utc))
+    return _to_iso_utc(datetime.now(UTC))
 
 
 def _to_iso_utc(moment: datetime) -> str:
     """ISO 8601 UTC en millisecondes, suffixe ``Z``."""
     if moment.tzinfo is None:
-        moment = moment.replace(tzinfo=timezone.utc)
-    return moment.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+        moment = moment.replace(tzinfo=UTC)
+    return moment.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
 
 
 def parse_iso(value: str) -> datetime | None:
@@ -198,12 +199,12 @@ def parse_iso(value: str) -> datetime | None:
         parsed = datetime.fromisoformat(normalized)
     except ValueError:
         return None
-    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
 
 
 def shift_iso(value: str, seconds: float) -> str:
     """Décale un horodatage ISO de *seconds* (négatif pour reculer), borné à maintenant."""
-    moment = parse_iso(value) or datetime.now(timezone.utc)
+    moment = parse_iso(value) or datetime.now(UTC)
     return _to_iso_utc(moment + timedelta(seconds=seconds))
 
 
@@ -213,7 +214,7 @@ def log(message: str, *, level: str = "INFO") -> None:
     ``CRITICAL`` est utilisé pour l'incident majeur : une chaîne d'audit rompue doit être
     impossible à manquer dans le journal du service.
     """
-    print("[siem-forwarder] %s %s %s" % (now_iso(), level, message), file=sys.stderr, flush=True)
+    print(f"[siem-forwarder] {now_iso()} {level} {message}", file=sys.stderr, flush=True)
 
 
 # --------------------------------------------------------------------------------------
@@ -266,9 +267,11 @@ def http_request(
     l'en-tête ``X-API-Key`` et n'apparaît dans aucun message.
     """
     if params:
-        query = urlparse.urlencode({key: value for key, value in params.items() if value is not None})
+        query = urlparse.urlencode(
+            {key: value for key, value in params.items() if value is not None}
+        )
         if query:
-            url = "%s%s%s" % (url, "&" if "?" in url else "?", query)
+            url = "{}{}{}".format(url, "&" if "?" in url else "?", query)
 
     headers = {"Accept": accept, "User-Agent": USER_AGENT}
     if api_key:
@@ -281,7 +284,7 @@ def http_request(
     except urlerror.HTTPError as exc:
         return exc.code, exc.read()
     except (urlerror.URLError, OSError, ValueError) as exc:
-        raise TransportError("échec de la requête %s %s : %s" % (method, safe_url(url), exc)) from exc
+        raise TransportError(f"échec de la requête {method} {safe_url(url)} : {exc}") from exc
 
 
 def decode_json(raw: bytes) -> Any:
@@ -308,7 +311,9 @@ class RotatingFile:
     jamais un enregistrement tronqué.
     """
 
-    def __init__(self, path: str, *, max_bytes: int = DEFAULT_MAX_BYTES, backups: int = DEFAULT_BACKUPS) -> None:
+    def __init__(
+        self, path: str, *, max_bytes: int = DEFAULT_MAX_BYTES, backups: int = DEFAULT_BACKUPS
+    ) -> None:
         self.path = Path(path)
         self.max_bytes = max(1024, int(max_bytes))
         self.backups = max(1, int(backups))
@@ -332,7 +337,7 @@ class RotatingFile:
             if oldest.exists():
                 oldest.unlink()
         except OSError as exc:
-            log("rotation : suppression de %s impossible (%s)" % (oldest, exc), level="WARN")
+            log(f"rotation : suppression de {oldest} impossible ({exc})", level="WARN")
         for index in range(self.backups - 1, 0, -1):
             source = Path("%s.%d" % (self.path, index))
             target = Path("%s.%d" % (self.path, index + 1))
@@ -340,14 +345,17 @@ class RotatingFile:
                 try:
                     os.replace(source, target)
                 except OSError as exc:
-                    log("rotation : %s → %s impossible (%s)" % (source, target, exc), level="WARN")
+                    log(f"rotation : {source} → {target} impossible ({exc})", level="WARN")
         try:
             if self.path.exists():
-                os.replace(self.path, Path("%s.1" % self.path))
+                os.replace(self.path, Path(f"{self.path}.1"))
                 self.rotations += 1
-                log("rotation : %s → %s.1 (seuil %d octets)" % (self.path, self.path, self.max_bytes))
+                log(
+                    "rotation : %s → %s.1 (seuil %d octets)"
+                    % (self.path, self.path, self.max_bytes)
+                )
         except OSError as exc:
-            log("rotation impossible (%s) : écriture en ajout malgré tout" % exc, level="WARN")
+            log(f"rotation impossible ({exc}) : écriture en ajout malgré tout", level="WARN")
 
     def write_bytes(self, payload: bytes) -> int:
         """Écrit *payload* après rotation ; retourne le nombre d'octets écrits.
@@ -363,12 +371,10 @@ class RotatingFile:
             with open(self.path, "ab") as handle:
                 handle.write(payload)
                 handle.flush()
-                try:
+                with _contextlib.suppress(OSError):
                     os.fsync(handle.fileno())
-                except OSError:
-                    pass
         except OSError as exc:
-            raise OSError("écriture dans %s impossible : %s" % (self.path, exc)) from exc
+            raise OSError(f"écriture dans {self.path} impossible : {exc}") from exc
         self.bytes_written += len(payload)
         return len(payload)
 
@@ -401,7 +407,7 @@ class ForwardState:
         if not self.path:
             return
         try:
-            with open(self.path, "r", encoding="utf-8") as handle:
+            with open(self.path, encoding="utf-8") as handle:
                 document = json.load(handle)
         except (OSError, ValueError):
             return
@@ -411,8 +417,9 @@ class ForwardState:
                 if isinstance(value, str) and value:
                     self._data[key] = value
             log(
-                "état repris depuis %s (audit_since=%s, findings_since=%s)"
-                % (self.path, self._data["audit_since"], self._data["findings_since"])
+                "état repris depuis {} (audit_since={}, findings_since={})".format(
+                    self.path, self._data["audit_since"], self._data["findings_since"]
+                )
             )
 
     def get(self, key: str) -> str | None:
@@ -434,7 +441,7 @@ class ForwardState:
             "findings_since": self._data.get("findings_since"),
             "updated_at": now_iso(),
         }
-        temporary = "%s.tmp" % self.path
+        temporary = f"{self.path}.tmp"
         try:
             directory = os.path.dirname(os.path.abspath(self.path))
             if directory:
@@ -445,7 +452,10 @@ class ForwardState:
                 os.fsync(handle.fileno())
             os.replace(temporary, self.path)
         except OSError as exc:
-            log("curseur non sauvegardé (%s) : le prochain cycle rejouera la fenêtre" % exc, level="WARN")
+            log(
+                f"curseur non sauvegardé ({exc}) : le prochain cycle rejouera la fenêtre",
+                level="WARN",
+            )
 
     def snapshot(self) -> dict[str, Any]:
         """Copie des curseurs (récapitulatif, tests)."""
@@ -498,12 +508,7 @@ def cef_escape_value(value: Any) -> str:
     reste interprété comme une nouvelle clé.
     """
     text = str(value if value is not None else "")
-    return (
-        text.replace("\\", "\\\\")
-        .replace("=", "\\=")
-        .replace("\r", " ")
-        .replace("\n", "\\n")
-    )
+    return text.replace("\\", "\\\\").replace("=", "\\=").replace("\r", " ").replace("\n", "\\n")
 
 
 def cef_line(
@@ -526,20 +531,20 @@ def cef_line(
     ]
     header = "|".join(parts)
     if device_event_class_id:
-        header = "%s|%s" % (header, cef_escape_header(device_event_class_id))
+        header = f"{header}|{cef_escape_header(device_event_class_id)}"
     extension_text = " ".join(
-        "%s=%s" % (key, cef_escape_value(value))
+        f"{key}={cef_escape_value(value)}"
         for key, value in extension.items()
         if value is not None and value != ""
     )
-    return "%s|%s" % (header, extension_text)
+    return f"{header}|{extension_text}"
 
 
 def timestamp_to_cef_millis(value: Any) -> str:
     """Convertit un horodatage ISO en millisecondes epoch (clé CEF ``rt``)."""
     moment = parse_iso(str(value)) if value else None
     if moment is None:
-        moment = datetime.now(timezone.utc)
+        moment = datetime.now(UTC)
     return str(int(moment.timestamp() * 1000))
 
 
@@ -561,9 +566,10 @@ def audit_to_cef(record: Mapping[str, Any]) -> str:
         "externalId": record.get("seq"),
         "suser": record.get("actor"),
         "act": action,
-        "outcome": "success" if status_after in ("approved", "succeeded", "acked", "closed") else status_after,
-        "msg": "%s par %s (%s) sur %s %s"
-        % (
+        "outcome": "success"
+        if status_after in ("approved", "succeeded", "acked", "closed")
+        else status_after,
+        "msg": "{} par {} ({}) sur {} {}".format(
             action,
             record.get("actor") or "inconnu",
             record.get("actor_role") or "?",
@@ -598,8 +604,8 @@ def audit_to_cef(record: Mapping[str, Any]) -> str:
         extension["cs10"] = json.dumps(after, ensure_ascii=False, sort_keys=True)
 
     return cef_line(
-        signature_id="audit.%s" % action,
-        name="Audit Thot Secure — %s" % action,
+        signature_id=f"audit.{action}",
+        name=f"Audit Thot Secure — {action}",
         severity=CEF_SEVERITY["medium"] if status_after == "failed" else CEF_SEVERITY["info"],
         extension=extension,
         device_event_class_id="audit",
@@ -683,16 +689,26 @@ class SiemClient:
         #: Point d'injection pour les tests : ``transport(method, url, api_key=…, params=…, timeout=…, accept=…)``.
         self._transport = transport or http_request
 
-    def _get(self, path: str, params: Mapping[str, Any] | None = None, *, accept: str = "application/json") -> tuple[int, bytes]:
+    def _get(
+        self,
+        path: str,
+        params: Mapping[str, Any] | None = None,
+        *,
+        accept: str = "application/json",
+    ) -> tuple[int, bytes]:
         url = path if path.startswith(("http://", "https://")) else self.base_url + path
-        return self._transport("GET", url, api_key=self.api_key, params=params, timeout=self.timeout, accept=accept)
+        return self._transport(
+            "GET", url, api_key=self.api_key, params=params, timeout=self.timeout, accept=accept
+        )
 
     def _json_or_raise(self, path: str, params: Mapping[str, Any] | None = None) -> Any:
         """GET JSON ; lève :class:`ApiError` sur statut ≥ 400, :class:`TransportError` sur panne réseau."""
         status, raw = self._get(path, params)
         payload = decode_json(raw)
         if status >= 400:
-            code, message, details = error_summary(payload, raw.decode("utf-8", errors="replace")[:400])
+            code, message, details = error_summary(
+                payload, raw.decode("utf-8", errors="replace")[:400]
+            )
             raise ApiError(status, code, message, details)
         return payload
 
@@ -716,15 +732,26 @@ class SiemClient:
         """``GET /api/v1/audit/export?format=cef|jsonl`` (§4.7) → corps brut (octets)."""
         accept = "text/plain" if format == "cef" else "application/x-ndjson"
         status, raw = self._get(
-            "/api/v1/audit/export", {"format": format, "since": since, "until": until}, accept=accept
+            "/api/v1/audit/export",
+            {"format": format, "since": since, "until": until},
+            accept=accept,
         )
         if status >= 400:
             payload = decode_json(raw)
-            code, message, details = error_summary(payload, raw.decode("utf-8", errors="replace")[:400])
+            code, message, details = error_summary(
+                payload, raw.decode("utf-8", errors="replace")[:400]
+            )
             raise ApiError(status, code, message, details)
         return raw
 
-    def list_audit(self, *, since: str | None, until: str | None, limit: int = DEFAULT_PAGE_LIMIT, max_pages: int = DEFAULT_MAX_PAGES) -> list[dict[str, Any]]:
+    def list_audit(
+        self,
+        *,
+        since: str | None,
+        until: str | None,
+        limit: int = DEFAULT_PAGE_LIMIT,
+        max_pages: int = DEFAULT_MAX_PAGES,
+    ) -> list[dict[str, Any]]:
         """``GET /api/v1/audit`` paginé — utilisé seulement si l'export CEF/JSONL est indisponible."""
         return self._paginate(
             "/api/v1/audit",
@@ -746,7 +773,9 @@ class SiemClient:
             max_pages=max_pages,
         )
 
-    def _paginate(self, path: str, params: Mapping[str, Any], *, max_pages: int) -> list[dict[str, Any]]:
+    def _paginate(
+        self, path: str, params: Mapping[str, Any], *, max_pages: int
+    ) -> list[dict[str, Any]]:
         """Parcourt une route paginée en suivant ``next_cursor``."""
         items: list[dict[str, Any]] = []
         cursor: str | None = None
@@ -762,7 +791,11 @@ class SiemClient:
                 return items
             seen.add(next_cursor)
             cursor = next_cursor
-        log("limite de %d pages atteinte sur %s : résultat possiblement partiel" % (max_pages, path), level="WARN")
+        log(
+            "limite de %d pages atteinte sur %s : résultat possiblement partiel"
+            % (max_pages, path),
+            level="WARN",
+        )
         return items
 
 
@@ -771,7 +804,11 @@ def _split_page(payload: Any) -> tuple[list[dict[str, Any]], str | None]:
     if isinstance(payload, Mapping):
         items = payload.get("items")
         next_cursor = payload.get("next_cursor") or payload.get("cursor")
-        found = [dict(item) for item in items if isinstance(item, Mapping)] if isinstance(items, list) else []
+        found = (
+            [dict(item) for item in items if isinstance(item, Mapping)]
+            if isinstance(items, list)
+            else []
+        )
         return found, str(next_cursor) if next_cursor else None
     if isinstance(payload, list):
         return [dict(item) for item in payload if isinstance(item, Mapping)], None
@@ -804,9 +841,9 @@ class Forwarder:
 
     def output(self, name: str, suffix: str) -> RotatingFile:
         """Retourne (et crée à la demande) le fichier tournant d'une source."""
-        key = "%s-%s" % (name, suffix)
+        key = f"{name}-{suffix}"
         if key not in self.outputs:
-            path = Path(self.args.out_dir) / ("%s.%s" % (name, suffix))
+            path = Path(self.args.out_dir) / (f"{name}.{suffix}")
             self.outputs[key] = RotatingFile(
                 str(path), max_bytes=self.args.max_bytes, backups=self.args.backups
             )
@@ -829,7 +866,11 @@ class Forwarder:
         données dont l'intégrité n'est plus attestable.
         """
         now = time.monotonic()
-        if not force and self.args.verify_interval > 0 and now - self.last_verify_at < self.args.verify_interval:
+        if (
+            not force
+            and self.args.verify_interval > 0
+            and now - self.last_verify_at < self.args.verify_interval
+        ):
             return not self.chain_broken
         self.last_verify_at = now
 
@@ -838,16 +879,23 @@ class Forwarder:
         except ApiError as exc:
             if exc.status in (401, 403):
                 raise
-            log("vérification de chaîne impossible (%s) : poursuite, nouvelle tentative au prochain cycle" % exc, level="WARN")
+            log(
+                f"vérification de chaîne impossible ({exc}) : poursuite, nouvelle tentative au prochain cycle",
+                level="WARN",
+            )
             return not self.chain_broken
         except TransportError as exc:
-            log("vérification de chaîne injoignable (%s) : poursuite" % exc, level="WARN")
+            log(f"vérification de chaîne injoignable ({exc}) : poursuite", level="WARN")
             return not self.chain_broken
 
         self.verify_result = result
         valid = result.get("valid")
         if valid is True:
-            log("chaîne d'audit vérifiée : %s enregistrement(s) intègre(s)" % result.get("records"))
+            log(
+                "chaîne d'audit vérifiée : {} enregistrement(s) intègre(s)".format(
+                    result.get("records")
+                )
+            )
             return True
         if valid is None:
             log(
@@ -861,9 +909,8 @@ class Forwarder:
         self.chain_broken = True
         broken_at = result.get("broken_at")
         log(
-            "INCIDENT MAJEUR — CHAÎNE D'AUDIT ROMPUE à l'enregistrement %s : le journal a été "
-            "altéré ou tronqué. Transmission ARRÊTÉE. Figer les sauvegardes et ouvrir un incident."
-            % broken_at,
+            f"INCIDENT MAJEUR — CHAÎNE D'AUDIT ROMPUE à l'enregistrement {broken_at} : le journal a été "
+            "altéré ou tronqué. Transmission ARRÊTÉE. Figer les sauvegardes et ouvrir un incident.",
             level="CRITICAL",
         )
         self.write_incident(result)
@@ -889,10 +936,12 @@ class Forwarder:
         }
         try:
             marker.parent.mkdir(parents=True, exist_ok=True)
-            marker.write_text(json.dumps(document, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-            log("marqueur d'incident écrit : %s" % marker, level="CRITICAL")
+            marker.write_text(
+                json.dumps(document, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+            )
+            log(f"marqueur d'incident écrit : {marker}", level="CRITICAL")
         except OSError as exc:
-            log("marqueur d'incident non écrit (%s)" % exc, level="CRITICAL")
+            log(f"marqueur d'incident non écrit ({exc})", level="CRITICAL")
 
     # -- sources -----------------------------------------------------------------------
 
@@ -912,7 +961,10 @@ class Forwarder:
             except ApiError as exc:
                 if exc.status in (404, 405, 501):
                     # Repli explicite : l'instance n'expose pas cet export → construction locale.
-                    log("export %s indisponible (%s) : repli sur GET /api/v1/audit" % (fmt, exc), level="WARN")
+                    log(
+                        f"export {fmt} indisponible ({exc}) : repli sur GET /api/v1/audit",
+                        level="WARN",
+                    )
                     raw = self._audit_jsonl_fallback(since, until)
                 else:
                     raise
@@ -921,7 +973,7 @@ class Forwarder:
                 # déduplication ni l'écriture (le transport par défaut renvoie des octets).
                 raw = raw.encode("utf-8")
             if not raw.strip():
-                log("audit %s : aucun enregistrement sur la fenêtre (%s → %s)" % (fmt, since, until))
+                log(f"audit {fmt} : aucun enregistrement sur la fenêtre ({since} → {until})")
                 continue
 
             if fmt == "cef":
@@ -936,7 +988,10 @@ class Forwarder:
                     total += count
                     log("audit CEF : %d enregistrement(s) → %s" % (count, output.path))
                 else:
-                    log("audit CEF : %d ligne(s) déjà transmise(s) (dédupliquées)" % raw.count(b"\n"))
+                    log(
+                        "audit CEF : %d ligne(s) déjà transmise(s) (dédupliquées)"
+                        % raw.count(b"\n")
+                    )
             else:
                 payload, count = self._filter_lines(raw, source="audit")
                 if count:
@@ -950,7 +1005,9 @@ class Forwarder:
     def _audit_jsonl_fallback(self, since: str | None, until: str | None) -> bytes:
         """Construit un flux JSONL d'audit depuis ``GET /api/v1/audit`` (repli)."""
         records = self.client.list_audit(since=since, until=until)
-        return ("".join(json.dumps(record, ensure_ascii=False) + "\n" for record in records)).encode("utf-8")
+        return (
+            "".join(json.dumps(record, ensure_ascii=False) + "\n" for record in records)
+        ).encode("utf-8")
 
     def forward_findings(self, since: str | None, until: str) -> int:
         """Transfère les findings modifiés depuis *since* ; retourne le nombre d'enregistrements.
@@ -961,7 +1018,7 @@ class Forwarder:
         """
         findings = self.client.list_findings(since=since)
         if not findings:
-            log("findings : aucun finding modifié sur la fenêtre (%s → %s)" % (since, until))
+            log(f"findings : aucun finding modifié sur la fenêtre ({since} → {until})")
             return 0
 
         total = 0
@@ -969,7 +1026,7 @@ class Forwarder:
             if fmt == "cef":
                 lines = []
                 for finding in findings:
-                    key = "finding:%s:%s" % (
+                    key = "finding:{}:{}".format(
                         finding.get("finding_id"),
                         finding.get("updated_at") or finding.get("last_seen"),
                     )
@@ -986,7 +1043,7 @@ class Forwarder:
             else:
                 payload_lines = []
                 for finding in findings:
-                    key = "finding-jsonl:%s:%s" % (
+                    key = "finding-jsonl:{}:{}".format(
                         finding.get("finding_id"),
                         finding.get("updated_at") or finding.get("last_seen"),
                     )
@@ -1017,7 +1074,7 @@ class Forwarder:
             if not isinstance(record, Mapping):
                 kept.append(line)
                 continue
-            key = "%s:%s:%s" % (source, record.get("seq"), record.get("hash"))
+            key = "{}:{}:{}".format(source, record.get("seq"), record.get("hash"))
             if self.dedupe.is_new(key):
                 kept.append(json.dumps(record, ensure_ascii=False))
         if not kept:
@@ -1036,8 +1093,10 @@ class Forwarder:
             if not line.strip():
                 continue
             match = re.search(r"(?:^|\s)externalId=([^\s]+)", line)
-            identifier = match.group(1) if match else hashlib.sha256(line.encode("utf-8")).hexdigest()
-            if self.dedupe.is_new("%s:%s" % (source, identifier)):
+            identifier = (
+                match.group(1) if match else hashlib.sha256(line.encode("utf-8")).hexdigest()
+            )
+            if self.dedupe.is_new(f"{source}:{identifier}"):
                 kept.append(line)
         if not kept:
             return b"", 0
@@ -1132,15 +1191,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--url",
         default=env_first("THOT_SECURE_URL", "THOT_URL", default=DEFAULT_BASE_URL),
-        help="base de l'API (défaut : $env:THOT_SECURE_URL, sinon $env:THOT_URL, sinon %s)"
-        % DEFAULT_BASE_URL,
+        help=f"base de l'API (défaut : $env:THOT_SECURE_URL, sinon $env:THOT_URL, sinon {DEFAULT_BASE_URL})",
     )
     parser.add_argument(
         "--api-key",
         default=env_first("THOT_SECURE_API_KEY", "THOT_API_KEY"),
         help="clé ao_… portant « read:audit » et « read:findings » (défaut : $env:THOT_SECURE_API_KEY)",
     )
-    parser.add_argument("--out-dir", default=".", help="dossier des fichiers de sortie (défaut : .)")
+    parser.add_argument(
+        "--out-dir", default=".", help="dossier des fichiers de sortie (défaut : .)"
+    )
     parser.add_argument(
         "--format",
         choices=("cef", "jsonl", "both"),
@@ -1163,36 +1223,41 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=DEFAULT_OVERLAP_SECONDS,
         help="recouvrement demandé avant le curseur, pour absorber les dérives d'horloge "
-        "(défaut %s s ; les doublons sont dédupliqués localement)" % DEFAULT_OVERLAP_SECONDS,
+        f"(défaut {DEFAULT_OVERLAP_SECONDS} s ; les doublons sont dédupliqués localement)",
     )
     parser.add_argument(
         "--interval",
         type=float,
         default=DEFAULT_INTERVAL,
-        help="période entre deux cycles, en secondes (défaut %s)" % DEFAULT_INTERVAL,
+        help=f"période entre deux cycles, en secondes (défaut {DEFAULT_INTERVAL})",
     )
     parser.add_argument(
         "--verify-interval",
         type=float,
         default=DEFAULT_VERIFY_INTERVAL,
-        help="période de vérification de la chaîne d'audit, en secondes (défaut %s ; 0 = à chaque "
-        "cycle)" % DEFAULT_VERIFY_INTERVAL,
+        help=f"période de vérification de la chaîne d'audit, en secondes (défaut {DEFAULT_VERIFY_INTERVAL} ; 0 = à chaque "
+        "cycle)",
     )
     parser.add_argument(
         "--max-bytes",
         type=int,
         default=DEFAULT_MAX_BYTES,
-        help="taille maximale d'un fichier avant rotation, en octets (défaut %s)" % DEFAULT_MAX_BYTES,
+        help=f"taille maximale d'un fichier avant rotation, en octets (défaut {DEFAULT_MAX_BYTES})",
     )
     parser.add_argument(
-        "--backups", type=int, default=DEFAULT_BACKUPS, help="nombre de fichiers conservés (défaut %s)" % DEFAULT_BACKUPS
+        "--backups",
+        type=int,
+        default=DEFAULT_BACKUPS,
+        help=f"nombre de fichiers conservés (défaut {DEFAULT_BACKUPS})",
     )
     parser.add_argument(
         "--state-file",
         default=DEFAULT_STATE_FILE,
-        help="fichier d'état des curseurs (défaut %s)" % DEFAULT_STATE_FILE,
+        help=f"fichier d'état des curseurs (défaut {DEFAULT_STATE_FILE})",
     )
-    parser.add_argument("--no-state", action="store_true", help="ne rien persister (tests, transfert jetable)")
+    parser.add_argument(
+        "--no-state", action="store_true", help="ne rien persister (tests, transfert jetable)"
+    )
     parser.add_argument(
         "--from-start",
         action="store_true",
@@ -1202,7 +1267,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--dedupe-size",
         type=int,
         default=DEFAULT_DEDUPE_SIZE,
-        help="nombre d'enregistrements mémorisés pour la déduplication (défaut %s)" % DEFAULT_DEDUPE_SIZE,
+        help=f"nombre d'enregistrements mémorisés pour la déduplication (défaut {DEFAULT_DEDUPE_SIZE})",
     )
     parser.add_argument("--once", action="store_true", help="exécuter un seul cycle puis sortir")
     parser.add_argument(
@@ -1213,8 +1278,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--timeout",
         type=float,
-        default=float(env_first("THOT_SECURE_TIMEOUT", "THOT_TIMEOUT", default=str(DEFAULT_TIMEOUT))),
-        help="délai d'attente par requête, en secondes (défaut %s)" % DEFAULT_TIMEOUT,
+        default=float(
+            env_first("THOT_SECURE_TIMEOUT", "THOT_TIMEOUT", default=str(DEFAULT_TIMEOUT))
+        ),
+        help=f"délai d'attente par requête, en secondes (défaut {DEFAULT_TIMEOUT})",
     )
     parser.add_argument("-v", "--verbose", action="store_true", help="journalise les détails")
     parser.add_argument("--version", action="version", version="thotsecure-siem-forwarder 0.1.0")
@@ -1226,7 +1293,9 @@ def parse_sources(value: str) -> list[str]:
     items = [item.strip().lower() for item in value.split(",") if item.strip()]
     unknown = [item for item in items if item not in ("audit", "findings")]
     if unknown:
-        raise ValueError("source(s) inconnue(s) : %s (attendu : audit, findings)" % ", ".join(unknown))
+        raise ValueError(
+            "source(s) inconnue(s) : {} (attendu : audit, findings)".format(", ".join(unknown))
+        )
     if not items:
         raise ValueError("--sources est vide : indiquez audit, findings, ou les deux")
     return items
@@ -1275,7 +1344,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         Path(args.out_dir).mkdir(parents=True, exist_ok=True)
     except OSError as exc:
-        log("dossier de sortie %s inutilisable : %s" % (args.out_dir, exc), level="ERROR")
+        log(f"dossier de sortie {args.out_dir} inutilisable : {exc}", level="ERROR")
         return 2
 
     client = SiemClient(args.url, args.api_key, timeout=args.timeout)

@@ -28,8 +28,9 @@ import ssl
 import struct
 import time
 import warnings
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, Iterator, List, Mapping, Optional, Sequence
+from typing import Any, Self
 from urllib.parse import urlencode, urlsplit, urlunsplit
 
 from .errors import AuthenticationError, PermissionDeniedError, WebSocketError, redact_url
@@ -37,15 +38,15 @@ from .errors import AuthenticationError, PermissionDeniedError, WebSocketError, 
 logger = logging.getLogger("thotsecure_sdk.ws")
 
 __all__ = [
+    "FRAME_TYPES",
+    "WS_PATH",
     "Frame",
     "WebSocketClient",
     "WebSocketConnection",
-    "build_ws_url",
     "accept_key",
+    "build_ws_url",
     "encode_frame",
     "read_frame",
-    "WS_PATH",
-    "FRAME_TYPES",
 ]
 
 #: Chemin du flux temps réel (contrat §4.8).
@@ -82,7 +83,7 @@ class Frame:
 
     type: str
     data: Any = None
-    raw: Dict[str, Any] = field(default_factory=dict)
+    raw: dict[str, Any] = field(default_factory=dict)
     received_at: float = field(default_factory=time.time)
 
     def __getitem__(self, key: str) -> Any:
@@ -98,7 +99,9 @@ class Frame:
         return self.raw.get(key, default)
 
     def __repr__(self) -> str:  # pragma: no cover - confort de débogage
-        return "Frame(type=%r, data=%s)" % (self.type, json.dumps(self.data, ensure_ascii=False, default=str)[:120])
+        return (
+            f"Frame(type={self.type!r}, data={json.dumps(self.data, ensure_ascii=False, default=str)[:120]})"
+        )
 
 
 # --------------------------------------------------------------------------------------
@@ -114,8 +117,8 @@ def accept_key(sec_websocket_key: str) -> str:
 
 def build_ws_url(
     base_url: str,
-    api_key: Optional[str] = None,
-    tenant_id: Optional[str] = None,
+    api_key: str | None = None,
+    tenant_id: str | None = None,
     *,
     path: str = WS_PATH,
 ) -> str:
@@ -135,11 +138,11 @@ def build_ws_url(
     elif parts.scheme in ("https", "wss"):
         scheme = "wss"
     else:
-        raise ValueError("build_ws_url : schéma non supporté %r" % parts.scheme)
+        raise ValueError(f"build_ws_url : schéma non supporté {parts.scheme!r}")
 
     prefix = parts.path.rstrip("/")
     full_path = prefix + path
-    query: Dict[str, str] = {}
+    query: dict[str, str] = {}
     if api_key:
         query["api_key"] = api_key
     if tenant_id:
@@ -153,7 +156,7 @@ def encode_frame(
     *,
     fin: bool = True,
     mask: bool = True,
-    mask_key: Optional[bytes] = None,
+    mask_key: bytes | None = None,
 ) -> bytes:
     """Encode une trame RFC 6455. Un client **doit** masquer ses trames (``mask=True``)."""
     if isinstance(payload, str):
@@ -267,8 +270,8 @@ class WebSocketConnection:
         *,
         timeout: float = 30.0,
         verify_tls: bool = True,
-        extra_headers: Optional[Mapping[str, str]] = None,
-        socket_factory: Optional[Callable[..., Any]] = None,
+        extra_headers: Mapping[str, str] | None = None,
+        socket_factory: Callable[..., Any] | None = None,
         max_payload: int = MAX_FRAME_BYTES,
     ) -> None:
         self.url = url
@@ -277,8 +280,8 @@ class WebSocketConnection:
         self.extra_headers = dict(extra_headers or {})
         self.max_payload = max_payload
         self._socket_factory = socket_factory or socket.create_connection
-        self._sock: Optional[Any] = None
-        self._reader: Optional[_SocketReader] = None
+        self._sock: Any | None = None
+        self._reader: _SocketReader | None = None
 
     # ------------------------------------------------------------------ connexion
 
@@ -295,7 +298,7 @@ class WebSocketConnection:
             sock = self._socket_factory((host, port), self.timeout)
         except OSError as exc:
             raise WebSocketError(
-                "connexion WebSocket impossible vers %s:%s : %s" % (host, port, exc), url=self.url
+                f"connexion WebSocket impossible vers {host}:{port} : {exc}", url=self.url
             ) from exc
 
         if secure:
@@ -306,12 +309,12 @@ class WebSocketConnection:
                     RuntimeWarning,
                     stacklevel=2,
                 )
-                context = ssl._create_unverified_context()  # noqa: SLF001
+                context = ssl._create_unverified_context()
             try:
                 sock = context.wrap_socket(sock, server_hostname=host)
             except (ssl.SSLError, OSError) as exc:
                 sock.close()
-                raise WebSocketError("échec TLS : %s" % exc, url=self.url) from exc
+                raise WebSocketError(f"échec TLS : {exc}", url=self.url) from exc
 
         sock.settimeout(self.timeout)
         self._sock = sock
@@ -327,27 +330,27 @@ class WebSocketConnection:
         host_header = host if port == default_port else "%s:%d" % (host, port)
 
         lines = [
-            "GET %s HTTP/1.1" % path,
-            "Host: %s" % host_header,
+            f"GET {path} HTTP/1.1",
+            f"Host: {host_header}",
             "Upgrade: websocket",
             "Connection: Upgrade",
-            "Sec-WebSocket-Key: %s" % key,
+            f"Sec-WebSocket-Key: {key}",
             "Sec-WebSocket-Version: 13",
             "User-Agent: thotsecure-sdk-python/0.1.0",
         ]
         for name, value in self.extra_headers.items():
-            lines.append("%s: %s" % (name, value))
+            lines.append(f"{name}: {value}")
         request = ("\r\n".join(lines) + "\r\n\r\n").encode("ascii")
 
         try:
             self._sock.sendall(request)
             raw_response = self._reader.read_until(b"\r\n\r\n")
         except OSError as exc:
-            raise WebSocketError("handshake WebSocket interrompu : %s" % exc, url=self.url) from exc
+            raise WebSocketError(f"handshake WebSocket interrompu : {exc}", url=self.url) from exc
 
         status, headers = self._parse_handshake(raw_response)
         if status != 101:
-            message = "handshake WebSocket refusé (HTTP %s)" % status
+            message = f"handshake WebSocket refusé (HTTP {status})"
             if status == 401:
                 raise AuthenticationError(message, url=self.url)
             if status == 403:
@@ -376,7 +379,7 @@ class WebSocketConnection:
             status = int(pieces[1])
         except (IndexError, ValueError) as exc:
             raise WebSocketError("réponse de handshake illisible") from exc
-        headers: Dict[str, str] = {}
+        headers: dict[str, str] = {}
         for line in lines[1:]:
             if not line or ":" not in line:
                 continue
@@ -418,9 +421,9 @@ class WebSocketConnection:
         try:
             self._sock.sendall(encode_frame(opcode, payload, mask=True))
         except OSError as exc:
-            raise WebSocketError("envoi de trame impossible : %s" % exc, url=self.url) from exc
+            raise WebSocketError(f"envoi de trame impossible : {exc}", url=self.url) from exc
 
-    def read_message(self, *, timeout: Optional[float] = None) -> tuple:
+    def read_message(self, *, timeout: float | None = None) -> tuple:
         """Lit un message complet (assemblage des fragments).
 
         Les ``ping`` reçus sont acquittés automatiquement (``pong``), les ``pong`` sont ignorés.
@@ -433,7 +436,7 @@ class WebSocketConnection:
             self._sock.settimeout(timeout)
 
         buffer = bytearray()
-        message_opcode: Optional[int] = None
+        message_opcode: int | None = None
         while True:
             fin, opcode, payload = read_frame(self._reader.read_exact, max_payload=self.max_payload)
 
@@ -474,7 +477,7 @@ class WebSocketConnection:
             self._sock = None
             self._reader = None
 
-    def __enter__(self) -> "WebSocketConnection":
+    def __enter__(self) -> Self:
         self.connect()
         return self
 
@@ -499,11 +502,11 @@ class WebSocketClient:
 
     def __init__(
         self,
-        base_url: Optional[str] = None,
-        api_key: Optional[str] = None,
-        tenant_id: Optional[str] = None,
+        base_url: str | None = None,
+        api_key: str | None = None,
+        tenant_id: str | None = None,
         *,
-        url: Optional[str] = None,
+        url: str | None = None,
         timeout: float = 30.0,
         connect_timeout: float = 10.0,
         verify_tls: bool = True,
@@ -513,7 +516,7 @@ class WebSocketClient:
         backoff_max: float = 30.0,
         heartbeat_seconds: float = 30.0,
         dead_connection_factor: float = 3.0,
-        socket_factory: Optional[Callable[..., Any]] = None,
+        socket_factory: Callable[..., Any] | None = None,
         sleep: Callable[[float], None] = time.sleep,
         rand: Callable[[], float] = random.random,
     ) -> None:
@@ -544,7 +547,7 @@ class WebSocketClient:
         self._socket_factory = socket_factory
         self._sleep = sleep
         self._rand = rand
-        self._connection: Optional[WebSocketConnection] = None
+        self._connection: WebSocketConnection | None = None
         #: Nombre de reconnexions effectuées depuis la création du client.
         self.reconnect_count = 0
 
@@ -569,7 +572,7 @@ class WebSocketClient:
             self._connection.close()
             self._connection = None
 
-    def __enter__(self) -> "WebSocketClient":
+    def __enter__(self) -> Self:
         self.connect()
         return self
 
@@ -577,20 +580,20 @@ class WebSocketClient:
         self.close()
 
     def __repr__(self) -> str:  # pragma: no cover - jamais de clé dans le repr
-        return "WebSocketClient(url=%r, reconnect=%s)" % (redact_url(self.url), self.reconnect)
+        return f"WebSocketClient(url={redact_url(self.url)!r}, reconnect={self.reconnect})"
 
     # ------------------------------------------------------------------ flux
 
     def _delay(self, attempt: int) -> float:
-        raw = min(self.backoff_max, self.backoff_base * (2 ** attempt))
+        raw = min(self.backoff_max, self.backoff_base * (2**attempt))
         return raw * (0.5 + 0.5 * self._rand())
 
     def stream(
         self,
         *,
-        types: Optional[Sequence[str]] = None,
+        types: Sequence[str] | None = None,
         include_heartbeat: bool = False,
-        max_messages: Optional[int] = None,
+        max_messages: int | None = None,
     ) -> Iterator[Frame]:
         """Itère sur les frames du flux, en se reconnectant si nécessaire.
 
@@ -630,7 +633,7 @@ class WebSocketClient:
                 continue
             except OSError as exc:
                 if not self.reconnect or attempts >= self.max_reconnect_attempts:
-                    raise WebSocketError("flux WebSocket interrompu : %s" % exc, url=self.url) from exc
+                    raise WebSocketError(f"flux WebSocket interrompu : {exc}", url=self.url) from exc
                 delay = self._delay(attempts)
                 attempts += 1
                 self.reconnect_count += 1
@@ -649,19 +652,19 @@ class WebSocketClient:
             if max_messages is not None and delivered >= max_messages:
                 return
 
-    def _next_frame(self) -> Optional[Frame]:
+    def _next_frame(self) -> Frame | None:
         """Lit le prochain message en gérant le heartbeat (retourne ``None`` après un ping)."""
         connection = self._connection
         if connection is None:
             raise WebSocketError("WebSocket non connecté", url=self.url)
         try:
             kind, payload = connection.read_message(timeout=self.heartbeat_seconds)
-        except socket.timeout:
+        except TimeoutError:
             # Aucun trafic pendant l'intervalle : on vérifie que la connexion vit toujours.
             connection.send_ping()
             return None
         except ssl.SSLError as exc:
-            raise WebSocketError("erreur TLS sur le flux : %s" % exc, url=self.url) from exc
+            raise WebSocketError(f"erreur TLS sur le flux : {exc}", url=self.url) from exc
 
         if kind == "close":
             raise WebSocketError("flux fermé par le serveur", url=self.url)

@@ -82,30 +82,68 @@ def canonical(obj: Any) -> str:
     return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
 
-def record_hash(seq: int, ts: str, tenant_id: str, actor: str, actor_role: str,
-                action: str, target: Any, before: Any, after: Any,
-                prev_hash: str) -> str:
-    material = "|".join([
-        str(seq), ts, tenant_id, actor, actor_role, action,
-        canonical(target), canonical(before), canonical(after), prev_hash,
-    ])
+def record_hash(
+    seq: int,
+    ts: str,
+    tenant_id: str,
+    actor: str,
+    actor_role: str,
+    action: str,
+    target: Any,
+    before: Any,
+    after: Any,
+    prev_hash: str,
+) -> str:
+    material = "|".join(
+        [
+            str(seq),
+            ts,
+            tenant_id,
+            actor,
+            actor_role,
+            action,
+            canonical(target),
+            canonical(before),
+            canonical(after),
+            prev_hash,
+        ]
+    )
     return "sha256:" + hashlib.sha256(material.encode("utf-8")).hexdigest()
 
 
-def append(conn: sqlite3.Connection, *, ts: str, tenant_id: str, actor: str,
-           actor_role: str, action: str, target: Any, before: Any,
-           after: Any) -> tuple[int, str]:
+def append(
+    conn: sqlite3.Connection,
+    *,
+    ts: str,
+    tenant_id: str,
+    actor: str,
+    actor_role: str,
+    action: str,
+    target: Any,
+    before: Any,
+    after: Any,
+) -> tuple[int, str]:
     row = conn.execute("SELECT seq, hash FROM audit ORDER BY seq DESC LIMIT 1").fetchone()
     seq = 1 if row is None else row[0] + 1
     prev_hash = GENESIS if row is None else row[1]
-    h = record_hash(seq, ts, tenant_id, actor, actor_role, action,
-                    target, before, after, prev_hash)
+    h = record_hash(seq, ts, tenant_id, actor, actor_role, action, target, before, after, prev_hash)
     conn.execute(
         "INSERT INTO audit (seq, ts, tenant_id, actor, actor_role, action,"
         " target, before, after, prev_hash, hash)"
         " VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-        (seq, ts, tenant_id, actor, actor_role, action,
-         canonical(target), canonical(before), canonical(after), prev_hash, h),
+        (
+            seq,
+            ts,
+            tenant_id,
+            actor,
+            actor_role,
+            action,
+            canonical(target),
+            canonical(before),
+            canonical(after),
+            prev_hash,
+            h,
+        ),
     )
     conn.commit()
     return seq, h
@@ -115,17 +153,37 @@ def verify(conn: sqlite3.Connection) -> dict:
     """Renvoie l'équivalent de GET /api/v1/audit/verify."""
     prev_hash = GENESIS
     records = 0
-    for (seq, ts, tenant_id, actor, actor_role, action,
-         target, before, after, stored) in conn.execute(
-            "SELECT seq, ts, tenant_id, actor, actor_role, action,"
-            " target, before, after, hash FROM audit ORDER BY seq"):
+    for (
+        seq,
+        ts,
+        tenant_id,
+        actor,
+        actor_role,
+        action,
+        target,
+        before,
+        after,
+        stored,
+    ) in conn.execute(
+        "SELECT seq, ts, tenant_id, actor, actor_role, action,"
+        " target, before, after, hash FROM audit ORDER BY seq"
+    ):
         records += 1
-        if seq != records:                      # trou de séquence : suppression
+        if seq != records:  # trou de séquence : suppression
             return {"valid": False, "records": records, "broken_at": seq}
-        expected = record_hash(seq, ts, tenant_id, actor, actor_role, action,
-                               json.loads(target), json.loads(before),
-                               json.loads(after), prev_hash)
-        if expected != stored:                  # contenu modifié
+        expected = record_hash(
+            seq,
+            ts,
+            tenant_id,
+            actor,
+            actor_role,
+            action,
+            json.loads(target),
+            json.loads(before),
+            json.loads(after),
+            prev_hash,
+        )
+        if expected != stored:  # contenu modifié
             return {"valid": False, "records": records, "broken_at": seq}
         prev_hash = stored
     return {"valid": True, "records": records, "broken_at": None}
@@ -146,8 +204,7 @@ Le code de sortie CLI `3` est réservé aux vérifications négatives : une supe
 **Cas 1 — modification brutale.** Un opérateur veut effacer la trace d'un rejet et modifie directement la base :
 
 ```python
-conn.execute("UPDATE audit SET after = ? WHERE seq = 3",
-             (canonical({"status": "approved"}),))
+conn.execute("UPDATE audit SET after = ? WHERE seq = 3", (canonical({"status": "approved"}),))
 conn.commit()
 print(verify(conn))
 # {'valid': False, 'records': 3, 'broken_at': 3}
@@ -156,10 +213,21 @@ print(verify(conn))
 **Cas 2 — l'attaquant soigneux.** Il recalcule l'empreinte de l'enregistrement modifié ; la chaîne casse alors au suivant, car le `prev_hash` de l'enregistrement 4 ne correspond plus :
 
 ```python
-h3 = record_hash(3, ts3, "acme", "api-key:ops", "responder", "action.reject",
-                 target3, before3, {"status": "approved"}, prev_hash3)
-conn.execute("UPDATE audit SET after=?, hash=? WHERE seq=3",
-             (canonical({"status": "approved"}), h3))
+h3 = record_hash(
+    3,
+    ts3,
+    "acme",
+    "api-key:ops",
+    "responder",
+    "action.reject",
+    target3,
+    before3,
+    {"status": "approved"},
+    prev_hash3,
+)
+conn.execute(
+    "UPDATE audit SET after=?, hash=? WHERE seq=3", (canonical({"status": "approved"}), h3)
+)
 conn.commit()
 print(verify(conn))
 # {'valid': False, 'records': 4, 'broken_at': 4}

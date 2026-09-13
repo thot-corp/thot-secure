@@ -91,7 +91,9 @@ class ShippedRulesTest(unittest.TestCase):
                     f"règle {rule.id}: seuil sans regroupement (il matcherait globalement)",
                 )
                 for field_name in rule.match.threshold.group_by:
-                    self.assertTrue(field_name.startswith("labels."), f"règle {rule.id}: {field_name}")
+                    self.assertTrue(
+                        field_name.startswith("labels."), f"règle {rule.id}: {field_name}"
+                    )
 
     def test_every_rule_has_false_positive_documentation_when_matching_patterns(self) -> None:
         """Une règle peut être peu précise, mais elle doit alors l'assumer par écrit."""
@@ -153,7 +155,9 @@ class ShippedPoliciesTest(unittest.TestCase):
         for policy in self.policies:
             if policy.then.decision == "auto":
                 self.assertTrue(policy.when, f"politique {policy.id}: 'auto' sans condition")
-                self.assertTrue(policy.description.strip(), f"politique {policy.id}: non documentée")
+                self.assertTrue(
+                    policy.description.strip(), f"politique {policy.id}: non documentée"
+                )
 
     def test_bounded_volumes(self) -> None:
         for policy in self.policies:
@@ -216,7 +220,9 @@ class ShippedPlaybooksTest(unittest.TestCase):
     def test_parameters_are_typed(self) -> None:
         for name, playbook in self.playbooks.items():
             for param_name, spec in playbook.params.items():
-                self.assertTrue(spec.description, f"{name}.{param_name}: paramètre sans description")
+                self.assertTrue(
+                    spec.description, f"{name}.{param_name}: paramètre sans description"
+                )
                 self.assertTrue(
                     spec.type,
                     f"{name}.{param_name}: paramètre sans type",
@@ -236,7 +242,9 @@ class ConfigExamplesTest(unittest.TestCase):
 
         document = yaml.safe_load(connectors.read_text(encoding="utf-8"))
         drivers = {
-            body.get("driver") for body in (document.get("connectors") or {}).values() if isinstance(body, dict)
+            body.get("driver")
+            for body in (document.get("connectors") or {}).values()
+            if isinstance(body, dict)
         }
         # L'exemple livré ne doit activer aucun connecteur réel par défaut : les pilotes
         # réels sont uniquement proposés en commentaire.

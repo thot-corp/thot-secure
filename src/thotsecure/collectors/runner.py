@@ -24,7 +24,7 @@ from ..core.util import iso_z, new_id, parse_dt, utcnow
 from ..pipeline import Pipeline
 from ..scope import TargetRegistry
 from ..storage import StoreProtocol
-from .base import Collector, CollectorContext, CollectorResult
+from .base import CollectorContext, CollectorResult
 from .registry import CollectorRegistry
 
 log = get_logger("collectors.runner")
@@ -75,7 +75,9 @@ class CollectorRunner:
         scope = self.targets.for_tenant(tenant_id)
         allowed, reason = collector.enabled(self.settings, scope)
         if not allowed:
-            result = CollectorResult(collector=collector.name, status="skipped", detail={"reason": reason})
+            result = CollectorResult(
+                collector=collector.name, status="skipped", detail={"reason": reason}
+            )
             self._record_run(tenant_id, collector.name, result)
             return result
 
@@ -99,7 +101,7 @@ class CollectorRunner:
         log.info("collecte démarrée", extra={"collector": collector.name, "tenant_id": tenant_id})
         try:
             result = collector.collect(context)
-        except Exception as exc:  # noqa: BLE001 - un collecteur ne doit jamais faire tomber le service
+        except Exception as exc:
             result = CollectorResult(collector=collector.name, status="error")
             result.add_error(f"{type(exc).__name__}: {exc}")
             log.error(
@@ -134,7 +136,9 @@ class CollectorRunner:
                 )
         return result
 
-    def run_all(self, tenant_id: str, *, actor: str = "system:scheduler") -> dict[str, CollectorResult]:
+    def run_all(
+        self, tenant_id: str, *, actor: str = "system:scheduler"
+    ) -> dict[str, CollectorResult]:
         """Exécute tous les collecteurs activés pour un tenant."""
         results: dict[str, CollectorResult] = {}
         for collector in self.registry.all():
@@ -202,8 +206,10 @@ class CollectorRunner:
             try:
                 # L'exécution est synchrone (urllib, fichiers) : on la sort de la boucle
                 # d'événements pour ne pas bloquer le service HTTP.
-                await asyncio.to_thread(self.run, collector_name, tenant_id, actor="system:scheduler")
-            except Exception as exc:  # noqa: BLE001
+                await asyncio.to_thread(
+                    self.run, collector_name, tenant_id, actor="system:scheduler"
+                )
+            except Exception as exc:
                 log.error(
                     "collecte planifiée en échec",
                     extra={"tenant_id": tenant_id, "collector": collector_name, "error": str(exc)},
@@ -222,7 +228,9 @@ class CollectorRunner:
             tenant = self.store.get_tenant(tenant_ids[0])
             if tenant is None:
                 continue
-            allowed, reason = collector.enabled(self.settings, self.targets.for_tenant(tenant.tenant_id))
+            allowed, reason = collector.enabled(
+                self.settings, self.targets.for_tenant(tenant.tenant_id)
+            )
             if not allowed:
                 log.info(
                     "collecteur en écoute non démarré",
@@ -303,7 +311,9 @@ class CollectorRunner:
         return {
             "collectors": len(self.registry),
             "names": self.registry.names(),
-            "streamers": [collector.name for collector in self.registry.all() if hasattr(collector, "serve")],
+            "streamers": [
+                collector.name for collector in self.registry.all() if hasattr(collector, "serve")
+            ],
         }
 
     # ----------------------------------------------------------------------------------
@@ -342,7 +352,7 @@ class CollectorRunner:
                 },
                 context={"detail": result.detail},
             )
-        except Exception as exc:  # noqa: BLE001 - la trace ne doit pas casser la collecte
+        except Exception as exc:
             log.error("enregistrement de collecte impossible", extra={"error": str(exc)})
 
 

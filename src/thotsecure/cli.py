@@ -33,7 +33,7 @@ from . import (
     __version__,
 )
 from .core.config import Settings, get_settings, set_settings
-from .core.errors import ThotSecureError, NotFoundError, ValidationError
+from .core.errors import NotFoundError, ThotSecureError, ValidationError
 from .core.logging_setup import get_logger
 from .core.models import Event, EventSource, Finding, Tenant
 from .core.util import iso_z
@@ -103,7 +103,9 @@ def _supports(stream: Any, sample: str) -> bool:
 class Output:
     """Sortie unifiée : texte lisible ou JSON, jamais les deux."""
 
-    def __init__(self, *, as_json: bool = False, quiet: bool = False, color: bool | None = None) -> None:
+    def __init__(
+        self, *, as_json: bool = False, quiet: bool = False, color: bool | None = None
+    ) -> None:
         self.as_json = as_json
         self.quiet = quiet
         self.color = sys.stdout.isatty() if color is None else color
@@ -203,7 +205,9 @@ def build_parser() -> argparse.ArgumentParser:
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("--version", action="version", version=f"Thot Secure {__version__} ({__license__})")
+    parser.add_argument(
+        "--version", action="version", version=f"Thot Secure {__version__} ({__license__})"
+    )
     parser.add_argument("--json", action="store_true", help="sortie JSON (pour l'automatisation)")
     parser.add_argument("--quiet", "-q", action="store_true", help="sortie minimale")
     parser.add_argument("--no-color", action="store_true", help="désactiver la couleur")
@@ -219,7 +223,9 @@ def build_parser() -> argparse.ArgumentParser:
     serve = sub.add_parser("serve", help="démarrer le service (API + console)")
     serve.add_argument("--host", default=None)
     serve.add_argument("--port", type=int, default=None)
-    serve.add_argument("--reload", action="store_true", help="rechargement automatique (développement)")
+    serve.add_argument(
+        "--reload", action="store_true", help="rechargement automatique (développement)"
+    )
     serve.add_argument("--log-level", default=None)
 
     # -- init-db / doctor --------------------------------------------------------------
@@ -256,9 +262,13 @@ def build_parser() -> argparse.ArgumentParser:
     key_sub = key.add_subparsers(dest="key_command", metavar="SOUS-COMMANDE")
     key_create = key_sub.add_parser("create", help="créer une clé API")
     key_create.add_argument("--tenant", required=True)
-    key_create.add_argument("--role", choices=["viewer", "analyst", "responder", "admin"], default="viewer")
+    key_create.add_argument(
+        "--role", choices=["viewer", "analyst", "responder", "admin"], default="viewer"
+    )
     key_create.add_argument("--label", default="")
-    key_sub.add_parser("list", help="lister les clés (sans secret)").add_argument("--tenant", required=True)
+    key_sub.add_parser("list", help="lister les clés (sans secret)").add_argument(
+        "--tenant", required=True
+    )
     key_revoke = key_sub.add_parser("revoke", help="révoquer une clé")
     key_revoke.add_argument("--key-id", required=True)
 
@@ -372,7 +382,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     collect = sub.add_parser("collect", help="collecteurs")
     collect_sub = collect.add_subparsers(dest="collect_command", metavar="SOUS-COMMANDE")
-    collect_sub.add_parser("list", help="état des collecteurs").add_argument("--tenant", required=True)
+    collect_sub.add_parser("list", help="état des collecteurs").add_argument(
+        "--tenant", required=True
+    )
     collect_run = collect_sub.add_parser("run", help="exécuter un collecteur")
     collect_run.add_argument("collector")
     collect_run.add_argument("--tenant", required=True)
@@ -381,7 +393,9 @@ def build_parser() -> argparse.ArgumentParser:
     # -- demo --------------------------------------------------------------------------
     demo = sub.add_parser("demo", help="créer un jeu de démonstration (findings + action)")
     demo.add_argument("--tenant", default="demo")
-    demo.add_argument("--scenario", choices=["web-attack", "supply-chain", "hardening"], default="web-attack")
+    demo.add_argument(
+        "--scenario", choices=["web-attack", "supply-chain", "hardening"], default="web-attack"
+    )
 
     return parser
 
@@ -520,7 +534,9 @@ def _cmd_funding(out: Output) -> int:
             "",
             f"  {FUNDING_DISCLAIMER}",
             "",
-            textwrap.fill(FUNDING_ANTISCAM, width=WIDTH, initial_indent="  ", subsequent_indent="  "),
+            textwrap.fill(
+                FUNDING_ANTISCAM, width=WIDTH, initial_indent="  ", subsequent_indent="  "
+            ),
             "",
             "  Source officielle : dépôt Git et site du projet. Page complète : /ui/support",
         ]
@@ -562,7 +578,12 @@ def _cmd_doctor(args: argparse.Namespace, service: Service, out: Output) -> int:
         if not ok and critical:
             critical_failures += 1
 
-    add("python", sys.version_info >= (3, 11), f"Python {sys.version.split()[0]} (≥ 3.11 requis)", critical=True)
+    add(
+        "python",
+        sys.version_info >= (3, 11),
+        f"Python {sys.version.split()[0]} (≥ 3.11 requis)",
+        critical=True,
+    )
     add("base de données", service.store.health(), store_location(service.store), critical=True)
     # Le contrôle « fichier présent » n'a de sens qu'en SQLite : sur PostgreSQL, la base est
     # distante et `settings.db_path` lève une erreur. On décrit donc ce que l'on sait vraiment.
@@ -577,10 +598,27 @@ def _cmd_doctor(args: argparse.Namespace, service: Service, out: Output) -> int:
         )
 
     rules = len(service.rules)
-    add("règles de détection", rules > 0, f"{rules} règle(s) chargée(s), {len(service.rule_diagnostics)} rejetée(s)", critical=rules == 0)
-    add("politiques", len(service.policies) > 0, f"{len(service.policies)} politique(s), {len(service.policy_diagnostics)} rejetée(s)")
-    add("playbooks", len(service.playbooks) > 0, f"{len(service.playbooks)} playbook(s), {len(service.playbook_diagnostics)} rejetée(s)")
-    add("périmètre déclaré", bool(service.targets.tenants()), f"{len(service.targets.tenants())} tenant(s) déclaré(s) dans {settings.targets_path}")
+    add(
+        "règles de détection",
+        rules > 0,
+        f"{rules} règle(s) chargée(s), {len(service.rule_diagnostics)} rejetée(s)",
+        critical=rules == 0,
+    )
+    add(
+        "politiques",
+        len(service.policies) > 0,
+        f"{len(service.policies)} politique(s), {len(service.policy_diagnostics)} rejetée(s)",
+    )
+    add(
+        "playbooks",
+        len(service.playbooks) > 0,
+        f"{len(service.playbooks)} playbook(s), {len(service.playbook_diagnostics)} rejetée(s)",
+    )
+    add(
+        "périmètre déclaré",
+        bool(service.targets.tenants()),
+        f"{len(service.targets.tenants())} tenant(s) déclaré(s) dans {settings.targets_path}",
+    )
 
     reversible = sum(1 for playbook in service.playbooks.values() if playbook.reversible)
     add(
@@ -595,18 +633,47 @@ def _cmd_doctor(args: argparse.Namespace, service: Service, out: Output) -> int:
     )
 
     verdict = service.audit.verify()
-    add("intégrité de l'audit", verdict.valid, verdict.reason or f"{verdict.records} enregistrement(s)", critical=not verdict.valid)
-    add("mode simulation", settings.dry_run, "actif (sûr par défaut)" if settings.dry_run else "DÉSACTIVÉ : les actions auront un effet réel")
+    add(
+        "intégrité de l'audit",
+        verdict.valid,
+        verdict.reason or f"{verdict.records} enregistrement(s)",
+        critical=not verdict.valid,
+    )
+    add(
+        "mode simulation",
+        settings.dry_run,
+        "actif (sûr par défaut)"
+        if settings.dry_run
+        else "DÉSACTIVÉ : les actions auront un effet réel",
+    )
     add("autonomie", True, f"globale : {settings.autonomy}")
     add(
         "connecteurs réels",
         not service.connectors.stats().get("simulated_only", True),
         "tous les connecteurs sont en simulation (aucun effet réel possible)",
     )
-    add("clé de signature", not settings.secret_key_is_ephemeral, "THOT_SECRET_KEY définie" if not settings.secret_key_is_ephemeral else "éphémère : les sessions et clés API seront invalidées au redémarrage")
-    add("clé d'amorçage", not settings.bootstrap_key_is_dev, "THOT_BOOTSTRAP_API_KEY personnalisée" if not settings.bootstrap_key_is_dev else "valeur de développement publique : à remplacer")
+    add(
+        "clé de signature",
+        not settings.secret_key_is_ephemeral,
+        "THOT_SECRET_KEY définie"
+        if not settings.secret_key_is_ephemeral
+        else "éphémère : les sessions et clés API seront invalidées au redémarrage",
+    )
+    add(
+        "clé d'amorçage",
+        not settings.bootstrap_key_is_dev,
+        "THOT_BOOTSTRAP_API_KEY personnalisée"
+        if not settings.bootstrap_key_is_dev
+        else "valeur de développement publique : à remplacer",
+    )
     add("bus d'événements", True, f"{settings.bus} (sqlite/nats recommandés en production)")
-    add("TLS", settings.tls_enabled, "actif" if settings.tls_enabled else "désactivé en direct : utilisez un reverse-proxy HTTPS")
+    add(
+        "TLS",
+        settings.tls_enabled,
+        "actif"
+        if settings.tls_enabled
+        else "désactivé en direct : utilisez un reverse-proxy HTTPS",
+    )
 
     payload = {
         "version": __version__,
@@ -624,7 +691,9 @@ def _cmd_doctor(args: argparse.Namespace, service: Service, out: Output) -> int:
         out.table(
             [
                 [
-                    out.sym("ok") if check["ok"] else (out.sym("error") if check["critical"] else out.sym("warn")),
+                    out.sym("ok")
+                    if check["ok"]
+                    else (out.sym("error") if check["critical"] else out.sym("warn")),
                     check["check"],
                     check["detail"],
                 ]
@@ -638,7 +707,7 @@ def _cmd_doctor(args: argparse.Namespace, service: Service, out: Output) -> int:
                 print(f"  {out.sym('warn')} {warning}")
         out.title("Prochaines étapes")
         print("  1. déclarer vos actifs dans config/targets.yaml")
-        print("  2. créer un tenant : thotsecure tenant create --id <id> --name \"<nom>\"")
+        print('  2. créer un tenant : thotsecure tenant create --id <id> --name "<nom>"')
         print("  3. créer une clé :   thotsecure key create --tenant <id> --role responder")
         print("  4. observer :        thotsecure collect run config_audit --tenant <id>")
         print("  5. n'activer le mode réel QU'APRÈS avoir validé les décisions en simulation")
@@ -667,7 +736,10 @@ def _cmd_tenant(args: argparse.Namespace, service: Service, out: Output) -> int:
             after=stored.model_dump(mode="json"),
             context={"channel": "cli"},
         )
-        out.emit(stored.model_dump(mode="json"), text=f"tenant '{stored.tenant_id}' enregistré (mode {stored.mode}, dry-run {stored.dry_run})")
+        out.emit(
+            stored.model_dump(mode="json"),
+            text=f"tenant '{stored.tenant_id}' enregistré (mode {stored.mode}, dry-run {stored.dry_run})",
+        )
         if args.no_dry_run:
             out.warn(
                 "dry-run désactivé pour ce tenant : les actions pourront avoir un effet réel. "
@@ -680,7 +752,9 @@ def _cmd_tenant(args: argparse.Namespace, service: Service, out: Output) -> int:
         {
             **tenant.model_dump(mode="json"),
             "keys": len(service.keys.list_keys(tenant.tenant_id)),
-            "open_findings": service.store.count_findings(tenant.tenant_id)["by_status"].get("open", 0),
+            "open_findings": service.store.count_findings(tenant.tenant_id)["by_status"].get(
+                "open", 0
+            ),
         }
         for tenant in tenants
     ]
@@ -715,7 +789,9 @@ def _cmd_key(args: argparse.Namespace, service: Service, out: Output) -> int:
             out.title(f"Clé API créée pour '{info.tenant_id}' (rôle {info.role})")
             print(f"  identifiant : {info.key_id}")
             print(f"  clé         : {api_key}")
-            out.warn("cette clé ne sera plus jamais affichée : conservez-la dans un coffre de secrets")
+            out.warn(
+                "cette clé ne sera plus jamais affichée : conservez-la dans un coffre de secrets"
+            )
         return EXIT_OK
 
     if args.key_command == "list":
@@ -907,7 +983,7 @@ def _cmd_ingest(args: argparse.Namespace, service: Service, out: Output) -> int:
         document.setdefault("source", {"type": args.source_type})
         try:
             events.append(Event(**document))
-        except Exception as exc:  # noqa: BLE001 - on collecte les erreurs ligne par ligne
+        except Exception as exc:
             errors.append(f"ligne {index}: {exc}")
 
     if not events and errors:
@@ -945,7 +1021,12 @@ def _cmd_findings(args: argparse.Namespace, service: Service, out: Output) -> in
             min_risk=args.min_risk,
             limit=args.limit,
         )
-        out.emit({"items": [finding.model_dump(mode="json") for finding in findings], "count": len(findings)})
+        out.emit(
+            {
+                "items": [finding.model_dump(mode="json") for finding in findings],
+                "count": len(findings),
+            }
+        )
         out.title(f"Findings de '{args.tenant}' ({len(findings)})")
         out.table(
             [
@@ -970,7 +1051,9 @@ def _cmd_findings(args: argparse.Namespace, service: Service, out: Output) -> in
             raise NotFoundError(f"finding introuvable: {args.finding_id}")
         actions = service.store.actions_for_finding(args.tenant, args.finding_id)
         tenant = service.store.require_tenant(args.tenant)
-        decision = service.decision.decide_for_finding(finding, tenant, environment=service.settings.env)
+        decision = service.decision.decide_for_finding(
+            finding, tenant, environment=service.settings.env
+        )
         payload = {
             **finding.model_dump(mode="json"),
             "actions": [action.model_dump(mode="json") for action in actions],
@@ -982,20 +1065,26 @@ def _cmd_findings(args: argparse.Namespace, service: Service, out: Output) -> in
             out.title(f"{finding.title}")
             print(f"  identifiant : {finding.finding_id}")
             print(f"  règle       : {finding.rule_id} — {finding.rule_name}")
-            print(f"  sévérité    : {finding.severity}   score : {finding.risk_score:.1f}/100 ({risk_band(finding.risk_score)})")
+            print(
+                f"  sévérité    : {finding.severity}   score : {finding.risk_score:.1f}/100 ({risk_band(finding.risk_score)})"
+            )
             print(f"  statut      : {finding.status}   occurrences : {finding.count}")
             print(f"  période     : {iso_z(finding.first_seen)} → {iso_z(finding.last_seen)}")
             print()
             print(f"  remédiation : {finding.remediation}")
             print()
-            print(f"  décision    : {decision.decision} (politique {decision.policy_id or 'aucune'})")
+            print(
+                f"  décision    : {decision.decision} (politique {decision.policy_id or 'aucune'})"
+            )
             if decision.guards:
                 print(f"  garde-fous  : {', '.join(decision.guards)}")
             if actions:
                 print()
                 print("  actions :")
                 for action in actions:
-                    print(f"    {action.action_id} {action.playbook} → {action.status} (dry-run {action.dry_run})")
+                    print(
+                        f"    {action.action_id} {action.playbook} → {action.status} (dry-run {action.dry_run})"
+                    )
         return EXIT_OK
 
     if args.findings_command in {"ack", "close"}:
@@ -1020,7 +1109,9 @@ def _cmd_findings(args: argparse.Namespace, service: Service, out: Output) -> in
             after={"status": updated.status, "resolution": updated.resolution},
             context={"comment": args.comment[:300], "channel": "cli"},
         )
-        out.emit(updated.model_dump(mode="json"), text=f"finding {args.finding_id} → {updated.status}")
+        out.emit(
+            updated.model_dump(mode="json"), text=f"finding {args.finding_id} → {updated.status}"
+        )
         return EXIT_OK
 
     raise ValidationError("sous-commande 'findings' manquante (list, show, ack, close)")
@@ -1032,7 +1123,9 @@ def _cmd_actions(args: argparse.Namespace, service: Service, out: Output) -> int
 
     if command == "list":
         actions, _ = service.actions.list(args.tenant, status=args.status, limit=100)
-        out.emit({"items": [action.model_dump(mode="json") for action in actions], "count": len(actions)})
+        out.emit(
+            {"items": [action.model_dump(mode="json") for action in actions], "count": len(actions)}
+        )
         out.title(f"Actions de '{args.tenant}' ({len(actions)})")
         out.table(
             [
@@ -1087,7 +1180,9 @@ def _cmd_actions(args: argparse.Namespace, service: Service, out: Output) -> int
         print(f"  playbook    : {action.playbook}")
         print(f"  cible       : {action.target}")
         print(f"  paramètres  : {json.dumps(action.params, ensure_ascii=False)}")
-        print(f"  simulation  : {'oui' if action.dry_run else 'NON (effet réel possible après approbation)'}")
+        print(
+            f"  simulation  : {'oui' if action.dry_run else 'NON (effet réel possible après approbation)'}"
+        )
         print(f"  rév. dispo. : {'oui' if action.rollback.available else 'non'}")
         print()
         print("  Aucun effet n'a été appliqué. Étapes suivantes :")
@@ -1100,12 +1195,18 @@ def _cmd_actions(args: argparse.Namespace, service: Service, out: Output) -> int
         actor = args.by
         if command == "approve":
             action = service.actions.approve(
-                tenant=tenant, action_id=args.action_id, actor=actor, actor_role="responder",
+                tenant=tenant,
+                action_id=args.action_id,
+                actor=actor,
+                actor_role="responder",
                 comment=args.comment,
             )
         elif command == "reject":
             action = service.actions.reject(
-                tenant=tenant, action_id=args.action_id, actor=actor, actor_role="responder",
+                tenant=tenant,
+                action_id=args.action_id,
+                actor=actor,
+                actor_role="responder",
                 reason=args.comment,
             )
         elif command == "execute":
@@ -1114,7 +1215,10 @@ def _cmd_actions(args: argparse.Namespace, service: Service, out: Output) -> int
             )
         else:
             action = service.actions.rollback(
-                tenant=tenant, action_id=args.action_id, actor=actor, actor_role="responder",
+                tenant=tenant,
+                action_id=args.action_id,
+                actor=actor,
+                actor_role="responder",
                 reason=args.comment or "annulation via CLI",
             )
         out.emit(action.model_dump(mode="json"))
@@ -1125,16 +1229,24 @@ def _cmd_actions(args: argparse.Namespace, service: Service, out: Output) -> int
                 steps = action.result.get("steps") or []
                 print(f"  étapes   : {len(steps)}")
                 for step in steps:
-                    marker = "simulé" if step.get("simulated") else ("ok" if step.get("ok") else "ÉCHEC")
-                    print(f"    [{marker}] {step.get('connector')}.{step.get('call')} — {step.get('detail') or step.get('error')}")
+                    marker = (
+                        "simulé" if step.get("simulated") else ("ok" if step.get("ok") else "ÉCHEC")
+                    )
+                    print(
+                        f"    [{marker}] {step.get('connector')}.{step.get('call')} — {step.get('detail') or step.get('error')}"
+                    )
             if action.status == "succeeded" and action.rollback.available:
                 print()
-                print(f"  annulation possible : thotsecure actions rollback {action.action_id} --tenant {args.tenant}")
+                print(
+                    f"  annulation possible : thotsecure actions rollback {action.action_id} --tenant {args.tenant}"
+                )
             if action.status == "failed":
                 out.warn(f"échec : {action.reason}")
         return EXIT_NEGATIVE if action.status == "failed" else EXIT_OK
 
-    raise ValidationError("sous-commande 'actions' manquante (list, plan, approve, reject, execute, rollback)")
+    raise ValidationError(
+        "sous-commande 'actions' manquante (list, plan, approve, reject, execute, rollback)"
+    )
 
 
 def _cmd_audit(args: argparse.Namespace, service: Service, out: Output) -> int:
@@ -1152,7 +1264,9 @@ def _cmd_audit(args: argparse.Namespace, service: Service, out: Output) -> int:
 
     if args.audit_command == "tail":
         records, _ = service.store.list_audit(args.tenant, limit=args.limit)
-        out.emit({"items": [record.model_dump(mode="json") for record in records], "count": len(records)})
+        out.emit(
+            {"items": [record.model_dump(mode="json") for record in records], "count": len(records)}
+        )
         out.title(f"Journal d'audit de '{args.tenant}' ({len(records)} derniers)")
         out.table(
             [
@@ -1174,8 +1288,10 @@ def _cmd_audit(args: argparse.Namespace, service: Service, out: Output) -> int:
         content = "\n".join(lines) + ("\n" if lines else "")
         if args.output:
             Path(args.output).write_text(content, encoding="utf-8")
-            out.emit({"output": args.output, "records": len(lines), "format": args.format},
-                     text=f"{len(lines)} enregistrement(s) exportés vers {args.output}")
+            out.emit(
+                {"output": args.output, "records": len(lines), "format": args.format},
+                text=f"{len(lines)} enregistrement(s) exportés vers {args.output}",
+            )
         else:
             out.emit({"records": len(lines), "format": args.format}, text=content)
         service.audit.record(
@@ -1202,11 +1318,15 @@ def _cmd_report(args: argparse.Namespace, service: Service, out: Output) -> int:
         for record in service.audit.tail(args.tenant, limit=300)
         if record.target.get("id") in {args.finding_id, *[action.action_id for action in actions]}
     ][:30]
-    content, _media_type = render_report(finding, args.format, tenant=tenant, actions=actions, audit=audit)
+    content, _media_type = render_report(
+        finding, args.format, tenant=tenant, actions=actions, audit=audit
+    )
     if args.output:
         Path(args.output).write_text(content, encoding="utf-8")
-        out.emit({"output": args.output, "format": args.format, "bytes": len(content)},
-                 text=f"rapport {args.format} écrit dans {args.output}")
+        out.emit(
+            {"output": args.output, "format": args.format, "bytes": len(content)},
+            text=f"rapport {args.format} écrit dans {args.output}",
+        )
     else:
         out.emit({"finding_id": args.finding_id, "format": args.format}, text=content)
     return EXIT_OK
@@ -1217,7 +1337,9 @@ def _cmd_probe(args: argparse.Namespace, service: Service, out: Output) -> int:
     scope = service.targets.for_tenant(args.tenant)
     verdict = service.targets.check_probe(args.tenant)
     if args.target:
-        if not any(args.target in asset.urls or args.target == asset.host for asset in scope.assets):
+        if not any(
+            args.target in asset.urls or args.target == asset.host for asset in scope.assets
+        ):
             from .core.errors import TargetNotAllowedError
 
             raise TargetNotAllowedError(
@@ -1243,7 +1365,10 @@ def _cmd_probe(args: argparse.Namespace, service: Service, out: Output) -> int:
             checks[check] = checks.get(check, 0) + 1
         if checks:
             print()
-            out.table([[check, str(count)] for check, count in sorted(checks.items())], ["contrôle", "occurrences"])
+            out.table(
+                [[check, str(count)] for check, count in sorted(checks.items())],
+                ["contrôle", "occurrences"],
+            )
         for error in result.errors[:10]:
             print(f"  {out.sym('warn')} {error}")
     return EXIT_OK
@@ -1252,7 +1377,12 @@ def _cmd_probe(args: argparse.Namespace, service: Service, out: Output) -> int:
 def _cmd_collect(args: argparse.Namespace, service: Service, out: Output) -> int:
     if args.collect_command == "list":
         statuses = service.collectors.status(args.tenant)
-        out.emit({"items": [status.model_dump(mode="json") for status in statuses], "count": len(statuses)})
+        out.emit(
+            {
+                "items": [status.model_dump(mode="json") for status in statuses],
+                "count": len(statuses),
+            }
+        )
         out.title(f"Collecteurs de '{args.tenant}'")
         out.table(
             [
@@ -1276,14 +1406,22 @@ def _cmd_collect(args: argparse.Namespace, service: Service, out: Output) -> int
             for name, result in service.collectors.run_all(args.tenant, actor="cli").items():
                 results[name] = result.to_dict()
         else:
-            results[args.collector] = service.collectors.run(args.collector, args.tenant, actor="cli").to_dict()
+            results[args.collector] = service.collectors.run(
+                args.collector, args.tenant, actor="cli"
+            ).to_dict()
         if out.as_json:
             out.emit(results)
         else:
             out.title("Collecte")
             out.table(
                 [
-                    [name, payload["status"], str(payload["events"]), str(payload["error_count"]), payload.get("detail", {}).get("reason", "")[:40]]
+                    [
+                        name,
+                        payload["status"],
+                        str(payload["events"]),
+                        str(payload["error_count"]),
+                        payload.get("detail", {}).get("reason", "")[:40],
+                    ]
                     for name, payload in results.items()
                 ],
                 ["collecteur", "état", "événements", "erreurs", "note"],
@@ -1353,7 +1491,11 @@ def _cmd_demo(args: argparse.Namespace, service: Service, out: Output) -> int:
                 tenant_id=tenant_id,
                 kind="config.audit",
                 source=EventSource(type="config_audit", name="demo", host="sshd_config"),
-                labels={"check": "ssh_permit_root_login", "file": "/etc/ssh/sshd_config", "kind": "ssh"},
+                labels={
+                    "check": "ssh_permit_root_login",
+                    "file": "/etc/ssh/sshd_config",
+                    "kind": "ssh",
+                },
                 payload={"message": "PermitRootLogin yes"},
                 severity_hint="high",
             )
@@ -1374,7 +1516,9 @@ def _cmd_demo(args: argparse.Namespace, service: Service, out: Output) -> int:
         out.emit(payload)
     else:
         out.title(f"Démonstration « {args.scenario} » — tenant '{tenant_id}'")
-        print(f"  {outcome.result.accepted} événement(s) ingéré(s), {len(outcome.findings)} finding(s)")
+        print(
+            f"  {outcome.result.accepted} événement(s) ingéré(s), {len(outcome.findings)} finding(s)"
+        )
         for index, finding in enumerate(outcome.findings):
             decision = outcome.decisions[index] if index < len(outcome.decisions) else None
             print()
@@ -1382,7 +1526,9 @@ def _cmd_demo(args: argparse.Namespace, service: Service, out: Output) -> int:
             print(f"    {finding.title}")
             print(f"    remédiation : {finding.remediation[:80]}")
             if decision is not None:
-                print(f"    décision    : {decision.decision} (politique {decision.policy_id or 'aucune'})")
+                print(
+                    f"    décision    : {decision.decision} (politique {decision.policy_id or 'aucune'})"
+                )
                 if decision.guards:
                     print(f"    garde-fous  : {', '.join(decision.guards)}")
         for action in outcome.actions:

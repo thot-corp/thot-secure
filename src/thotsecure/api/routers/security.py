@@ -11,11 +11,14 @@ from typing import Any
 
 from fastapi import APIRouter, Body, Query, Response
 
-from ...core.errors import RuleError
 from ...core.util import parse_dt
 from ...decision.policy_loader import validate_policy
-from ...detection.rule_loader import RuleLoadError, dump_rule, load_rule_text, sigma_supported_subset
-from ...audit.hashchain import to_cef
+from ...detection.rule_loader import (
+    RuleLoadError,
+    dump_rule,
+    load_rule_text,
+    sigma_supported_subset,
+)
 from ..deps import PrincipalDep, ServiceDep, require
 from ..schemas import RuleValidateRequest
 
@@ -159,7 +162,7 @@ def validate_policy_endpoint(
         from ...decision.policy_loader import parse_policy
 
         policy = parse_policy(document, path="<api>", known_playbooks=set(service.playbooks))
-    except Exception as exc:  # noqa: BLE001 - l'endpoint de validation renvoie les erreurs
+    except Exception as exc:
         return {"valid": False, "errors": [str(exc)]}
     return {
         "valid": True,
@@ -224,9 +227,7 @@ def export_audit(
 ) -> Response:
     require("read:audit")(principal)
     lines = list(
-        service.audit.export(
-            principal.tenant_id, fmt=format, limit=limit, since=parse_dt(since)
-        )
+        service.audit.export(principal.tenant_id, fmt=format, limit=limit, since=parse_dt(since))
     )
     content = "\n".join(lines) + ("\n" if lines else "")
     media_type = "text/plain; charset=utf-8"
@@ -265,8 +266,7 @@ def list_collectors(service: ServiceDep, principal: PrincipalDep) -> dict[str, A
         "scheduler_enabled": service.settings.collectors_enabled,
         "syslog_enabled": service.settings.syslog_enabled,
         "note": (
-            "Chaque collecteur n'agit que sur le périmètre déclaré du tenant "
-            "(config/targets.yaml)."
+            "Chaque collecteur n'agit que sur le périmètre déclaré du tenant (config/targets.yaml)."
         ),
     }
 

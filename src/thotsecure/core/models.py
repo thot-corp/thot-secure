@@ -270,7 +270,9 @@ class Decision(BaseModel):
 
 
 class ActionTarget(StrictModel):
-    type: Literal["ip", "cidr", "host", "url", "user", "session", "file", "package", "secret", "other"] = "other"
+    type: Literal[
+        "ip", "cidr", "host", "url", "user", "session", "file", "package", "secret", "other"
+    ] = "other"
     value: str = ""
 
     def __str__(self) -> str:
@@ -881,6 +883,8 @@ class StatsOverview(BaseModel):
 
 
 __all__ = [
+    "SEVERITIES",
+    "SEVERITY_ORDER",
     "Action",
     "ActionRollback",
     "ActionStatus",
@@ -915,8 +919,6 @@ __all__ = [
     "RuleDedup",
     "RuleDiagnostic",
     "RuleRisk",
-    "SEVERITIES",
-    "SEVERITY_ORDER",
     "Scalar",
     "Severity",
     "SeverityCounts",

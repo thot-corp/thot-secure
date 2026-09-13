@@ -590,7 +590,9 @@ def build_stack(
     (root / "config" / "targets.yaml").write_text(
         targets_yaml or textwrap.dedent(TARGETS_YAML), encoding="utf-8"
     )
-    (root / "config" / "connectors.yaml").write_text(textwrap.dedent(CONNECTORS_YAML), encoding="utf-8")
+    (root / "config" / "connectors.yaml").write_text(
+        textwrap.dedent(CONNECTORS_YAML), encoding="utf-8"
+    )
 
     # Sources surveillées par les collecteurs (journaux, manifestes, configurations).
     (root / "logs").mkdir(parents=True, exist_ok=True)
@@ -664,9 +666,7 @@ def build_stack(
         connectors=connectors,
     )
     keys = ApiKeyService(store, settings, audit)
-    pipeline = Pipeline(
-        store, audit, detection, decision, actions, settings=settings, bus=None
-    )
+    pipeline = Pipeline(store, audit, detection, decision, actions, settings=settings, bus=None)
     collector_runner = CollectorRunner(
         default_registry(), pipeline, store, audit, registry, settings=settings
     )
@@ -698,8 +698,8 @@ __all__ = [
     "PLAYBOOK_BLOCK_IP",
     "POLICY_AUTO_BLOCK",
     "RULE_SQLI",
+    "TARGETS_YAML",
     "Stack",
     "StackTestCase",
-    "TARGETS_YAML",
     "build_stack",
 ]

@@ -35,7 +35,9 @@ def load_playbooks_from_dir(
     playbooks: dict[str, Playbook] = {}
     diagnostics: list[RuleDiagnostic] = []
     if not root.exists():
-        diagnostics.append(RuleDiagnostic(path=str(root), error="répertoire de playbooks inexistant"))
+        diagnostics.append(
+            RuleDiagnostic(path=str(root), error="répertoire de playbooks inexistant")
+        )
         log.warning("répertoire de playbooks inexistant", extra={"path": str(root)})
         return playbooks, diagnostics
 
@@ -57,7 +59,9 @@ def load_playbooks_from_dir(
         for document in documents:
             if not isinstance(document, dict):
                 diagnostics.append(
-                    RuleDiagnostic(path=str(file_path), error="un playbook doit être un mapping YAML")
+                    RuleDiagnostic(
+                        path=str(file_path), error="un playbook doit être un mapping YAML"
+                    )
                 )
                 continue
             try:
@@ -127,7 +131,14 @@ def validate_playbook(playbook: Playbook, *, known_connectors: set[str] | None =
             for placeholder in _placeholders(value):
                 if placeholder.startswith("params."):
                     referenced.add(placeholder[len("params.") :])
-                elif placeholder.split(".")[0] not in {"params", "finding", "action", "tenant", "now", "context"}:
+                elif placeholder.split(".")[0] not in {
+                    "params",
+                    "finding",
+                    "action",
+                    "tenant",
+                    "now",
+                    "context",
+                }:
                     problems.append(
                         f"étape {step.connector}.{step.call}: espace de nommage inconnu "
                         f"dans '${{{placeholder}}}'"

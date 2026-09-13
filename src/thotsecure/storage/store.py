@@ -70,7 +70,7 @@ def _decode_cursor(cursor: str) -> tuple[str, str]:
         raw = base64.urlsafe_b64decode(padded.encode("ascii")).decode("utf-8")
         primary, identifier = raw.split("|", 1)
         return primary, identifier
-    except Exception as exc:  # noqa: BLE001 - tout curseur invalide est un 400
+    except Exception as exc:
         raise StorageError("curseur de pagination invalide", details={"cursor": cursor}) from exc
 
 
@@ -140,7 +140,9 @@ class Store:
             conn = self.connection
             conn.executescript(SQLITE_DDL)
             conn.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
-        log.info("schéma initialisé", extra={"db": str(self.db_path), "schema_version": SCHEMA_VERSION})
+        log.info(
+            "schéma initialisé", extra={"db": str(self.db_path), "schema_version": SCHEMA_VERSION}
+        )
 
     def close(self) -> None:
         """Ferme **toutes** les connexions (tous threads confondus) et marque le magasin fermé.
@@ -225,7 +227,9 @@ class Store:
             )
         created = self.get_tenant(tenant.tenant_id)
         if created is None:  # pragma: no cover - ne peut arriver qu'en cas de corruption
-            raise StorageError("tenant introuvable après écriture", details={"tenant_id": tenant.tenant_id})
+            raise StorageError(
+                "tenant introuvable après écriture", details={"tenant_id": tenant.tenant_id}
+            )
         return created
 
     def get_tenant(self, tenant_id: str) -> Tenant | None:
@@ -331,7 +335,9 @@ class Store:
         return record
 
     def get_api_key(self, key_id: str) -> ApiKeyRecord | None:
-        row = self.connection.execute("SELECT * FROM api_keys WHERE key_id = ?", (key_id,)).fetchone()
+        row = self.connection.execute(
+            "SELECT * FROM api_keys WHERE key_id = ?", (key_id,)
+        ).fetchone()
         return self._row_to_api_key(row) if row else None
 
     def find_api_key_by_hash(self, key_hash: str) -> ApiKeyRecord | None:
@@ -863,7 +869,9 @@ class Store:
                     action.rejected_by,
                     iso_z(action.rejected_at) if action.rejected_at else None,
                     iso_z(action.executed_at) if action.executed_at else None,
-                    json.dumps(action.result, ensure_ascii=False, default=str) if action.result else None,
+                    json.dumps(action.result, ensure_ascii=False, default=str)
+                    if action.result
+                    else None,
                     json.dumps(action.rollback.model_dump(mode="json"), ensure_ascii=False),
                     action.audit_seq,
                     action.reason,
@@ -927,7 +935,12 @@ class Store:
         return [self._row_to_action(row) for row in rows], next_cursor
 
     def count_actions_since(
-        self, tenant_id: str, since: Any, *, playbook: str | None = None, exclude_failed: bool = True
+        self,
+        tenant_id: str,
+        since: Any,
+        *,
+        playbook: str | None = None,
+        exclude_failed: bool = True,
     ) -> int:
         sql = "SELECT COUNT(*) AS n FROM actions WHERE tenant_id = ? AND requested_at >= ?"
         params: list[Any] = [tenant_id, iso_z(parse_dt(since) or utcnow())]
@@ -939,14 +952,12 @@ class Store:
         row = self.connection.execute(sql, params).fetchone()
         return safe_int(row["n"] if row else 0)
 
-    def last_action_for(
-        self, tenant_id: str, playbook: str, target_value: str
-    ) -> Action | None:
+    def last_action_for(self, tenant_id: str, playbook: str, target_value: str) -> Action | None:
         """Dernière action réussie sur une cible donnée — sert au calcul du cooldown."""
         row = self.connection.execute(
             """
             SELECT * FROM actions
-            WHERE tenant_id = ? AND playbook = ? AND target LIKE ? 
+            WHERE tenant_id = ? AND playbook = ? AND target LIKE ?
               AND status IN ('succeeded','executing','approved')
             ORDER BY requested_at DESC LIMIT 1
             """,
@@ -1034,7 +1045,9 @@ class Store:
             conn = self.connection
             conn.execute("BEGIN IMMEDIATE")
             try:
-                row = conn.execute("SELECT hash FROM audit_log ORDER BY seq DESC LIMIT 1").fetchone()
+                row = conn.execute(
+                    "SELECT hash FROM audit_log ORDER BY seq DESC LIMIT 1"
+                ).fetchone()
                 prev_hash = row["hash"] if row else GENESIS_HASH
                 cursor = conn.execute(
                     "INSERT INTO audit_log (ts, tenant_id, actor, actor_role, action, target,"
@@ -1380,12 +1393,18 @@ class Store:
                 # Purge de l'audit : interdit par défaut (audit_retention_days élevé).
                 audit = 0
                 if audit_retention_days < 3650:
-                    audit = conn.execute("DELETE FROM audit_log WHERE ts < ?", (audit_cutoff,)).rowcount
+                    audit = conn.execute(
+                        "DELETE FROM audit_log WHERE ts < ?", (audit_cutoff,)
+                    ).rowcount
                 conn.execute("COMMIT")
             except Exception:
                 conn.execute("ROLLBACK")
                 raise
-        result = {"events": max(0, events), "suppressions": max(0, suppressions), "audit": max(0, audit)}
+        result = {
+            "events": max(0, events),
+            "suppressions": max(0, suppressions),
+            "audit": max(0, audit),
+        }
         if any(result.values()):
             log.info("purge de rétention effectuée", extra={"result": result})
         return result

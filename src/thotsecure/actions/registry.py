@@ -112,7 +112,9 @@ class ConnectorRegistry:
         source: str | None = None,
         root_dir: str | Path | None = None,
     ) -> None:
-        self.configuration = configuration or {key: dict(value) for key, value in DEFAULT_CONNECTORS.items()}
+        self.configuration = configuration or {
+            key: dict(value) for key, value in DEFAULT_CONNECTORS.items()
+        }
         self.dry_run = dry_run
         self.source = source
         #: Racine de résolution des chemins déclarés par les connecteurs (jamais le CWD).
@@ -251,9 +253,7 @@ class ConnectorRegistry:
         return {
             "source": self.source,
             "dry_run": self.dry_run,
-            "connectors": {
-                name: self.get(name).description for name in sorted(self.configuration)
-            },
+            "connectors": {name: self.get(name).description for name in sorted(self.configuration)},
             "unknown_requested": sorted(self._unknown),
         }
 

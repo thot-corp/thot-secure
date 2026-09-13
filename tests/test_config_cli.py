@@ -78,7 +78,7 @@ class SettingsDefaultsTest(unittest.TestCase):
         first = self._settings()  # sans secret_key fourni
         first.root_dir = str(self._tmp)
         first.secret_key = ""
-        first._resolve_secret_key()  # noqa: SLF001 - vérification ciblée de la résolution
+        first._resolve_secret_key()
 
         self.assertEqual("file", first.secret_key_source)
         self.assertTrue(first.secret_key_file.exists())
@@ -87,7 +87,7 @@ class SettingsDefaultsTest(unittest.TestCase):
         second = self._settings()
         second.root_dir = str(self._tmp)
         second.secret_key = ""
-        second._resolve_secret_key()  # noqa: SLF001
+        second._resolve_secret_key()
         self.assertEqual(first.secret_key, second.secret_key, "la clé doit être partagée")
 
     def test_db_path_resolution(self) -> None:
@@ -167,7 +167,15 @@ class CliTest(unittest.TestCase):
         import json
 
         code, out, _ = self.run_cli(
-            "--json", "tenant", "create", "--id", "clitest", "--name", "CLI Test", "--mode", "supervised"
+            "--json",
+            "tenant",
+            "create",
+            "--id",
+            "clitest",
+            "--name",
+            "CLI Test",
+            "--mode",
+            "supervised",
         )
         self.assertEqual(EXIT_OK, code)
         self.assertEqual("clitest", json.loads(out)["tenant_id"])
@@ -257,7 +265,9 @@ class SecretRedactionTest(unittest.TestCase):
             "mot de passe oublié (aucun secret ici)",
             "GET /produit?id=1 UNION SELECT 1-- HTTP/1.1",
         ):
-            self.assertEqual(text, redact_secrets(text), "la redaction ne doit pas mutiler le texte")
+            self.assertEqual(
+                text, redact_secrets(text), "la redaction ne doit pas mutiler le texte"
+            )
 
     def test_payload_is_truncated(self) -> None:
         from thotsecure.core.util import redact_secrets

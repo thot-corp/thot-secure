@@ -228,7 +228,7 @@ class AnomalyDetector:
             signals.extend(self._observe_cardinality(event, timestamp))
             self.signals_emitted += len(signals)
             return signals
-        except Exception as exc:  # noqa: BLE001 - jamais bloquant
+        except Exception as exc:
             log.error("erreur du détecteur d'anomalie", extra={"error": str(exc)}, exc_info=True)
             return []
 
@@ -284,7 +284,9 @@ class AnomalyDetector:
         # juger un volume en cours de constitution sans déclencher sur le premier événement
         # venu. C'est aussi ce qui rend le détecteur déterministe.
         if timestamp - stats.bucket_start >= self.bucket_seconds:
-            completed = stats.count_in_bucket - 1  # l'événement courant appartient au nouveau bucket
+            completed = (
+                stats.count_in_bucket - 1
+            )  # l'événement courant appartient au nouveau bucket
             signals.extend(self._evaluate_bucket(event, stats, completed, field_name))
             stats.bucket_start = _bucket_start(timestamp, self.bucket_seconds)
             stats.count_in_bucket = 1
@@ -399,7 +401,9 @@ class AnomalyDetector:
                             f"contre {state.mean:.1f} habituellement (écart de {zscore:.1f} écarts-types). "
                             "Schéma compatible avec une attaque distribuée ou un balayage réparti."
                         ),
-                        entity_field=self.entity_fields[0] if self.entity_fields else "labels.src_ip",
+                        entity_field=self.entity_fields[0]
+                        if self.entity_fields
+                        else "labels.src_ip",
                         bucket_seconds=self.bucket_seconds,
                         extra={
                             "labels": {"distinct_sources": observed},
@@ -410,7 +414,9 @@ class AnomalyDetector:
 
         previous_mean = state.mean
         state.mean = self.alpha * observed + (1 - self.alpha) * state.mean
-        state.variance = self.alpha * ((observed - previous_mean) ** 2) + (1 - self.alpha) * state.variance
+        state.variance = (
+            self.alpha * ((observed - previous_mean) ** 2) + (1 - self.alpha) * state.variance
+        )
         state.buckets_seen += 1
         state.current = set()
         state.bucket_start = _bucket_start(timestamp, self.bucket_seconds)

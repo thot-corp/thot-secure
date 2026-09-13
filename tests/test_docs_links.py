@@ -24,7 +24,7 @@ CHECKER = REPO_ROOT / "scripts" / "check-docs-links.py"
 class DocumentationLinksTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        completed = subprocess.run(  # noqa: S603 - script local, arguments fixes
+        completed = subprocess.run(
             [sys.executable, str(CHECKER), "--json"],
             capture_output=True,
             text=True,

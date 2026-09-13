@@ -17,7 +17,7 @@ import pathlib
 import sys
 import unittest
 import warnings
-from typing import Any, Dict, List, Optional
+from typing import Any
 from unittest import mock
 
 # Permet d'exécuter les tests depuis n'importe quel répertoire de travail.
@@ -25,20 +25,20 @@ _SDK_ROOT = pathlib.Path(__file__).resolve().parents[1]
 if str(_SDK_ROOT) not in sys.path:
     sys.path.insert(0, str(_SDK_ROOT))
 
-from thotsecure_sdk import ThotSecureClient, Event  # noqa: E402
-from thotsecure_sdk.errors import (  # noqa: E402
-    ThotSecureError,
+from thotsecure_sdk import Event, ThotSecureClient
+from thotsecure_sdk.errors import (
     AuthenticationError,
     ConflictError,
     NotFoundError,
     PermissionDeniedError,
     RateLimitedError,
     ServerError,
+    ThotSecureError,
     TransportError,
     ValidationError,
     redact_url,
 )
-from thotsecure_sdk.transport import (  # noqa: E402
+from thotsecure_sdk.transport import (
     HttpRequest,
     HttpResponse,
     RetryingTransport,
@@ -55,7 +55,7 @@ TENANT = "acme"
 def json_response(
     status: int = 200,
     payload: Any = None,
-    headers: Optional[Dict[str, str]] = None,
+    headers: dict[str, str] | None = None,
 ) -> HttpResponse:
     """Fabrique une ``HttpResponse`` JSON (ou vide si ``payload`` est ``None`` et statut 204)."""
     if payload is None and status == 204:
@@ -70,9 +70,9 @@ def json_response(
 class FakeTransport(Transport):
     """Transport simulé : enregistre les requêtes et rejoue une file de réponses."""
 
-    def __init__(self, responses: Optional[List[Any]] = None, default: Any = None) -> None:
-        self.requests: List[HttpRequest] = []
-        self.responses: List[Any] = list(responses or [])
+    def __init__(self, responses: list[Any] | None = None, default: Any = None) -> None:
+        self.requests: list[HttpRequest] = []
+        self.responses: list[Any] = list(responses or [])
         self.default = default
         self.closed = False
 
@@ -83,7 +83,7 @@ class FakeTransport(Transport):
         elif self.default is not None:
             item = self.default
         else:
-            raise AssertionError("requête inattendue : %s %s" % (request.method, request.url))
+            raise AssertionError(f"requête inattendue : {request.method} {request.url}")
         if isinstance(item, BaseException):
             raise item
         if callable(item):
@@ -112,10 +112,10 @@ class ClientTestCase(unittest.TestCase):
     """Base commune : client + transport simulé + horloge de sommeil contrôlée."""
 
     def setUp(self) -> None:
-        self.sleeps: List[float] = []
+        self.sleeps: list[float] = []
 
     def make_client(self, transport: Transport, **kwargs: Any) -> ThotSecureClient:
-        params: Dict[str, Any] = {
+        params: dict[str, Any] = {
             "base_url": BASE_URL,
             "api_key": API_KEY,
             "tenant_id": TENANT,
@@ -252,7 +252,9 @@ class TestRequestShape(ClientTestCase):
             client.ingest_events([], chunk_size=501)
 
     def test_ingest_event_fills_tenant_from_client(self) -> None:
-        fake = FakeTransport([json_response(202, {"accepted": 1, "rejected": 0, "event_ids": [], "findings": []})])
+        fake = FakeTransport(
+            [json_response(202, {"accepted": 1, "rejected": 0, "event_ids": [], "findings": []})]
+        )
         client = self.make_client(fake)
 
         client.ingest_event({"kind": "log.line", "labels": {"a": "b"}})
@@ -346,7 +348,9 @@ class TestRequestShape(ClientTestCase):
     def test_whoami_and_stats_and_collectors(self) -> None:
         fake = FakeTransport(
             [
-                json_response(200, {"tenant_id": TENANT, "role": "responder", "capabilities": ["read:events"]}),
+                json_response(
+                    200, {"tenant_id": TENANT, "role": "responder", "capabilities": ["read:events"]}
+                ),
                 json_response(200, {"findings_by_severity": {"critical": 2}, "autonomy_mode": "supervised"}),
                 json_response(200, {"items": [{"name": "nginx", "last_run_at": "2026-02-14T10:00:00Z"}]}),
                 json_response(200, {"collector": "nginx", "items": 42}),
@@ -450,9 +454,7 @@ class TestRequestShape(ClientTestCase):
         self.assertEqual(acked["status"], "acked")
         self.assertEqual(closed["status"], "closed")
         self.assertEqual(suppressed["status"], "suppressed")
-        self.assertEqual(
-            fake.requests[2].url, BASE_URL + "/api/v1/findings/f1/ack"
-        )
+        self.assertEqual(fake.requests[2].url, BASE_URL + "/api/v1/findings/f1/ack")
         self.assertEqual(fake.body(3), {"resolution": "true_positive"})
         self.assertEqual(fake.body(4), {"duration_seconds": 3600, "reason": "faux positif chronique"})
         with self.assertRaises(ValidationError):
@@ -537,7 +539,9 @@ class TestRequestShape(ClientTestCase):
         self.assertIn("cursor=c2", fake.requests[1].full_url())
 
     def test_pagination_protects_against_cursor_loop(self) -> None:
-        fake = FakeTransport(default=json_response(200, {"items": [{"finding_id": "f"}], "next_cursor": "same"}))
+        fake = FakeTransport(
+            default=json_response(200, {"items": [{"finding_id": "f"}], "next_cursor": "same"})
+        )
         client = self.make_client(fake)
 
         ids = list(client.iter_findings())
@@ -551,7 +555,7 @@ class TestRequestShape(ClientTestCase):
 
 
 class TestErrorMapping(ClientTestCase):
-    def _raise_for(self, status: int, payload: Any, headers: Optional[Dict[str, str]] = None):
+    def _raise_for(self, status: int, payload: Any, headers: dict[str, str] | None = None):
         fake = FakeTransport([json_response(status, payload, headers)])
         client = self.make_client(fake, max_retries=0)
         with self.assertRaises(ThotSecureError) as ctx:
@@ -610,9 +614,7 @@ class TestErrorMapping(ClientTestCase):
         self.assertIn("errors", error.details)
 
     def test_non_json_error_body_does_not_crash(self) -> None:
-        fake = FakeTransport(
-            [HttpResponse(status_code=502, headers={}, content=b"<html>bad gateway</html>")]
-        )
+        fake = FakeTransport([HttpResponse(status_code=502, headers={}, content=b"<html>bad gateway</html>")])
         client = self.make_client(fake, max_retries=0)
         with self.assertRaises(ServerError) as ctx:
             client.get_tenant()
@@ -623,7 +625,7 @@ class TestErrorMapping(ClientTestCase):
         client = self.make_client(fake, max_retries=0)
         with self.assertRaises(PermissionDeniedError) as ctx:
             client.get_tenant()
-        rendered = "%s | %r" % (ctx.exception, ctx.exception)
+        rendered = f"{ctx.exception} | {ctx.exception!r}"
         self.assertNotIn(API_KEY, rendered)
         self.assertNotIn(API_KEY, repr(client))
 
@@ -760,18 +762,14 @@ class TestRetryPolicy(ClientTestCase):
         self.assertEqual(len(fake.requests), 3)
 
     def test_network_error_then_success(self) -> None:
-        fake = FakeTransport(
-            [TransportError("timeout"), json_response(200, {"tenant_id": TENANT})]
-        )
+        fake = FakeTransport([TransportError("timeout"), json_response(200, {"tenant_id": TENANT})])
         client = self.make_client(fake, max_retries=1)
 
         self.assertEqual(client.get_tenant().tenant_id, TENANT)
         self.assertEqual(len(fake.requests), 2)
 
     def test_max_retries_zero_disables_retry(self) -> None:
-        fake = FakeTransport(
-            [json_response(503, {"error": {"code": "internal_error", "message": "x"}})]
-        )
+        fake = FakeTransport([json_response(503, {"error": {"code": "internal_error", "message": "x"}})])
         client = self.make_client(fake, max_retries=0)
 
         with self.assertRaises(ServerError):
@@ -804,10 +802,9 @@ class TestConfigurationAndLifecycle(ClientTestCase):
             "THOT_MAX_RETRIES": "1",
             "THOT_VERIFY_TLS": "false",
         }
-        with mock.patch.dict(os.environ, env, clear=False):
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                client = ThotSecureClient(transport=FakeTransport())
+        with mock.patch.dict(os.environ, env, clear=False), warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            client = ThotSecureClient(transport=FakeTransport())
         self.assertEqual(client.base_url, "http://127.0.0.1:9090")
         self.assertEqual(client.api_key, "ao_from_env")
         self.assertEqual(client.tenant_id, "env-tenant")

@@ -68,7 +68,7 @@ class SqliteBus(EventBus):
         """Rejoue les événements jamais traités (démarrage ou reprise après incident)."""
         try:
             pending = self.store.pending_events(limit=limit)
-        except Exception as exc:  # noqa: BLE001 - la reprise ne doit pas empêcher le démarrage
+        except Exception as exc:
             self.errors += 1
             log.error("reprise impossible", extra={"error": str(exc)})
             return 0
@@ -97,14 +97,16 @@ class SqliteBus(EventBus):
                     self.received += 1
                     self._dispatch(event)
                 if fresh:
-                    log.debug("nouveaux événements récupérés par sondage", extra={"count": len(fresh)})
+                    log.debug(
+                        "nouveaux événements récupérés par sondage", extra={"count": len(fresh)}
+                    )
                 # Bornage mémoire : au-delà de 50 000 identifiants mémorisés, on repart de
                 # l'état courant de la base (les événements déjà traités ne sont plus listés).
                 if len(self._seen) > 50_000:
                     self._seen = {event.event_id for event in self.store.pending_events(limit=1000)}
             except asyncio.CancelledError:
                 raise
-            except Exception as exc:  # noqa: BLE001 - boucle de fond : on journalise et continue
+            except Exception as exc:
                 self.errors += 1
                 log.error("erreur de sondage du bus", extra={"error": str(exc)})
                 await asyncio.sleep(min(self.poll_interval * 5, 30))

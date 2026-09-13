@@ -182,7 +182,9 @@ class PlaybookExecutor:
         effective_dry_run = self.dry_run if dry_run is None else dry_run
         stack = _unpack_token(token)
         if stack is None:
-            return ExecutionOutcome(ok=False, error="jeton de rollback illisible", rollback_available=False)
+            return ExecutionOutcome(
+                ok=False, error="jeton de rollback illisible", rollback_available=False
+            )
 
         steps_applied: list[dict[str, Any]] = stack.get("steps", [])
         if not steps_applied:
@@ -233,7 +235,9 @@ class PlaybookExecutor:
             if entry.get("rollback_token"):
                 undo_params["rollback_token"] = entry["rollback_token"]
             result = connector.call(undo, undo_params)
-            synthetic = PlaybookStep(connector=str(entry.get("connector", "")), call=undo, with_=undo_params)
+            synthetic = PlaybookStep(
+                connector=str(entry.get("connector", "")), call=undo, with_=undo_params
+            )
             outcome.steps.append(_to_step_outcome(index, synthetic, result, undo_params))
             if result.simulated:
                 outcome.simulated = True

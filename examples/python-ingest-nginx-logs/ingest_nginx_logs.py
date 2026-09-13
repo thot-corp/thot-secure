@@ -78,10 +78,9 @@ Codes de sortie
 """
 
 from __future__ import annotations
-import contextlib as _contextlib
-import sys as _sys
 
 import argparse
+import contextlib as _contextlib
 import hashlib
 import hmac
 import ipaddress
@@ -91,16 +90,18 @@ import queue
 import re
 import signal
 import sys
+import sys as _sys
 import threading
 import time
 import uuid
 from collections.abc import Iterator, Mapping, Sequence
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any
 from urllib import error as urlerror
 from urllib import request as urlrequest
+
 
 # --- Sortie Unicode sûre ---------------------------------------------------------------
 # Sous Windows, une console en page de code cp1252 ne peut pas encoder « ✖ », « ✔ » ou « ─ » :
@@ -120,13 +121,13 @@ _configure_safe_output()
 
 
 __all__ = [
-    "main",
-    "LogTailer",
     "IngestClient",
+    "LogTailer",
     "TailStateStore",
     "build_event",
-    "redact_secrets",
+    "main",
     "pseudonymize_ip",
+    "redact_secrets",
 ]
 
 # --------------------------------------------------------------------------------------
@@ -289,7 +290,9 @@ _SENSITIVE_PARTS = frozenset(
 )
 
 _JWT_RE = re.compile(r"\beyJ[A-Za-z0-9_\-]{4,}\.[A-Za-z0-9_\-]{4,}\.[A-Za-z0-9_\-]{4,}\b")
-_AUTH_SCHEME_RE = re.compile(r"(?i)\b(bearer|basic|token|apikey|api[_-]?key)\s+([A-Za-z0-9._\-+/=]{6,})")
+_AUTH_SCHEME_RE = re.compile(
+    r"(?i)\b(bearer|basic|token|apikey|api[_-]?key)\s+([A-Za-z0-9._\-+/=]{6,})"
+)
 _KV_SECRET_RE = re.compile(
     r"(?i)\b(api[_-]?key|apikey|token|access_token|password|passwd|secret|signature)=([^&\s\"';]+)"
 )
@@ -310,16 +313,14 @@ def is_sensitive_key(key: Any) -> bool:
     parts = [part for part in normalized.split("_") if part]
     if any(part in _SENSITIVE_PARTS for part in parts):
         return True
-    if "api" in parts and "key" in parts:
-        return True
-    return False
+    return bool("api" in parts and "key" in parts)
 
 
 def _scrub_string(value: str) -> str:
     """Masque les secrets *contenus* dans une chaîne (JWT, ``Bearer …``, ``token=…``)."""
     scrubbed = _JWT_RE.sub(REDACTED_JWT, value)
-    scrubbed = _AUTH_SCHEME_RE.sub(lambda match: "%s %s" % (match.group(1), REDACTED), scrubbed)
-    scrubbed = _KV_SECRET_RE.sub(lambda match: "%s=%s" % (match.group(1), REDACTED), scrubbed)
+    scrubbed = _AUTH_SCHEME_RE.sub(lambda match: f"{match.group(1)} {REDACTED}", scrubbed)
+    scrubbed = _KV_SECRET_RE.sub(lambda match: f"{match.group(1)}={REDACTED}", scrubbed)
     return scrubbed
 
 
@@ -328,7 +329,7 @@ def _mask_value(value: Any) -> Any:
     if isinstance(value, str):
         parts = value.split(None, 1)
         if len(parts) == 2 and parts[0].lower() in ("bearer", "basic", "token", "apikey"):
-            return "%s %s" % (parts[0], REDACTED)
+            return f"{parts[0]} {REDACTED}"
     return REDACTED
 
 
@@ -416,12 +417,12 @@ def pseudonymize_ip(ip: str, salt: str, *, keep_prefix: bool = False, prefix: st
                 bits = 24 if address.version == 4 else 64
                 network_text = str(ipaddress.ip_network("%s/%d" % (address, bits), strict=False))
     except ValueError as exc:
-        raise ValueError("pseudonymize_ip : %r n'est pas une IP ni un CIDR valide" % raw) from exc
+        raise ValueError(f"pseudonymize_ip : {raw!r} n'est pas une IP ni un CIDR valide") from exc
 
     digest = hmac.new(salt.encode("utf-8"), packed_str.encode("utf-8"), hashlib.sha256).hexdigest()
-    token = "%s%s" % (prefix, digest[:32])
+    token = f"{prefix}{digest[:32]}"
     if keep_prefix and network_text:
-        return "%s@%s" % (token, network_text)
+        return f"{token}@{network_text}"
     return token
 
 
@@ -461,7 +462,9 @@ def pseudonymize_ip_fields(
         return out
     if isinstance(data, list):
         return [
-            pseudonymize_ip_fields(item, salt, fields=fields, keep_prefix=keep_prefix, depth=depth + 1)
+            pseudonymize_ip_fields(
+                item, salt, fields=fields, keep_prefix=keep_prefix, depth=depth + 1
+            )
             for item in data
         ]
     return data
@@ -511,7 +514,10 @@ def pseudonymize_ips_in_text(data: Any, salt: str, *, depth: int = 0) -> Any:
     if depth > 32 or not salt:
         return data
     if isinstance(data, Mapping):
-        return {key: pseudonymize_ips_in_text(value, salt, depth=depth + 1) for key, value in data.items()}
+        return {
+            key: pseudonymize_ips_in_text(value, salt, depth=depth + 1)
+            for key, value in data.items()
+        }
     if isinstance(data, list):
         return [pseudonymize_ips_in_text(item, salt, depth=depth + 1) for item in data]
     if isinstance(data, str):
@@ -542,14 +548,14 @@ _MONTHS = {
 def _to_iso_utc(moment: datetime) -> str:
     """ISO 8601 UTC en millisecondes, au format du contrat (``…Z``)."""
     if moment.tzinfo is None:
-        moment = moment.replace(tzinfo=timezone.utc)
-    moment = moment.astimezone(timezone.utc)
+        moment = moment.replace(tzinfo=UTC)
+    moment = moment.astimezone(UTC)
     return moment.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
 
 
 def now_iso() -> str:
     """Horodatage courant au format du contrat §3.1."""
-    return _to_iso_utc(datetime.now(timezone.utc))
+    return _to_iso_utc(datetime.now(UTC))
 
 
 def parse_clf_timestamp(value: str) -> datetime | None:
@@ -563,13 +569,15 @@ def parse_clf_timestamp(value: str) -> datetime | None:
     month = _MONTHS.get(month_name.lower())
     if month is None:
         return None
-    tzinfo = timezone.utc
+    tzinfo = UTC
     if offset:
         sign = 1 if offset[0] == "+" else -1
         delta = timedelta(hours=int(offset[1:3]), minutes=int(offset[3:5]))
         tzinfo = timezone(sign * delta)
     try:
-        return datetime(int(year), month, int(day), int(hour), int(minute), int(second), tzinfo=tzinfo)
+        return datetime(
+            int(year), month, int(day), int(hour), int(minute), int(second), tzinfo=tzinfo
+        )
     except ValueError:
         return None
 
@@ -581,7 +589,7 @@ def parse_error_timestamp(value: str) -> datetime | None:
         return None
     year, month, day, hour, minute, second = (int(part) for part in match.groups())
     try:
-        return datetime(year, month, day, hour, minute, second, tzinfo=timezone.utc)
+        return datetime(year, month, day, hour, minute, second, tzinfo=UTC)
     except ValueError:
         return None
 
@@ -595,13 +603,13 @@ def parse_timestamp(value: Any, *, default_year: int | None = None) -> datetime 
     if value is None or isinstance(value, bool):
         return None
     if isinstance(value, datetime):
-        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+        return value if value.tzinfo else value.replace(tzinfo=UTC)
     if isinstance(value, (int, float)):
         seconds = float(value)
         if seconds > 1e11:  # millisecondes
             seconds /= 1000.0
         try:
-            return datetime.fromtimestamp(seconds, tz=timezone.utc)
+            return datetime.fromtimestamp(seconds, tz=UTC)
         except (OverflowError, OSError, ValueError):
             return None
     text = str(value).strip()
@@ -616,7 +624,7 @@ def parse_timestamp(value: Any, *, default_year: int | None = None) -> datetime 
     except ValueError:
         parsed = None
     if parsed is not None:
-        return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+        return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
 
     clf = parse_clf_timestamp(text)
     if clf is not None:
@@ -631,7 +639,7 @@ def parse_timestamp(value: Any, *, default_year: int | None = None) -> datetime 
         month = _MONTHS.get(month_name.lower())
         if month is None:
             return None
-        reference = datetime.now(timezone.utc)
+        reference = datetime.now(UTC)
         try:
             candidate = datetime(
                 default_year or reference.year,
@@ -640,7 +648,7 @@ def parse_timestamp(value: Any, *, default_year: int | None = None) -> datetime 
                 int(hour),
                 int(minute),
                 int(second),
-                tzinfo=timezone.utc,
+                tzinfo=UTC,
             )
         except ValueError:
             return None
@@ -695,7 +703,9 @@ _COMBINED_RE = re.compile(
     r"(?:\s+(?P<extra>\S+))?\s*$"
 )
 
-_REQUEST_RE = re.compile(r"^(?P<method>[A-Za-z]+)\s+(?P<target>\S+)(?:\s+(?P<protocol>HTTP/[\d.]+))?$")
+_REQUEST_RE = re.compile(
+    r"^(?P<method>[A-Za-z]+)\s+(?P<target>\S+)(?:\s+(?P<protocol>HTTP/[\d.]+))?$"
+)
 
 #: Ligne de ``nginx error.log`` : ``2026/02/14 10:00:00 [error] 1234#1234: *5 message``.
 _ERROR_RE = re.compile(
@@ -746,7 +756,9 @@ def truncate_payload(
         if serialized_size(result) <= max_bytes:
             break
         candidates = [
-            (serialized_size({key: value}), key) for key, value in result.items() if key not in keep_keys
+            (serialized_size({key: value}), key)
+            for key, value in result.items()
+            if key not in keep_keys
         ]
         if not candidates:
             break
@@ -932,7 +944,9 @@ def build_event(
         event = redact_secrets(event)
     if ip_salt:
         # 1) champs identifiés comme des adresses (labels.src_ip, client_ip, remote_addr…)
-        event = pseudonymize_ip_fields(event, ip_salt, fields=DEFAULT_IP_FIELDS, keep_prefix=keep_ip_prefix)
+        event = pseudonymize_ip_fields(
+            event, ip_salt, fields=DEFAULT_IP_FIELDS, keep_prefix=keep_ip_prefix
+        )
         # 2) adresses restées en clair dans le texte libre (message de la ligne brute) : sans
         #    cette passe, la pseudonymisation serait contournée par ``payload.message``.
         event["labels"] = pseudonymize_ips_in_text(event["labels"], ip_salt)
@@ -951,9 +965,9 @@ def validate_event(event: Mapping[str, Any]) -> None:
     if not event.get("tenant_id"):
         raise ValueError("tenant_id manquant (contrat §1)")
     if event.get("kind") not in KINDS:
-        raise ValueError("kind invalide : %r (énumération §3.1)" % (event.get("kind"),))
+        raise ValueError("kind invalide : {!r} (énumération §3.1)".format(event.get("kind")))
     if event.get("severity_hint") is not None and event["severity_hint"] not in SEVERITY_HINTS:
-        raise ValueError("severity_hint invalide : %r" % (event.get("severity_hint"),))
+        raise ValueError("severity_hint invalide : {!r}".format(event.get("severity_hint")))
     source = event.get("source")
     if not isinstance(source, Mapping) or not source.get("type") or not source.get("name"):
         raise ValueError("source.type et source.name sont obligatoires (contrat §3.1)")
@@ -962,14 +976,16 @@ def validate_event(event: Mapping[str, Any]) -> None:
         raise ValueError("labels doit être un objet plat")
     for key, value in labels.items():
         if isinstance(value, (Mapping, list, tuple, set)):
-            raise ValueError("labels.%s n'est pas scalaire : « labels » doit rester plat (§3.1)" % key)
+            raise ValueError(
+                f"labels.{key} n'est pas scalaire : « labels » doit rester plat (§3.1)"
+            )
     payload = event.get("payload")
     if not isinstance(payload, Mapping):
         raise ValueError("payload doit être un objet")
     if serialized_size(payload) > MAX_PAYLOAD_BYTES:
         raise ValueError("payload sérialisé > %d octets (contrat §3.1)" % MAX_PAYLOAD_BYTES)
     if parse_timestamp(event.get("ts")) is None:
-        raise ValueError("ts illisible : %r" % (event.get("ts"),))
+        raise ValueError("ts illisible : {!r}".format(event.get("ts")))
 
 
 # --------------------------------------------------------------------------------------
@@ -1002,7 +1018,7 @@ class TailStateStore:
         if not self.path:
             return
         try:
-            with open(self.path, "r", encoding="utf-8") as handle:
+            with open(self.path, encoding="utf-8") as handle:
                 document = json.load(handle)
         except (OSError, ValueError):
             return
@@ -1030,9 +1046,13 @@ class TailStateStore:
         if not self.path:
             return
         with self._lock:
-            document = {"version": self.VERSION, "files": dict(self._files), "updated_at": now_iso()}
+            document = {
+                "version": self.VERSION,
+                "files": dict(self._files),
+                "updated_at": now_iso(),
+            }
         directory = os.path.dirname(os.path.abspath(self.path)) or "."
-        temporary = "%s.tmp" % self.path
+        temporary = f"{self.path}.tmp"
         try:
             os.makedirs(directory, exist_ok=True)
             with open(temporary, "w", encoding="utf-8") as handle:
@@ -1042,8 +1062,8 @@ class TailStateStore:
             os.replace(temporary, self.path)
         except OSError as exc:  # l'état est un confort, pas une condition de fonctionnement
             print(
-                "[ingest-nginx] état non enregistré (%s) : la reprise après redémarrage repartira "
-                "du début du fichier" % exc,
+                f"[ingest-nginx] état non enregistré ({exc}) : la reprise après redémarrage repartira "
+                "du début du fichier",
                 file=sys.stderr,
                 flush=True,
             )
@@ -1161,10 +1181,8 @@ class LogTailer:
                 if stop_event.wait(self.poll_interval):
                     return
         finally:
-            try:
+            with _contextlib.suppress(OSError):
                 handle.close()
-            except OSError:
-                pass
 
 
 # --------------------------------------------------------------------------------------
@@ -1228,8 +1246,8 @@ def parse_retry_after(value: Any) -> float | None:
     if moment is None:
         return None
     if moment.tzinfo is None:
-        moment = moment.replace(tzinfo=timezone.utc)
-    return max(0.0, (moment - datetime.now(timezone.utc)).total_seconds())
+        moment = moment.replace(tzinfo=UTC)
+    return max(0.0, (moment - datetime.now(UTC)).total_seconds())
 
 
 def post_json(
@@ -1263,7 +1281,7 @@ def post_json(
         raw = exc.read()
         return exc.code, _decode(raw), _text(raw), exc.headers
     except (urlerror.URLError, OSError, ValueError) as exc:
-        raise TransportError("échec de la requête vers %s : %s" % (safe_url(url), exc)) from exc
+        raise TransportError(f"échec de la requête vers {safe_url(url)} : {exc}") from exc
 
 
 def error_summary(payload: Any, raw_text: str) -> str:
@@ -1276,7 +1294,9 @@ def error_summary(payload: Any, raw_text: str) -> str:
             details = error.get("details")
             parts = [str(part) for part in (code, message) if part]
             if details:
-                parts.append("details=%s" % json.dumps(details, ensure_ascii=False, default=str)[:300])
+                parts.append(
+                    f"details={json.dumps(details, ensure_ascii=False, default=str)[:300]}"
+                )
             if parts:
                 return " · ".join(parts)
         return json.dumps(payload, ensure_ascii=False, default=str)[:300]
@@ -1291,7 +1311,15 @@ def error_summary(payload: Any, raw_text: str) -> str:
 class BatchResult:
     """Résultat d'un envoi de lot (vocabulaire fermé, utilisé par le récapitulatif)."""
 
-    __slots__ = ("outcome", "http_status", "accepted", "rejected", "findings", "message", "attempts")
+    __slots__ = (
+        "accepted",
+        "attempts",
+        "findings",
+        "http_status",
+        "message",
+        "outcome",
+        "rejected",
+    )
 
     def __init__(
         self,
@@ -1353,7 +1381,7 @@ class IngestClient:
         log: Any = None,
         stop_event: threading.Event | None = None,
     ) -> None:
-        self.endpoint = "%s/api/v1/events" % base_url.rstrip("/")
+        self.endpoint = "{}/api/v1/events".format(base_url.rstrip("/"))
         self.api_key = api_key
         self.timeout = float(timeout)
         self.max_attempts = max(1, int(max_attempts))
@@ -1363,7 +1391,7 @@ class IngestClient:
         self._stop = stop_event or threading.Event()
 
     def __repr__(self) -> str:  # pragma: no cover - jamais de secret dans le repr
-        return "IngestClient(endpoint=%r, api_key=%s)" % (
+        return "IngestClient(endpoint={!r}, api_key={})".format(
             safe_url(self.endpoint),
             "'***'" if self.api_key else "None",
         )
@@ -1379,7 +1407,9 @@ class IngestClient:
         if not events:
             return BatchResult("accepted", accepted=0)
         if len(events) > MAX_BATCH_SIZE:
-            raise ValueError("un lot ne peut pas dépasser %d événements (contrat §4.3)" % MAX_BATCH_SIZE)
+            raise ValueError(
+                "un lot ne peut pas dépasser %d événements (contrat §4.3)" % MAX_BATCH_SIZE
+            )
 
         body = {"events": list(events)}
         delay = self.backoff_base
@@ -1395,10 +1425,12 @@ class IngestClient:
             except TransportError as exc:
                 last_message = str(exc)
                 if attempt >= self.max_attempts:
-                    self._log("lot : échec réseau après %d tentative(s) — %s" % (attempt, last_message))
+                    self._log(
+                        "lot : échec réseau après %d tentative(s) — %s" % (attempt, last_message)
+                    )
                     return BatchResult("transport", message=last_message, attempts=attempt)
                 wait = min(delay, self.retry_after_max)
-                self._log("lot : %s — nouvelle tentative dans %.1f s" % (last_message, wait))
+                self._log(f"lot : {last_message} — nouvelle tentative dans {wait:.1f} s")
                 if self._wait(wait):
                     return BatchResult("interrupted", message="arrêt demandé", attempts=attempt)
                 delay = min(delay * 2, self.retry_after_max)
@@ -1420,7 +1452,7 @@ class IngestClient:
             if status == 429 or 500 <= status < 600:
                 last_message = "HTTP %d — %s" % (status, error_summary(payload, raw_text))
                 if attempt >= self.max_attempts:
-                    self._log("lot : %s (tentatives épuisées)" % last_message)
+                    self._log(f"lot : {last_message} (tentatives épuisées)")
                     return BatchResult(
                         "exhausted", http_status=status, message=last_message, attempts=attempt
                     )
@@ -1440,19 +1472,32 @@ class IngestClient:
             if status in (401, 403):
                 last_message = (
                     "HTTP %d : clé API absente, invalide, révoquée ou rôle sans capacité "
-                    "« write:events » (contrat §4.2) — %s" % (status, error_summary(payload, raw_text))
+                    "« write:events » (contrat §4.2) — %s"
+                    % (status, error_summary(payload, raw_text))
                 )
                 self._log(last_message)
-                return BatchResult("auth", http_status=status, message=last_message, attempts=attempt)
+                return BatchResult(
+                    "auth", http_status=status, message=last_message, attempts=attempt
+                )
 
             if status in (400, 409, 422):
-                last_message = "HTTP %d : lot refusé — %s" % (status, error_summary(payload, raw_text))
+                last_message = "HTTP %d : lot refusé — %s" % (
+                    status,
+                    error_summary(payload, raw_text),
+                )
                 self._log(last_message)
-                return BatchResult("rejected", http_status=status, message=last_message, attempts=attempt)
+                return BatchResult(
+                    "rejected", http_status=status, message=last_message, attempts=attempt
+                )
 
-            last_message = "HTTP %d : réponse inattendue — %s" % (status, error_summary(payload, raw_text))
+            last_message = "HTTP %d : réponse inattendue — %s" % (
+                status,
+                error_summary(payload, raw_text),
+            )
             self._log(last_message)
-            return BatchResult("unexpected", http_status=status, message=last_message, attempts=attempt)
+            return BatchResult(
+                "unexpected", http_status=status, message=last_message, attempts=attempt
+            )
 
 
 # --------------------------------------------------------------------------------------
@@ -1579,7 +1624,7 @@ def run_follow(
                     )
                 except (LineUnparsed, ValueError) as exc:
                     stats.add(lines_unparsed=1)
-                    log("ligne ignorée dans %s : %s" % (Path(tailer.path).name, exc))
+                    log(f"ligne ignorée dans {Path(tailer.path).name} : {exc}")
                     state.update(tailer.path, offset=next_offset)
                     continue
                 if args.ip_salt:
@@ -1591,13 +1636,11 @@ def run_follow(
                 if not _put(event):
                     return
                 state.update(tailer.path, offset=next_offset)
-        except Exception as exc:  # noqa: BLE001 - un lecteur ne doit jamais tuer le collecteur
-            log("lecteur %s interrompu : %s" % (Path(tailer.path).name, exc))
+        except Exception as exc:
+            log(f"lecteur {Path(tailer.path).name} interrompu : {exc}")
         finally:
-            try:
+            with _contextlib.suppress(queue.Full):
                 work.put(_SENTINEL, timeout=5.0)
-            except queue.Full:
-                pass
 
     def _put(event: dict[str, Any]) -> bool:
         """Met un événement en file en bloquant si elle est pleine ; ``False`` si arrêt demandé."""
@@ -1624,7 +1667,9 @@ def run_follow(
 
     for tailer in tailers:
         log("suivi de %s (reprise à l'offset %d)" % (tailer.path, tailer.stored_offset()))
-        thread = threading.Thread(target=reader_loop, args=(tailer,), name="reader:%s" % tailer.path, daemon=True)
+        thread = threading.Thread(
+            target=reader_loop, args=(tailer,), name=f"reader:{tailer.path}", daemon=True
+        )
         thread.start()
         readers.append(thread)
 
@@ -1647,7 +1692,11 @@ def run_follow(
         result = client.post_batch(batch)
         stats.add(batches_sent=1)
         stats.add(retries=max(0, result.attempts - 1))
-        stats.add(events_accepted=result.accepted, events_rejected=result.rejected, findings=result.findings)
+        stats.add(
+            events_accepted=result.accepted,
+            events_rejected=result.rejected,
+            findings=result.findings,
+        )
         if result.outcome == "accepted":
             log("lot de %d événement(s) accepté (%s)" % (len(batch), reason))
         elif result.outcome == "rejected":
@@ -1764,7 +1813,11 @@ def run_once(
                 log("lot de %d événement(s) perdu : %s" % (len(batch), result.message))
                 exit_code = max(exit_code, 1)
                 stats.add(batches_failed=1)
-            stats.add(events_accepted=result.accepted, events_rejected=result.rejected, findings=result.findings)
+            stats.add(
+                events_accepted=result.accepted,
+                events_rejected=result.rejected,
+                findings=result.findings,
+            )
         stats.add(batches_sent=1)
 
     stop_event = threading.Event()
@@ -1785,7 +1838,7 @@ def run_once(
                     )
                 except (LineUnparsed, ValueError) as exc:
                     stats.add(lines_unparsed=1)
-                    log("ligne ignorée dans %s : %s" % (Path(tailer.path).name, exc))
+                    log(f"ligne ignorée dans {Path(tailer.path).name} : {exc}")
                     state.update(tailer.path, offset=next_offset)
                     continue
                 if args.ip_salt:
@@ -1802,7 +1855,7 @@ def run_once(
                     return exit_code
         flush()
     except _StopIngest as exc:
-        log("collecte interrompue : %s" % exc)
+        log(f"collecte interrompue : {exc}")
     except KeyboardInterrupt:
         log("interruption : vidage du lot en cours…")
         try:
@@ -1847,8 +1900,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--url",
         default=env_first("THOT_SECURE_URL", "THOT_URL", default=DEFAULT_BASE_URL),
-        help="base de l'API (défaut : $env:THOT_SECURE_URL, sinon $env:THOT_URL, sinon %s)"
-        % DEFAULT_BASE_URL,
+        help=f"base de l'API (défaut : $env:THOT_SECURE_URL, sinon $env:THOT_URL, sinon {DEFAULT_BASE_URL})",
     )
     parser.add_argument(
         "--api-key",
@@ -1871,12 +1923,15 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="conserve le réseau (/24 IPv4, /64 IPv6) à côté du pseudonyme",
     )
-    parser.add_argument("--source-host", help="force source.host (sinon l'hôte virtuel de la ligne)")
+    parser.add_argument(
+        "--source-host", help="force source.host (sinon l'hôte virtuel de la ligne)"
+    )
     parser.add_argument(
         "--batch-size",
         type=int,
         default=DEFAULT_BATCH_SIZE,
-        help="événements par lot (1 à %d, contrat §4.3 ; défaut %d)" % (MAX_BATCH_SIZE, DEFAULT_BATCH_SIZE),
+        help="événements par lot (1 à %d, contrat §4.3 ; défaut %d)"
+        % (MAX_BATCH_SIZE, DEFAULT_BATCH_SIZE),
     )
     parser.add_argument(
         "--queue-size",
@@ -1889,38 +1944,38 @@ def build_parser() -> argparse.ArgumentParser:
         "--flush-interval",
         type=float,
         default=DEFAULT_FLUSH_INTERVAL,
-        help="délai maximal avant envoi d'un lot incomplet, en secondes (défaut %s)" % DEFAULT_FLUSH_INTERVAL,
+        help=f"délai maximal avant envoi d'un lot incomplet, en secondes (défaut {DEFAULT_FLUSH_INTERVAL})",
     )
     parser.add_argument(
         "--poll-interval",
         type=float,
         default=DEFAULT_POLL_INTERVAL,
-        help="période d'interrogation du fichier en mode suivi, en secondes (défaut %s)"
-        % DEFAULT_POLL_INTERVAL,
+        help=f"période d'interrogation du fichier en mode suivi, en secondes (défaut {DEFAULT_POLL_INTERVAL})",
     )
     parser.add_argument(
         "--timeout",
         type=float,
         default=DEFAULT_TIMEOUT,
-        help="délai d'attente par requête HTTP, en secondes (défaut %s)" % DEFAULT_TIMEOUT,
+        help=f"délai d'attente par requête HTTP, en secondes (défaut {DEFAULT_TIMEOUT})",
     )
     parser.add_argument(
         "--max-attempts",
         type=int,
         default=DEFAULT_MAX_ATTEMPTS,
-        help="nombre total de tentatives par lot sur 429/5xx/réseau (défaut %d)" % DEFAULT_MAX_ATTEMPTS,
+        help="nombre total de tentatives par lot sur 429/5xx/réseau (défaut %d)"
+        % DEFAULT_MAX_ATTEMPTS,
     )
     parser.add_argument(
         "--retry-after-max",
         type=float,
         default=DEFAULT_RETRY_AFTER_MAX,
-        help="plafond d'attente imposé par Retry-After, en secondes (défaut %s)" % DEFAULT_RETRY_AFTER_MAX,
+        help=f"plafond d'attente imposé par Retry-After, en secondes (défaut {DEFAULT_RETRY_AFTER_MAX})",
     )
     parser.add_argument(
         "--state-file",
         default=DEFAULT_STATE_FILE,
-        help="fichier d'état JSON mémorisant l'offset de chaque journal (défaut %s) ; "
-        "ignoré en --dry-run" % DEFAULT_STATE_FILE,
+        help=f"fichier d'état JSON mémorisant l'offset de chaque journal (défaut {DEFAULT_STATE_FILE}) ; "
+        "ignoré en --dry-run",
     )
     parser.add_argument(
         "--from-start",
@@ -1948,14 +2003,16 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="en --dry-run : sortie JSON indentée par lot au lieu d'un JSON compact par ligne",
     )
-    parser.add_argument("-v", "--verbose", action="store_true", help="journalise la progression détaillée")
+    parser.add_argument(
+        "-v", "--verbose", action="store_true", help="journalise la progression détaillée"
+    )
     parser.add_argument("--version", action="version", version="thotsecure-nginx-ingest 0.1.0")
     return parser
 
 
 def _stderr(message: str) -> None:
     """Journalise sur stderr : stdout reste réservé aux données (JSON en ``--dry-run``)."""
-    print("[ingest-nginx] %s" % message, file=sys.stderr, flush=True)
+    print(f"[ingest-nginx] {message}", file=sys.stderr, flush=True)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -1981,7 +2038,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     missing = [path for path in args.files if not os.path.exists(path)]
     if missing:
-        _stderr("journal introuvable : %s" % ", ".join(missing))
+        _stderr("journal introuvable : {}".format(", ".join(missing)))
         return 2
 
     log = _stderr if args.verbose else (lambda _message: None)
@@ -2072,8 +2129,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         offsets = {path: entry.get("offset") for path, entry in state.snapshot().items()}
         if offsets:
             _stderr(
-                "offsets mémorisés (reprise au prochain démarrage) : %s"
-                % json.dumps(offsets, ensure_ascii=False)
+                f"offsets mémorisés (reprise au prochain démarrage) : {json.dumps(offsets, ensure_ascii=False)}"
             )
     return code
 

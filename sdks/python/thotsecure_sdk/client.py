@@ -23,13 +23,13 @@ import json
 import logging
 import os
 import warnings
-from typing import Any, Dict, Iterable, Iterator, List, Mapping, Optional, Sequence, Union
+from collections.abc import Iterable, Iterator, Mapping, Sequence
+from typing import Any, Self
 
 from . import helpers as _helpers
 from .errors import (
-    ThotSecureError,
     ServerError,
-    TransportError,
+    ThotSecureError,
     ValidationError,
     error_from_response,
 )
@@ -48,7 +48,6 @@ from .models import (
     RuleValidation,
     StatsOverview,
     Tenant,
-    Model,
 )
 from .transport import (
     DEFAULT_USER_AGENT,
@@ -62,7 +61,7 @@ from .transport import (
 
 logger = logging.getLogger("thotsecure_sdk")
 
-__all__ = ["ThotSecureClient", "MAX_BATCH_SIZE", "DEFAULT_BASE_URL"]
+__all__ = ["DEFAULT_BASE_URL", "MAX_BATCH_SIZE", "ThotSecureClient"]
 
 #: Taille maximale d'un lot d'ingestion imposée par le contrat §4.3.
 MAX_BATCH_SIZE = 500
@@ -87,7 +86,7 @@ def _env_bool(name: str, default: bool) -> bool:
     return default
 
 
-def _env_float(name: str, default: Optional[float]) -> Optional[float]:
+def _env_float(name: str, default: float | None) -> float | None:
     raw = os.environ.get(name)
     if raw is None or raw.strip() == "":
         return default
@@ -124,21 +123,21 @@ class ThotSecureClient:
 
     def __init__(
         self,
-        base_url: Optional[str] = None,
-        api_key: Optional[str] = None,
-        tenant_id: Optional[str] = None,
+        base_url: str | None = None,
+        api_key: str | None = None,
+        tenant_id: str | None = None,
         *,
-        timeout: Optional[float] = None,
-        max_retries: Optional[int] = None,
-        verify_tls: Optional[bool] = None,
-        transport: Optional[Transport] = None,
-        user_agent: Optional[str] = None,
+        timeout: float | None = None,
+        max_retries: int | None = None,
+        verify_tls: bool | None = None,
+        transport: Transport | None = None,
+        user_agent: str | None = None,
         backoff_base: float = 0.5,
         backoff_max: float = 30.0,
         max_retry_after: float = 60.0,
         prefer_httpx: bool = True,
-        sleep: Optional[Any] = None,
-        rand: Optional[Any] = None,
+        sleep: Any | None = None,
+        rand: Any | None = None,
     ) -> None:
         self.base_url = (base_url or os.environ.get("THOT_URL") or DEFAULT_BASE_URL).rstrip("/")
         if not self.base_url.startswith(("http://", "https://")):
@@ -147,15 +146,11 @@ class ThotSecureClient:
         self.api_key = api_key if api_key is not None else os.environ.get("THOT_API_KEY")
         self.tenant_id = tenant_id if tenant_id is not None else os.environ.get("THOT_TENANT_ID")
 
-        self.timeout = float(
-            timeout if timeout is not None else (_env_float("THOT_TIMEOUT", None) or 30.0)
-        )
+        self.timeout = float(timeout if timeout is not None else (_env_float("THOT_TIMEOUT", None) or 30.0))
         self.max_retries = int(
             max_retries if max_retries is not None else (_env_float("THOT_MAX_RETRIES", None) or 3)
         )
-        self.verify_tls = bool(
-            verify_tls if verify_tls is not None else _env_bool("THOT_VERIFY_TLS", True)
-        )
+        self.verify_tls = bool(verify_tls if verify_tls is not None else _env_bool("THOT_VERIFY_TLS", True))
         self.user_agent = user_agent or DEFAULT_USER_AGENT
         self._closed = False
 
@@ -172,7 +167,7 @@ class ThotSecureClient:
         base_transport = transport or create_transport(
             verify_tls=self.verify_tls, prefer_httpx=prefer_httpx, timeout=self.timeout
         )
-        retry_kwargs: Dict[str, Any] = {
+        retry_kwargs: dict[str, Any] = {
             "max_retries": self.max_retries,
             "backoff_base": backoff_base,
             "backoff_max": backoff_max,
@@ -188,7 +183,7 @@ class ThotSecureClient:
     # Cycle de vie
     # ==================================================================================
 
-    def __enter__(self) -> "ThotSecureClient":
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
@@ -203,7 +198,7 @@ class ThotSecureClient:
                 self._closed = True
 
     def __repr__(self) -> str:  # pragma: no cover - jamais de secret dans le repr
-        return "ThotSecureClient(base_url=%r, tenant_id=%r, api_key=%s)" % (
+        return "ThotSecureClient(base_url={!r}, tenant_id={!r}, api_key={})".format(
             self.base_url,
             self.tenant_id,
             "'***'" if self.api_key else "None",
@@ -222,14 +217,14 @@ class ThotSecureClient:
         return self.API_PREFIX + path
 
     @staticmethod
-    def _compact(**kwargs: Any) -> Dict[str, Any]:
+    def _compact(**kwargs: Any) -> dict[str, Any]:
         """Retire les valeurs ``None`` d'un corps de requête."""
         return {k: v for k, v in kwargs.items() if v is not None}
 
     @staticmethod
-    def _qparams(**kwargs: Any) -> Dict[str, Any]:
+    def _qparams(**kwargs: Any) -> dict[str, Any]:
         """Prépare les paramètres de requête (``None`` retiré, booléens en minuscules)."""
-        params: Dict[str, Any] = {}
+        params: dict[str, Any] = {}
         for key, value in kwargs.items():
             if value is None:
                 continue
@@ -244,25 +239,25 @@ class ThotSecureClient:
         method: str,
         path: str,
         *,
-        params: Optional[Mapping[str, Any]] = None,
+        params: Mapping[str, Any] | None = None,
         json_body: Any = _UNSET,
-        data: Optional[Union[str, bytes]] = None,
-        content_type: Optional[str] = None,
-        headers: Optional[Mapping[str, str]] = None,
-        idempotency_key: Optional[str] = None,
-        retry_safe: Optional[bool] = None,
+        data: str | bytes | None = None,
+        content_type: str | None = None,
+        headers: Mapping[str, str] | None = None,
+        idempotency_key: str | None = None,
+        retry_safe: bool | None = None,
         auth: bool = True,
     ) -> HttpResponse:
         """Exécute une requête et lève une exception typée pour tout statut ≥ 400."""
         url = self._url(path)
-        request_headers: Dict[str, str] = {
+        request_headers: dict[str, str] = {
             "Accept": "application/json",
             "User-Agent": self.user_agent,
         }
         if auth and self.api_key:
             request_headers["X-API-Key"] = self.api_key
 
-        content: Optional[bytes] = None
+        content: bytes | None = None
         if json_body is not _UNSET:
             content = json.dumps(json_body, ensure_ascii=False, default=str).encode("utf-8")
             request_headers["Content-Type"] = "application/json"
@@ -295,7 +290,7 @@ class ThotSecureClient:
         if response.status_code < 400:
             return
         payload: Any = None
-        text: Optional[str] = None
+        text: str | None = None
         if response.content:
             try:
                 payload = response.json()
@@ -320,7 +315,7 @@ class ThotSecureClient:
             return response.json()
         except (ValueError, UnicodeDecodeError) as exc:
             raise ThotSecureError(
-                "réponse non JSON (%s) : %s" % (response.status_code, response.text[:200]),
+                f"réponse non JSON ({response.status_code}) : {response.text[:200]}",
                 code="invalid_response",
                 status_code=response.status_code,
             ) from exc
@@ -328,22 +323,22 @@ class ThotSecureClient:
     def _model(self, model: type, response: HttpResponse) -> Any:
         return model.from_dict(self._json(response) or {})
 
-    def _page(self, model: Optional[type], response: HttpResponse) -> Page:
+    def _page(self, model: type | None, response: HttpResponse) -> Page:
         return Page.from_payload(self._json(response), model)
 
     @staticmethod
-    def _event_payload(event: Union[Event, Mapping[str, Any]]) -> Dict[str, Any]:
+    def _event_payload(event: Event | Mapping[str, Any]) -> dict[str, Any]:
         if isinstance(event, Event):
             return event.to_dict()
         if isinstance(event, Mapping):
             return dict(event)
         raise ValidationError(
-            "un événement doit être un Event ou un mapping, reçu %r" % type(event).__name__,
+            f"un événement doit être un Event ou un mapping, reçu {type(event).__name__!r}",
             code="validation_error",
             details={"type": type(event).__name__},
         )
 
-    def _fill_tenant(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+    def _fill_tenant(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Renseigne ``tenant_id`` depuis la configuration du client si l'appelant l'a omis."""
         if not payload.get("tenant_id") and self.tenant_id:
             payload["tenant_id"] = self.tenant_id
@@ -353,15 +348,15 @@ class ThotSecureClient:
     # §4.1 Santé, méta, observabilité
     # ==================================================================================
 
-    def whoami(self) -> Dict[str, Any]:
+    def whoami(self) -> dict[str, Any]:
         """``GET /api/v1/auth/whoami`` → tenant, rôle, capacités, mode d'autonomie."""
         return self._json(self._request("GET", self._api("/auth/whoami")))
 
-    def healthz(self) -> Dict[str, Any]:
+    def healthz(self) -> dict[str, Any]:
         """``GET /healthz`` (public) → ``{"status","version","uptime_s"}``."""
         return self._json(self._request("GET", "/healthz", auth=False))
 
-    def readyz(self, *, raise_on_error: bool = False) -> Dict[str, Any]:
+    def readyz(self, *, raise_on_error: bool = False) -> dict[str, Any]:
         """``GET /readyz`` (public) — vérifie DB + bus + règles.
 
         Par défaut, un ``503`` ne lève pas d'exception mais retourne un dictionnaire
@@ -380,7 +375,7 @@ class ThotSecureClient:
                 "details": exc.details,
             }
 
-    def version(self) -> Dict[str, Any]:
+    def version(self) -> dict[str, Any]:
         """``GET /version`` (public) → version, commit, licence, mode d'autonomie global."""
         return self._json(self._request("GET", "/version", auth=False))
 
@@ -403,8 +398,8 @@ class ThotSecureClient:
         name: str,
         *,
         mode: str = "supervised",
-        autonomy_allowlist: Optional[Sequence[str]] = None,
-        dry_run: Optional[bool] = None,
+        autonomy_allowlist: Sequence[str] | None = None,
+        dry_run: bool | None = None,
     ) -> Tenant:
         """``POST /api/v1/tenants`` (capacité ``admin:tenants``).
 
@@ -413,7 +408,7 @@ class ThotSecureClient:
         """
         if mode not in Tenant.MODES:
             raise ValidationError(
-                "mode invalide : %r (attendu : %s)" % (mode, ", ".join(Tenant.MODES)),
+                "mode invalide : {!r} (attendu : {})".format(mode, ", ".join(Tenant.MODES)),
                 code="validation_error",
             )
         body = self._compact(
@@ -425,18 +420,20 @@ class ThotSecureClient:
         )
         return self._model(Tenant, self._request("POST", self._api("/tenants"), json_body=body))
 
-    def get_tenant(self, tenant_id: Optional[str] = None) -> Tenant:
+    def get_tenant(self, tenant_id: str | None = None) -> Tenant:
         """``GET /api/v1/tenants/{id}`` (capacité ``read:stats``, self)."""
-        return self._model(Tenant, self._request("GET", self._api("/tenants/%s" % self._require_tenant(tenant_id))))
+        return self._model(
+            Tenant, self._request("GET", self._api(f"/tenants/{self._require_tenant(tenant_id)}"))
+        )
 
     def update_tenant(
         self,
-        tenant_id: Optional[str] = None,
+        tenant_id: str | None = None,
         *,
-        mode: Optional[str] = None,
-        dry_run: Optional[bool] = None,
-        name: Optional[str] = None,
-        autonomy_allowlist: Optional[Sequence[str]] = None,
+        mode: str | None = None,
+        dry_run: bool | None = None,
+        name: str | None = None,
+        autonomy_allowlist: Sequence[str] | None = None,
     ) -> Tenant:
         """``PATCH /api/v1/tenants/{id}`` (capacité ``admin:tenants``).
 
@@ -445,7 +442,7 @@ class ThotSecureClient:
         """
         if mode is not None and mode not in Tenant.MODES:
             raise ValidationError(
-                "mode invalide : %r (attendu : %s)" % (mode, ", ".join(Tenant.MODES)),
+                "mode invalide : {!r} (attendu : {})".format(mode, ", ".join(Tenant.MODES)),
                 code="validation_error",
             )
         body = self._compact(
@@ -459,15 +456,15 @@ class ThotSecureClient:
                 "update_tenant : aucun champ à modifier (mode, dry_run, name, autonomy_allowlist)",
                 code="validation_error",
             )
-        path = self._api("/tenants/%s" % self._require_tenant(tenant_id))
+        path = self._api(f"/tenants/{self._require_tenant(tenant_id)}")
         return self._model(Tenant, self._request("PATCH", path, json_body=body))
 
     def create_key(
         self,
         role: str = "responder",
         *,
-        label: Optional[str] = None,
-        tenant_id: Optional[str] = None,
+        label: str | None = None,
+        tenant_id: str | None = None,
     ) -> ApiKey:
         """``POST /api/v1/tenants/{id}/keys`` (capacité ``admin:keys``).
 
@@ -477,34 +474,35 @@ class ThotSecureClient:
         roles = ("viewer", "analyst", "responder", "admin")
         if role not in roles:
             raise ValidationError(
-                "rôle invalide : %r (attendu : %s)" % (role, ", ".join(roles)),
+                "rôle invalide : {!r} (attendu : {})".format(role, ", ".join(roles)),
                 code="validation_error",
             )
-        path = self._api("/tenants/%s/keys" % self._require_tenant(tenant_id))
-        return self._model(ApiKey, self._request("POST", path, json_body=self._compact(role=role, label=label)))
+        path = self._api(f"/tenants/{self._require_tenant(tenant_id)}/keys")
+        return self._model(
+            ApiKey, self._request("POST", path, json_body=self._compact(role=role, label=label))
+        )
 
-    def list_keys(self, tenant_id: Optional[str] = None) -> Page:
+    def list_keys(self, tenant_id: str | None = None) -> Page:
         """``GET /api/v1/tenants/{id}/keys`` (capacité ``admin:keys``)."""
-        path = self._api("/tenants/%s/keys" % self._require_tenant(tenant_id))
+        path = self._api(f"/tenants/{self._require_tenant(tenant_id)}/keys")
         return self._page(ApiKey, self._request("GET", path))
 
     def revoke_key(self, key_id: str) -> None:
         """``DELETE /api/v1/keys/{key_id}`` (capacité ``admin:keys``) → ``204``."""
-        self._request("DELETE", self._api("/keys/%s" % key_id))
-        return None
+        self._request("DELETE", self._api(f"/keys/{key_id}"))
 
     # ==================================================================================
     # §4.3 Événements
     # ==================================================================================
 
-    def ingest_event(self, event: Union[Event, Mapping[str, Any]]) -> IngestResult:
+    def ingest_event(self, event: Event | Mapping[str, Any]) -> IngestResult:
         """``POST /api/v1/events`` avec un événement unique (capacité ``write:events``)."""
         body = self._fill_tenant(self._event_payload(event))
         return self._model(IngestResult, self._request("POST", self._api("/events"), json_body=body))
 
     def ingest_events(
         self,
-        events: Iterable[Union[Event, Mapping[str, Any]]],
+        events: Iterable[Event | Mapping[str, Any]],
         *,
         chunk_size: int = MAX_BATCH_SIZE,
     ) -> IngestResult:
@@ -533,13 +531,13 @@ class ThotSecureClient:
     def list_events(
         self,
         *,
-        kind: Optional[str] = None,
-        source_type: Optional[str] = None,
-        since: Optional[str] = None,
-        until: Optional[str] = None,
-        q: Optional[str] = None,
-        limit: Optional[int] = None,
-        cursor: Optional[str] = None,
+        kind: str | None = None,
+        source_type: str | None = None,
+        since: str | None = None,
+        until: str | None = None,
+        q: str | None = None,
+        limit: int | None = None,
+        cursor: str | None = None,
     ) -> Page:
         """``GET /api/v1/events`` (capacité ``read:events``) — ``limit ≤ 500``, défaut 100."""
         params = self._qparams(
@@ -549,7 +547,7 @@ class ThotSecureClient:
 
     def get_event(self, event_id: str) -> Event:
         """``GET /api/v1/events/{event_id}`` (capacité ``read:events``)."""
-        return self._model(Event, self._request("GET", self._api("/events/%s" % event_id)))
+        return self._model(Event, self._request("GET", self._api(f"/events/{event_id}")))
 
     def iter_events(self, *, max_pages: int = 1000, **filters: Any) -> Iterator[Event]:
         """Itère sur tous les événements en suivant le ``cursor``."""
@@ -562,15 +560,15 @@ class ThotSecureClient:
     def list_findings(
         self,
         *,
-        status: Optional[str] = None,
-        severity: Optional[str] = None,
-        rule_id: Optional[str] = None,
-        since: Optional[str] = None,
-        until: Optional[str] = None,
-        min_risk: Optional[float] = None,
-        sort: Optional[str] = None,
-        limit: Optional[int] = None,
-        cursor: Optional[str] = None,
+        status: str | None = None,
+        severity: str | None = None,
+        rule_id: str | None = None,
+        since: str | None = None,
+        until: str | None = None,
+        min_risk: float | None = None,
+        sort: str | None = None,
+        limit: int | None = None,
+        cursor: str | None = None,
     ) -> Page:
         """``GET /api/v1/findings`` (capacité ``read:findings``).
 
@@ -591,11 +589,11 @@ class ThotSecureClient:
 
     def get_finding(self, finding_id: str) -> Finding:
         """``GET /api/v1/findings/{id}`` → ``Finding`` + actions liées (dans ``extra['actions']``)."""
-        return self._model(Finding, self._request("GET", self._api("/findings/%s" % finding_id)))
+        return self._model(Finding, self._request("GET", self._api(f"/findings/{finding_id}")))
 
-    def ack_finding(self, finding_id: str, *, comment: Optional[str] = None) -> Dict[str, Any]:
+    def ack_finding(self, finding_id: str, *, comment: str | None = None) -> dict[str, Any]:
         """``POST /api/v1/findings/{id}/ack`` (capacité ``write:findings``) → ``{"status":"acked"}``."""
-        path = self._api("/findings/%s/ack" % finding_id)
+        path = self._api(f"/findings/{finding_id}/ack")
         return self._json(self._request("POST", path, json_body=self._compact(comment=comment)))
 
     def close_finding(
@@ -603,8 +601,8 @@ class ThotSecureClient:
         finding_id: str,
         resolution: str,
         *,
-        comment: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        comment: str | None = None,
+    ) -> dict[str, Any]:
         """``POST /api/v1/findings/{id}/close`` (capacité ``write:findings``).
 
         ``resolution`` ∈ ``true_positive|false_positive|mitigated``.
@@ -612,10 +610,10 @@ class ThotSecureClient:
         allowed = ("true_positive", "false_positive", "mitigated")
         if resolution not in allowed:
             raise ValidationError(
-                "resolution invalide : %r (attendu : %s)" % (resolution, ", ".join(allowed)),
+                "resolution invalide : {!r} (attendu : {})".format(resolution, ", ".join(allowed)),
                 code="validation_error",
             )
-        path = self._api("/findings/%s/close" % finding_id)
+        path = self._api(f"/findings/{finding_id}/close")
         return self._json(
             self._request("POST", path, json_body=self._compact(resolution=resolution, comment=comment))
         )
@@ -625,13 +623,13 @@ class ThotSecureClient:
         finding_id: str,
         *,
         duration_seconds: int = 86400,
-        reason: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        reason: str | None = None,
+    ) -> dict[str, Any]:
         """``POST /api/v1/findings/{id}/suppress`` (capacité ``write:findings``).
 
         Crée une exception temporaire sur la règle : à utiliser avec un motif explicite.
         """
-        path = self._api("/findings/%s/suppress" % finding_id)
+        path = self._api(f"/findings/{finding_id}/suppress")
         return self._json(
             self._request(
                 "POST",
@@ -648,10 +646,10 @@ class ThotSecureClient:
         allowed = ("md", "html", "json", "sarif")
         if format not in allowed:
             raise ValidationError(
-                "format invalide : %r (attendu : %s)" % (format, ", ".join(allowed)),
+                "format invalide : {!r} (attendu : {})".format(format, ", ".join(allowed)),
                 code="validation_error",
             )
-        path = self._api("/findings/%s/report" % finding_id)
+        path = self._api(f"/findings/{finding_id}/report")
         response = self._request("GET", path, params={"format": format})
         return response.content if as_bytes else response.text
 
@@ -671,9 +669,9 @@ class ThotSecureClient:
 
     def get_rule(self, rule_id: str) -> Rule:
         """``GET /api/v1/rules/{rule_id}`` → règle complète + YAML source (``rule.yaml_source``)."""
-        return self._model(Rule, self._request("GET", self._api("/rules/%s" % rule_id)))
+        return self._model(Rule, self._request("GET", self._api(f"/rules/{rule_id}")))
 
-    def validate_rule(self, rule: Union[str, Mapping[str, Any]]) -> RuleValidation:
+    def validate_rule(self, rule: str | Mapping[str, Any]) -> RuleValidation:
         """``POST /api/v1/rules/validate`` (capacité ``admin:rules``).
 
         ``rule`` peut être le YAML source (``str``) ou un dictionnaire JSON de règle.
@@ -693,7 +691,7 @@ class ThotSecureClient:
             )
         return self._model(RuleValidation, response)
 
-    def reload_rules(self) -> Dict[str, Any]:
+    def reload_rules(self) -> dict[str, Any]:
         """``POST /api/v1/rules/reload`` (capacité ``admin:rules``) → ``{"loaded":n,"errors":[…]}}``."""
         return self._json(self._request("POST", self._api("/rules/reload"), json_body={}))
 
@@ -701,7 +699,7 @@ class ThotSecureClient:
         """``GET /api/v1/policies`` (capacité ``read:policies``) : politiques + ordre de priorité."""
         return self._json(self._request("GET", self._api("/policies")))
 
-    def reload_policies(self) -> Dict[str, Any]:
+    def reload_policies(self) -> dict[str, Any]:
         """``POST /api/v1/policies/reload`` (capacité ``admin:policies``)."""
         return self._json(self._request("POST", self._api("/policies/reload"), json_body={}))
 
@@ -718,9 +716,9 @@ class ThotSecureClient:
         finding_id: str,
         playbook: str,
         *,
-        params: Optional[Mapping[str, Any]] = None,
+        params: Mapping[str, Any] | None = None,
         dry_run: bool = True,
-        idempotency_key: Optional[str] = None,
+        idempotency_key: str | None = None,
     ) -> Action:
         """``POST /api/v1/actions/plan`` (capacité ``execute:actions``) — aucun effet de bord.
 
@@ -746,11 +744,11 @@ class ThotSecureClient:
     def list_actions(
         self,
         *,
-        status: Optional[str] = None,
-        playbook: Optional[str] = None,
-        finding_id: Optional[str] = None,
-        limit: Optional[int] = None,
-        cursor: Optional[str] = None,
+        status: str | None = None,
+        playbook: str | None = None,
+        finding_id: str | None = None,
+        limit: int | None = None,
+        cursor: str | None = None,
     ) -> Page:
         """``GET /api/v1/actions`` (capacité ``read:findings``)."""
         params = self._qparams(
@@ -760,24 +758,24 @@ class ThotSecureClient:
 
     def get_action(self, action_id: str) -> Action:
         """``GET /api/v1/actions/{id}`` (capacité ``read:findings``)."""
-        return self._model(Action, self._request("GET", self._api("/actions/%s" % action_id)))
+        return self._model(Action, self._request("GET", self._api(f"/actions/{action_id}")))
 
-    def approve_action(self, action_id: str, *, comment: Optional[str] = None) -> Action:
+    def approve_action(self, action_id: str, *, comment: str | None = None) -> Action:
         """``POST /api/v1/actions/{id}/approve`` (capacité ``approve:actions``) → ``approved``."""
-        path = self._api("/actions/%s/approve" % action_id)
+        path = self._api(f"/actions/{action_id}/approve")
         return self._model(Action, self._request("POST", path, json_body=self._compact(comment=comment)))
 
-    def reject_action(self, action_id: str, *, reason: Optional[str] = None) -> Action:
+    def reject_action(self, action_id: str, *, reason: str | None = None) -> Action:
         """``POST /api/v1/actions/{id}/reject`` (capacité ``approve:actions``) → ``rejected`` (terminal)."""
-        path = self._api("/actions/%s/reject" % action_id)
+        path = self._api(f"/actions/{action_id}/reject")
         return self._model(Action, self._request("POST", path, json_body=self._compact(reason=reason)))
 
     def execute_action(
         self,
         action_id: str,
         *,
-        idempotency_key: Optional[str] = None,
-        dry_run: Optional[bool] = None,
+        idempotency_key: str | None = None,
+        dry_run: bool | None = None,
     ) -> Action:
         """``POST /api/v1/actions/{id}/execute`` (capacité ``execute:actions``).
 
@@ -785,7 +783,7 @@ class ThotSecureClient:
         dès qu'une ``idempotency_key`` est fournie : c'est la seule façon dont le SDK réessaiera
         automatiquement cette route (méthode ``POST``).
         """
-        path = self._api("/actions/%s/execute" % action_id)
+        path = self._api(f"/actions/{action_id}/execute")
         body = self._compact(idempotency_key=idempotency_key, dry_run=dry_run)
         return self._model(
             Action,
@@ -796,14 +794,14 @@ class ThotSecureClient:
         self,
         action_id: str,
         *,
-        reason: Optional[str] = None,
-        idempotency_key: Optional[str] = None,
+        reason: str | None = None,
+        idempotency_key: str | None = None,
     ) -> Action:
         """``POST /api/v1/actions/{id}/rollback`` (capacité ``execute:actions``).
 
         Refuse (``409``) une action déjà ``rolled_back``.
         """
-        path = self._api("/actions/%s/rollback" % action_id)
+        path = self._api(f"/actions/{action_id}/rollback")
         body = self._compact(reason=reason, idempotency_key=idempotency_key)
         return self._model(
             Action,
@@ -812,9 +810,7 @@ class ThotSecureClient:
 
     def iter_actions(self, *, max_pages: int = 1000, **filters: Any) -> Iterator[Action]:
         """Itère sur toutes les actions en suivant le ``cursor``."""
-        return self._paginate(
-            lambda cursor: self.list_actions(cursor=cursor, **filters), max_pages=max_pages
-        )
+        return self._paginate(lambda cursor: self.list_actions(cursor=cursor, **filters), max_pages=max_pages)
 
     # ==================================================================================
     # §4.7 Audit
@@ -823,12 +819,12 @@ class ThotSecureClient:
     def list_audit(
         self,
         *,
-        since: Optional[str] = None,
-        until: Optional[str] = None,
-        action: Optional[str] = None,
-        actor: Optional[str] = None,
-        limit: Optional[int] = None,
-        cursor: Optional[str] = None,
+        since: str | None = None,
+        until: str | None = None,
+        action: str | None = None,
+        actor: str | None = None,
+        limit: int | None = None,
+        cursor: str | None = None,
     ) -> Page:
         """``GET /api/v1/audit`` (capacité ``read:audit``)."""
         params = self._qparams(
@@ -838,9 +834,7 @@ class ThotSecureClient:
 
     def iter_audit(self, *, max_pages: int = 1000, **filters: Any) -> Iterator[AuditRecord]:
         """Itère sur tout le journal d'audit en suivant le ``cursor``."""
-        return self._paginate(
-            lambda cursor: self.list_audit(cursor=cursor, **filters), max_pages=max_pages
-        )
+        return self._paginate(lambda cursor: self.list_audit(cursor=cursor, **filters), max_pages=max_pages)
 
     def verify_audit(self) -> AuditVerification:
         """``GET /api/v1/audit/verify`` (capacité ``read:audit``) → ``{"valid","records","broken_at"}``."""
@@ -850,8 +844,8 @@ class ThotSecureClient:
         self,
         *,
         format: str = "jsonl",
-        since: Optional[str] = None,
-        until: Optional[str] = None,
+        since: str | None = None,
+        until: str | None = None,
         as_bytes: bool = False,
     ) -> Any:
         """``GET /api/v1/audit/export?format=jsonl|cef`` (capacité ``read:audit``).
@@ -860,7 +854,7 @@ class ThotSecureClient:
         """
         if format not in ("jsonl", "cef"):
             raise ValidationError(
-                "format invalide : %r (attendu : jsonl, cef)" % (format,), code="validation_error"
+                f"format invalide : {format!r} (attendu : jsonl, cef)", code="validation_error"
             )
         params = self._qparams(format=format, since=since, until=until)
         response = self._request("GET", self._api("/audit/export"), params=params)
@@ -878,20 +872,20 @@ class ThotSecureClient:
         """``GET /api/v1/collectors`` (capacité ``read:stats``)."""
         return self._page(CollectorStatus, self._request("GET", self._api("/collectors")))
 
-    def run_collector(self, name: str) -> Dict[str, Any]:
+    def run_collector(self, name: str) -> dict[str, Any]:
         """``POST /api/v1/collectors/{name}/run`` (capacité ``execute:actions``).
 
         Déclenche un run **sur les cibles déclarées du tenant** uniquement : le SDK n'offre aucune
         primitive de balayage arbitraire (contrat §10, « zéro capacité offensive »).
         """
-        path = self._api("/collectors/%s/run" % name)
+        path = self._api(f"/collectors/{name}/run")
         return self._json(self._request("POST", path, json_body={}))
 
     # ==================================================================================
     # Flux temps réel (§4.8)
     # ==================================================================================
 
-    def ws_url(self, *, types: Optional[Sequence[str]] = None) -> str:
+    def ws_url(self, *, types: Sequence[str] | None = None) -> str:
         """URL WebSocket ``/api/v1/ws/stream`` avec ``api_key`` et ``tenant_id``.
 
         Les navigateurs ne peuvent pas poser d'en-tête sur ``ws://`` : la clé passe donc en
@@ -908,7 +902,7 @@ class ThotSecureClient:
     def stream(
         self,
         *,
-        types: Optional[Sequence[str]] = None,
+        types: Sequence[str] | None = None,
         reconnect: bool = True,
         max_reconnect_attempts: int = 10,
         heartbeat_seconds: float = 30.0,
@@ -934,12 +928,11 @@ class ThotSecureClient:
     # Helpers internes
     # ==================================================================================
 
-    def _require_tenant(self, tenant_id: Optional[str]) -> str:
+    def _require_tenant(self, tenant_id: str | None) -> str:
         resolved = tenant_id or self.tenant_id
         if not resolved:
             raise ValidationError(
-                "aucun tenant_id : passez-le en argument ou au constructeur "
-                "(ou via THOT_TENANT_ID)",
+                "aucun tenant_id : passez-le en argument ou au constructeur (ou via THOT_TENANT_ID)",
                 code="validation_error",
             )
         return resolved
@@ -947,14 +940,13 @@ class ThotSecureClient:
     @staticmethod
     def _paginate(fetch: Any, *, max_pages: int = 1000) -> Iterator[Any]:
         """Suit ``next_cursor`` en se protégeant des boucles et des paginations infinies."""
-        cursor: Optional[str] = None
+        cursor: str | None = None
         seen: set = set()
         pages = 0
         while True:
             page = fetch(cursor)
             pages += 1
-            for item in page.items:
-                yield item
+            yield from page.items
             cursor = page.next_cursor
             if not cursor or cursor in seen or pages >= max_pages:
                 return

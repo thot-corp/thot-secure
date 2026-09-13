@@ -203,6 +203,7 @@ possible sans perdre la lisibilité des données passées, et la **destruction c
 
 ```python
 """Pseudonymisation d'IP — exemple illustratif (stdlib uniquement)."""
+
 import hashlib
 import hmac
 import ipaddress
@@ -226,7 +227,7 @@ def pseudonymize_ip(raw_ip: str) -> dict[str, str]:
 
     digest = hmac.new(PSEUDO_KEY, str(addr).encode("utf-8"), hashlib.sha256).hexdigest()
     return {
-        "src_ip_hash": f"{KEY_ID}:{digest[:32]}",   # tronqué : 128 bits, largement suffisant
+        "src_ip_hash": f"{KEY_ID}:{digest[:32]}",  # tronqué : 128 bits, largement suffisant
         "src_ip_prefix": str(network),
     }
 

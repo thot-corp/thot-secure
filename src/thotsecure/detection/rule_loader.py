@@ -25,10 +25,9 @@ from ..core.models import (
     Condition,
     MatchSpec,
     Rule,
-    RuleDiagnostic,
     RuleDedup,
+    RuleDiagnostic,
     RuleRisk,
-    Threshold,
 )
 from .matchers import condition_is_coherent
 
@@ -263,8 +262,11 @@ def _translate_sigma(document: dict[str, Any], *, path: str | None) -> list[Rule
 
     tags = [str(tag) for tag in document.get("tags") or []]
     mitre = [tag.split(".", 1)[1].upper() for tag in tags if tag.lower().startswith("attack.t")]
-    remediation = str(document.get("falsepositives") and "" or "")
-    remediation = remediation or "Analyser l'événement, confirmer ou infirmer, puis appliquer le playbook adapté."
+    remediation = str((document.get("falsepositives") and "") or "")
+    remediation = (
+        remediation
+        or "Analyser l'événement, confirmer ou infirmer, puis appliquer le playbook adapté."
+    )
 
     rule = Rule(
         id=rule_id,
@@ -352,9 +354,7 @@ def _sigma_field_conditions(field_spec: str, value: Any, *, selection: str) -> l
             op = "cidr"
         elif modifier in {"gt", "gte", "lt", "lte"}:
             op = modifier
-        elif modifier == "all":
-            match_all = True
-        elif modifier in {"contains|all", "all|contains"}:
+        elif modifier == "all" or modifier in {"contains|all", "all|contains"}:
             match_all = True
         else:
             raise RuleLoadError(f"selection '{selection}': modificateur Sigma inconnu '{modifier}'")
@@ -379,7 +379,11 @@ def _sigma_field_conditions(field_spec: str, value: Any, *, selection: str) -> l
 
     if len(values) == 1:
         item = values[0]
-        if isinstance(item, str) and ("*" in item or "?" in item) and op in {"eq", "in", "contains", "icontains"}:
+        if (
+            isinstance(item, str)
+            and ("*" in item or "?" in item)
+            and op in {"eq", "in", "contains", "icontains"}
+        ):
             conditions.append(
                 Condition(
                     field=path,
@@ -389,7 +393,9 @@ def _sigma_field_conditions(field_spec: str, value: Any, *, selection: str) -> l
                 )
             )
         else:
-            conditions.append(Condition(field=path, op=op, value=item, case_sensitive=case_sensitive))
+            conditions.append(
+                Condition(field=path, op=op, value=item, case_sensitive=case_sensitive)
+            )
         return conditions
 
     if op in {"eq", "in"}:
@@ -428,11 +434,7 @@ def _combine_sigma_condition(expression: str, selections: dict[str, MatchSpec]) 
 
 
 def _tokenize_condition(expression: str) -> list[str]:
-    normalized = (
-        expression.replace("(", " ( ")
-        .replace(")", " ) ")
-        .replace("|", " | ")
-    )
+    normalized = expression.replace("(", " ( ").replace(")", " ) ").replace("|", " | ")
     return [token for token in normalized.split() if token]
 
 
@@ -509,7 +511,9 @@ class _ConditionParser:
                 pattern = self._next()
                 matched = self._match_pattern(pattern)
                 if not matched:
-                    raise RuleLoadError(f"condition Sigma : aucune selection ne correspond à {pattern!r}")
+                    raise RuleLoadError(
+                        f"condition Sigma : aucune selection ne correspond à {pattern!r}"
+                    )
                 return self._combine_many(matched, mode="or" if lowered == "1" else "and")
         self._next()
         if token.lower() == "them":
@@ -538,7 +542,9 @@ class _ConditionParser:
     def _combine_many(self, specs: list[MatchSpec], *, mode: str) -> MatchSpec:
         result = MatchSpec()
         for spec in specs:
-            result = self._merge_and(result, spec) if mode == "and" else self._merge_or(result, spec)
+            result = (
+                self._merge_and(result, spec) if mode == "and" else self._merge_or(result, spec)
+            )
         return result
 
     @staticmethod

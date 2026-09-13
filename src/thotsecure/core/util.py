@@ -10,8 +10,9 @@ import re
 import secrets
 import unicodedata
 import uuid
+from collections.abc import Iterable, Mapping, Sequence
 from datetime import UTC, datetime, timedelta
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any
 
 # --------------------------------------------------------------------------------------
 # Temps
@@ -116,7 +117,9 @@ def canonical_json(value: Any) -> str:
     C'est la base de la chaîne d'audit : deux représentations logiquement identiques
     doivent produire exactement la même empreinte.
     """
-    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True, default=_json_default)
+    return json.dumps(
+        value, sort_keys=True, separators=(",", ":"), ensure_ascii=True, default=_json_default
+    )
 
 
 def _json_default(value: Any) -> Any:
@@ -279,7 +282,10 @@ _SECRET_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
         "<private-key-redacted>",
     ),
     # JWT (avant les motifs génériques de type "token=").
-    (re.compile(r"\beyJ[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{4,}"), "<jwt-redacted>"),
+    (
+        re.compile(r"\beyJ[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{4,}"),
+        "<jwt-redacted>",
+    ),
     # Jetons préfixés connus (OpenAI, GitHub, GitLab, Slack, et les clés API de Thot Secure
     # au format `thot_<identifiant>_<secret>`).
     (
@@ -387,7 +393,9 @@ def dedupe(items: Iterable[Any]) -> list[Any]:
     seen: set[str] = set()
     out: list[Any] = []
     for item in items:
-        key = item if isinstance(item, (str, int, float, bool, type(None))) else canonical_json(item)
+        key = (
+            item if isinstance(item, (str, int, float, bool, type(None))) else canonical_json(item)
+        )
         if key in seen:
             continue
         seen.add(key)

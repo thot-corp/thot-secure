@@ -334,12 +334,12 @@ class GithubIssueConnector(Connector):
         elif result.status == 422:
             hint = " (données refusées par GitHub : vérifiez les étiquettes et le titre)"
         # ``message`` et ``errors[]`` portent des informations différentes : on garde les deux.
-        detail = " — ".join(part for part in (message, errors_text) if part) or (
-            result.text or ""
-        ).strip().replace("\n", " ")[:200]
-        return (
-            f"GitHub a refusé {action}: HTTP {result.status}{hint}"
-            + (f" — {detail}" if detail else "")
+        detail = (
+            " — ".join(part for part in (message, errors_text) if part)
+            or (result.text or "").strip().replace("\n", " ")[:200]
+        )
+        return f"GitHub a refusé {action}: HTTP {result.status}{hint}" + (
+            f" — {detail}" if detail else ""
         )
 
     # -- opérations --------------------------------------------------------------------
@@ -391,14 +391,12 @@ class GithubIssueConnector(Connector):
                 [assignees] if isinstance(assignees, str) else [str(item) for item in assignees]
             )
 
-        result = self._request(
-            "POST", f"/repos/{self.repository}/issues", payload
-        )
+        result = self._request("POST", f"/repos/{self.repository}/issues", payload)
         failure = self._diagnose(result, "l'ouverture du ticket")
         if failure:
             return ConnectorResult(ok=False, error=failure)
         number = result.payload.get("number")
-        html_url = str((result.payload.get("html_url") or ""))
+        html_url = str(result.payload.get("html_url") or "")
         if number is None:
             return ConnectorResult(
                 ok=False,

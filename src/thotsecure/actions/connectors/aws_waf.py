@@ -139,16 +139,12 @@ def build_canonical_request(
 
 
 def build_string_to_sign(amz_date: str, scope: str, canonical_request: str) -> str:
-    return "\n".join(
-        [ALGORITHM, amz_date, scope, sha256_hex(canonical_request.encode("utf-8"))]
-    )
+    return "\n".join([ALGORITHM, amz_date, scope, sha256_hex(canonical_request.encode("utf-8"))])
 
 
-def derive_signing_key(
-    secret_access_key: str, date_stamp: str, region: str, service: str
-) -> bytes:
+def derive_signing_key(secret_access_key: str, date_stamp: str, region: str, service: str) -> bytes:
     """Clé de signature dérivée (chaîne de HMAC-SHA256 du jour, de la région, du service)."""
-    key = hmac_sha256(f"AWS4{secret_access_key}".encode("utf-8"), date_stamp)
+    key = hmac_sha256(f"AWS4{secret_access_key}".encode(), date_stamp)
     key = hmac_sha256(key, region)
     key = hmac_sha256(key, service)
     return hmac_sha256(key, "aws4_request")
@@ -436,9 +432,7 @@ class AwsWafConnector(Connector):
 
     # -- opérations --------------------------------------------------------------------
 
-    def _mutate(
-        self, *, address: str, add: bool, operation: str
-    ) -> ConnectorResult:
+    def _mutate(self, *, address: str, add: bool, operation: str) -> ConnectorResult:
         """Ajoute ou retire une adresse, avec une seule nouvelle tentative sur conflit."""
         for attempt in (1, 2):
             state, failure = self._read_ipset()

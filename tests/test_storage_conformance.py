@@ -409,12 +409,16 @@ class StoreConformanceTest(unittest.TestCase):
         self.store.insert_events(events)
         pending = self.store.pending_events(limit=10)
         self.assertEqual(3, len(pending))
-        self.assertEqual(sorted(event.event_id for event in events), sorted(e.event_id for e in pending))
+        self.assertEqual(
+            sorted(event.event_id for event in events), sorted(e.event_id for e in pending)
+        )
         # La lecture n'a rien marqué : une seconde lecture retourne le même lot.
         self.assertEqual(3, len(self.store.pending_events(limit=10)))
 
         self.assertEqual(0, self.store.mark_events_processed([]))
-        self.assertEqual(2, self.store.mark_events_processed([events[0].event_id, events[1].event_id]))
+        self.assertEqual(
+            2, self.store.mark_events_processed([events[0].event_id, events[1].event_id])
+        )
         self.assertEqual(0, self.store.mark_events_processed([events[0].event_id]))
         remaining = self.store.pending_events(limit=10)
         self.assertEqual([events[2].event_id], [event.event_id for event in remaining])
@@ -450,7 +454,9 @@ class StoreConformanceTest(unittest.TestCase):
             "un finding acquitté reste déduplicable",
         )
 
-        self.store.update_finding(TENANT, finding.finding_id, status="closed", resolution="true_positive")
+        self.store.update_finding(
+            TENANT, finding.finding_id, status="closed", resolution="true_positive"
+        )
         self.assertIsNone(
             self.store.find_open_finding(TENANT, "AO-WEB-001", "203.0.113.9"),
             "un finding clos ne doit plus absorber de nouveaux événements",
@@ -469,7 +475,9 @@ class StoreConformanceTest(unittest.TestCase):
     def test_finding_queries_and_counts(self) -> None:
         """Listes filtrées et compteurs (par sévérité, par statut, top règles)."""
         self.store.insert_finding(self.make_finding(risk_score=90.0, severity="critical"))
-        self.store.insert_finding(self.make_finding(risk_score=70.0, rule_id="AO-WEB-050", severity="medium"))
+        self.store.insert_finding(
+            self.make_finding(risk_score=70.0, rule_id="AO-WEB-050", severity="medium")
+        )
         self.store.insert_finding(
             self.make_finding(risk_score=10.0, tenant_id=OTHER_TENANT, severity="low")
         )
@@ -519,10 +527,14 @@ class StoreConformanceTest(unittest.TestCase):
         """Rejouer une exécution ne crée pas de seconde action (clé d'idempotence unique)."""
         finding = self.make_finding()
         self.store.insert_finding(finding)
-        action = self.make_action(finding_id=finding.finding_id, idempotency_key="acme:block:1.2.3.4:1")
+        action = self.make_action(
+            finding_id=finding.finding_id, idempotency_key="acme:block:1.2.3.4:1"
+        )
         self.store.insert_action(action)
 
-        duplicate = self.make_action(finding_id=finding.finding_id, idempotency_key="acme:block:1.2.3.4:1")
+        duplicate = self.make_action(
+            finding_id=finding.finding_id, idempotency_key="acme:block:1.2.3.4:1"
+        )
         with self.assertRaises(ConflictError) as raised:
             self.store.insert_action(duplicate)
         self.assertEqual(action.action_id, raised.exception.details.get("action_id"))
@@ -647,7 +659,9 @@ class StoreConformanceTest(unittest.TestCase):
 
         self.assertLess(first.seq, second.seq)
         self.assertLess(second.seq, third.seq)
-        self.assertEqual(second.hash, third.prev_hash, "la chaîne est globale, tous tenants confondus")
+        self.assertEqual(
+            second.hash, third.prev_hash, "la chaîne est globale, tous tenants confondus"
+        )
         self.assertNotEqual("", second.hash)
 
         verdict = chain.verify()
@@ -676,7 +690,7 @@ class StoreConformanceTest(unittest.TestCase):
                         action="action.plan",
                         after={"step": step},
                     )
-            except BaseException as exc:  # noqa: BLE001 - remonté à l'assertion
+            except BaseException as exc:
                 errors.append(exc)
 
         threads = [
@@ -725,12 +739,16 @@ class StoreConformanceTest(unittest.TestCase):
                 break
             self.assertLessEqual(guard, 10, "pagination d'audit non convergente")
         self.assertEqual(3, len(seen))
-        self.assertEqual(sorted(seen, reverse=True), seen, "l'audit se lit du plus récent au plus ancien")
+        self.assertEqual(
+            sorted(seen, reverse=True), seen, "l'audit se lit du plus récent au plus ancien"
+        )
 
         tenant_records = list(self.store.iter_audit(tenant_id=TENANT))
         self.assertEqual(3, len(tenant_records))
-        self.assertEqual([record.seq for record in sorted(tenant_records, key=lambda r: r.seq)],
-                         [record.seq for record in tenant_records])
+        self.assertEqual(
+            [record.seq for record in sorted(tenant_records, key=lambda r: r.seq)],
+            [record.seq for record in tenant_records],
+        )
         all_records = list(self.store.iter_audit())
         self.assertEqual(5, len(all_records))
         self.assertTrue(all(record.context == {} for record in all_records))
@@ -882,7 +900,7 @@ class SqliteStoreConformanceTest(StoreConformanceTest):
 
     def tamper_audit(self, seq: int) -> None:
         """Modifie l'acteur d'un maillon en SQL direct (aucun trigger d'immuabilité dans le DDL)."""
-        with self.store._write_lock:  # noqa: SLF001 - test : accès volontaire au verrou interne
+        with self.store._write_lock:
             self.store.connection.execute(
                 "UPDATE audit_log SET actor = 'attaquant' WHERE seq = ?", (seq,)
             )

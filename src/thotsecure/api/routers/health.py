@@ -9,10 +9,10 @@ from fastapi import APIRouter, Response
 
 from ... import __license__, __version__
 from ...core.util import iso_z, utcnow
-from ...storage import store_location
-from ..deps import PrincipalDep, ServiceDep
 from ...observability.metrics import METRICS_CATALOG
+from ...storage import store_location
 from ...tenancy.rbac import ROLE_DESCRIPTIONS, capabilities_for, role_matrix
+from ..deps import PrincipalDep, ServiceDep
 
 router = APIRouter(tags=["santé"])
 
@@ -65,7 +65,7 @@ def readyz(service: ServiceDep, response: Response) -> dict[str, Any]:
         try:
             verdict = service.audit.verify(tenant_id=tenant_id[0].tenant_id)
             checks["audit_chain"] = {"ok": verdict.valid, "records": verdict.records}
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             checks["audit_chain"] = {"ok": False, "error": str(exc)}
 
     degraded = [name for name, check in checks.items() if not check.get("ok")]
@@ -142,7 +142,9 @@ def roles(service: ServiceDep, principal: PrincipalDep) -> dict[str, Any]:
 def metrics(service: ServiceDep) -> Response:
     """Exposition texte Prometheus, rafraîchie à chaque scrape."""
     service.record_pipeline_metrics()
-    return Response(content=service.metrics.render(), media_type="text/plain; version=0.0.4; charset=utf-8")
+    return Response(
+        content=service.metrics.render(), media_type="text/plain; version=0.0.4; charset=utf-8"
+    )
 
 
 @router.get("/api/v1/stats/overview", summary="Indicateurs du tableau de bord")

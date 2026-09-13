@@ -135,7 +135,9 @@ def close_finding(
     }
 
 
-@router.post("/{finding_id}/suppress", summary="Supprimer le bruit d'un finding (exception temporaire)")
+@router.post(
+    "/{finding_id}/suppress", summary="Supprimer le bruit d'un finding (exception temporaire)"
+)
 def suppress_finding(
     finding_id: str,
     payload: FindingSuppressRequest,
@@ -213,7 +215,9 @@ def finding_report(
 def _require_finding(service: ServiceDep, tenant_id: str, finding_id: str):
     finding = service.store.get_finding(tenant_id, finding_id)
     if finding is None:
-        raise NotFoundError(f"finding introuvable: {finding_id}", details={"finding_id": finding_id})
+        raise NotFoundError(
+            f"finding introuvable: {finding_id}", details={"finding_id": finding_id}
+        )
     return finding
 
 
@@ -261,9 +265,14 @@ def _transition(
 
 
 def _extension(fmt: str) -> str:
-    return {"md": "md", "markdown": "md", "html": "html", "json": "json", "sarif": "sarif", "cef": "cef"}.get(
-        fmt, "txt"
-    )
+    return {
+        "md": "md",
+        "markdown": "md",
+        "html": "html",
+        "json": "json",
+        "sarif": "sarif",
+        "cef": "cef",
+    }.get(fmt, "txt")
 
 
 __all__ = ["TRANSITIONS", "router"]

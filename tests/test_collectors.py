@@ -10,12 +10,12 @@ from __future__ import annotations
 import http.server
 import socket
 import socketserver
-import threading
 import textwrap
+import threading
 from pathlib import Path
 
 from thotsecure.collectors.base import CollectorContext
-from thotsecure.collectors.config_audit import run_checks, SSH_CHECKS
+from thotsecure.collectors.config_audit import SSH_CHECKS, run_checks
 from thotsecure.collectors.dependency_scan import (
     compare_versions,
     parse_go_mod,
@@ -212,7 +212,7 @@ class LogTailTest(StackTestCase):
 class _ProbeHandler(http.server.BaseHTTPRequestHandler):
     """Serveur de test qui reproduit les défauts recherchés par l'audit de surface."""
 
-    def do_GET(self) -> None:  # noqa: N802 - API de http.server
+    def do_GET(self) -> None:
         if self.path == "/.git/config":
             body = b"[core]\n\trepositoryformatversion = 0\n"
             self._respond(200, body, content_type="text/plain")
@@ -311,9 +311,7 @@ class WebProbeTest(StackTestCase):
         self.assertIn("exposed_path", checks)
         self.assertIn("no_https", checks)
 
-        exposed = [
-            event for event in result.events if event.labels.get("check") == "exposed_path"
-        ]
+        exposed = [event for event in result.events if event.labels.get("check") == "exposed_path"]
         paths = {event.labels.get("path") for event in exposed}
         self.assertIn("/.git/config", paths)
         # La signature de contenu doit confirmer l'exposition.

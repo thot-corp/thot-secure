@@ -151,7 +151,9 @@ def fetch(
 
 def _describe_network_error(exc: Exception) -> str:
     """Traduit une erreur réseau en message exploitable (et non en trace Python)."""
-    if isinstance(exc, urllib.error.URLError) and isinstance(exc.reason, ssl.SSLCertVerificationError):
+    if isinstance(exc, urllib.error.URLError) and isinstance(
+        exc.reason, ssl.SSLCertVerificationError
+    ):
         return f"certificat TLS refusé: {exc.reason.verify_message}"
     if isinstance(exc, TimeoutError):
         return "délai d'attente dépassé"
@@ -160,7 +162,9 @@ def _describe_network_error(exc: Exception) -> str:
     return str(exc)[:300]
 
 
-def inspect_certificate(host: str, port: int = 443, *, timeout: float = DEFAULT_TIMEOUT) -> CertInfo:
+def inspect_certificate(
+    host: str, port: int = 443, *, timeout: float = DEFAULT_TIMEOUT
+) -> CertInfo:
     """Récupère les propriétés d'un certificat TLS, **sans** faire échouer la collecte.
 
     Le certificat est récupéré même s'il n'est pas validable (expiré, auto-signé) : c'est
