@@ -22,6 +22,11 @@ jobs:
     name: Compute ruff autofixes
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      # Ecriture limitee a cette execution : le workflow pousse les corrections sur une
+      # branche jetable `chore/ruff-autofix`, jamais sur `main`. Le resultat y est relu,
+      # applique et teste localement avant tout merge.
+      contents: write
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -56,3 +61,16 @@ jobs:
           ruff check --output-format=concise . || true
           echo "=====END-REMAINING====="
           ruff check --statistics . || true
+
+      - name: Publish the result on a throwaway branch
+        # Transfert fiable du resultat : un diff de 11 000 lignes recopie depuis un journal de
+        # job peut etre altere (GitHub retire les espaces en fin de ligne de ses journaux), ce
+        # qui a fait echouer l'application du patch pour cinq fichiers. Une branche, elle, est
+        # recuperee telle quelle par `git fetch`.
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b chore/ruff-autofix
+          git add -A
+          git commit -m "chore(lint): corrections automatiques ruff (branche jetable)" || echo "aucun changement"
+          git push --force origin chore/ruff-autofix
