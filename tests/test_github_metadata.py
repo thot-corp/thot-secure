@@ -63,7 +63,9 @@ def template_labels() -> set[str]:
 
 class GithubLabelsTest(unittest.TestCase):
     def test_labels_file_is_not_empty(self) -> None:
-        self.assertGreaterEqual(len(declared_labels()), 20, "taxonomie d'étiquettes suspicieusement pauvre")
+        self.assertGreaterEqual(
+            len(declared_labels()), 20, "taxonomie d'étiquettes suspicieusement pauvre"
+        )
 
     def test_dependabot_labels_are_declared(self) -> None:
         missing = sorted(dependabot_labels() - declared_labels())
