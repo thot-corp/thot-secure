@@ -51,6 +51,7 @@ def _require_http_scheme(url: str, *, setting: str) -> str:
         )
     return url
 
+
 #: Toutes les opérations sont relayées à la passerelle : c'est elle qui sait quoi en faire.
 RELAYED_OPERATIONS = frozenset(
     {

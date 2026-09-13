@@ -1497,7 +1497,9 @@ class IngestClient:
                     "rejected", http_status=status, message=last_message, attempts=attempt
                 )
 
-            last_message = f"HTTP {status} : réponse inattendue — {error_summary(payload, raw_text)}"
+            last_message = (
+                f"HTTP {status} : réponse inattendue — {error_summary(payload, raw_text)}"
+            )
             self._log(last_message)
             return BatchResult(
                 "unexpected", http_status=status, message=last_message, attempts=attempt

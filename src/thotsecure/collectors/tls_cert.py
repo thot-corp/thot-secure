@@ -172,8 +172,7 @@ class TlsCertCollector(Collector):
                     },
                     payload={
                         "explanation": (
-                            "Protocole TLS obsolète négocié : "
-                            "chiffrement considéré comme cassé."
+                            "Protocole TLS obsolète négocié : chiffrement considéré comme cassé."
                         ),
                         **info.to_dict(),
                     },

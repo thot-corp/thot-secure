@@ -1993,9 +1993,7 @@ class WebhookSchemeValidationTest(unittest.TestCase):
             "HTTPS://PASSERELLE.INTERNE/hook",
         ):
             with self.subTest(url=value):
-                self.assertEqual(
-                    value, self._connector(rollback_url=value, url=value).rollback_url
-                )
+                self.assertEqual(value, self._connector(rollback_url=value, url=value).rollback_url)
 
     def test_every_other_scheme_is_refused(self) -> None:
         for value in (

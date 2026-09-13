@@ -62,8 +62,7 @@ SSH_CHECKS: tuple[ConfigCheck, ...] = (
         pattern=r"(?im)^\s*PermitEmptyPasswords\s+yes",
         severity="critical",
         message=(
-            "Les mots de passe vides sont acceptés en SSH : "
-            "accès direct sans authentification."
+            "Les mots de passe vides sont acceptés en SSH : accès direct sans authentification."
         ),
         reference="CIS 5.2.9 — Ensure SSH PermitEmptyPasswords is disabled",
     ),
@@ -91,8 +90,7 @@ WEB_CHECKS: tuple[ConfigCheck, ...] = (
         pattern=r"(?im)^\s*ssl_protocols\s+[^;]*\b(TLSv1|TLSv1\.1|SSLv3)\b",
         severity="high",
         message=(
-            "Des protocoles TLS obsolètes sont activés : "
-            "le chiffrement est considéré comme cassé."
+            "Des protocoles TLS obsolètes sont activés : le chiffrement est considéré comme cassé."
         ),
         reference="CIS 2.4 — Nginx TLS configuration",
     ),
