@@ -266,7 +266,6 @@ CREATE TABLE IF NOT EXISTS events (
 CREATE INDEX IF NOT EXISTS idx_events_tenant_ts   ON events (tenant_id, ts DESC);
 CREATE INDEX IF NOT EXISTS idx_events_tenant_kind ON events (tenant_id, kind, ts DESC);
 CREATE INDEX IF NOT EXISTS idx_events_pending     ON events (ts) WHERE processed = FALSE;
-CREATE INDEX IF NOT EXISTS idx_events_claims      ON events (claimed_at) WHERE claimed_at IS NOT NULL;
 -- JSONB : les règles interrogent ``labels->>'src_ip'`` sans index dédié dans le MVP. L'index
 -- GIN ne dépend pas de TimescaleDB : il est créé même sur un PostgreSQL nu.
 CREATE INDEX IF NOT EXISTS idx_events_labels_src_ip ON events USING gin (labels jsonb_path_ops);
@@ -275,8 +274,14 @@ CREATE INDEX IF NOT EXISTS idx_events_labels_src_ip ON events USING gin (labels 
 -- processus ne peuvent pas réclamer la même ligne, et un bail expiré redevient réclamable.
 -- Ces deux colonnes n'existent qu'en PostgreSQL : SQLite n'a qu'un écrivain, donc pas besoin
 -- de bail. ``ADD COLUMN IF NOT EXISTS`` rend la mise à jour d'une base existante idempotente.
+--
+-- Ordre impératif : les colonnes d'abord, l'index ensuite. L'index partiel sur ``claimed_at``
+-- placé avant l'``ALTER TABLE`` échoue sur une base neuve (« column "claimed_at" does not
+-- exist ») — PostgreSQL n'accepte pas un index sur une colonne qui n'existe pas encore, et
+-- c'est exactement ce qui faisait échouer toute l'initialisation du schéma en CI.
 ALTER TABLE events ADD COLUMN IF NOT EXISTS claimed_by TEXT;
 ALTER TABLE events ADD COLUMN IF NOT EXISTS claimed_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_events_claims      ON events (claimed_at) WHERE claimed_at IS NOT NULL;
 
 -- ---------------------------------------------------------------------------------
 -- Findings : agrégats produits par le moteur de détection.

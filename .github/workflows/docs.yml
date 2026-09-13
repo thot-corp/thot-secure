@@ -119,13 +119,6 @@ jobs:
         # at the mkdocs.yml default (`site`), which is the path uploaded below.
         run: mkdocs build --strict
 
-      - name: Configure GitHub Pages
-        # Reads the Pages configuration of the repository (base URL, enablement)
-        # and exposes it to later steps. Fails early and clearly if Pages has not
-        # been switched to "GitHub Actions" as the source, which is the usual
-        # reason a docs deployment is red.
-        uses: actions/configure-pages@v5
-
       - name: Upload the Pages artifact
         uses: actions/upload-pages-artifact@v4
         with:
@@ -152,6 +145,20 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+        with:
+          # `enablement: true` activates "GitHub Actions" as the Pages source if it
+          # is not already set, instead of failing with "Get Pages site failed".
+          #
+          # Pourquoi ici et pas dans le job de build : `configure-pages` a besoin de
+          # `pages: write`, et le job de build exécute `pip install` avec des plugins MkDocs
+          # tiers. Lui donner ce jeton pour une étape de configuration serait exactement le
+          # mauvais compromis — un jeton capable de publier le site dans le seul job qui
+          # installe du code tiers. Le job privilégié ne tourne de toute façon qu'après un
+          # build réussi sur `main`, jamais sur une pull request.
+          enablement: true
+
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4

@@ -117,14 +117,17 @@ services:
       # fichier (ex. ./config/targets.yaml) si vous en avez un.
       - thotsecure-targets:/etc/thotsecure/targets.yaml:ro
       # Zone temporaire inscriptible malgré le rootfs en lecture seule.
-      # uid/gid 10001 = utilisateur non-root de l'image.
+      #
+      # `uid` et `gid` ne sont PAS des clés acceptées dans le bloc `tmpfs:` : Compose v2 les
+      # rejette (« additional properties 'uid', 'gid' not allowed »), `docker compose config`
+      # échoue, et le fichier livré n'était donc pas déployable. Le mode 1777 (avec bit sticky)
+      # rend de toute façon la question du propriétaire sans objet : tout utilisateur peut
+      # créer et supprimer ses propres fichiers dans /tmp, et seulement les siens.
       - type: tmpfs
         target: /tmp
         tmpfs:
           size: 67108864
           mode: 1777
-          uid: "10001"
-          gid: "10001"
     # --- Durcissement conteneur ---------------------------------------------
     read_only: true
     cap_drop:
@@ -253,13 +256,13 @@ services:
       - thotsecure-policies:/etc/thotsecure/policies:ro
       - thotsecure-playbooks:/etc/thotsecure/playbooks:ro
       - thotsecure-targets:/etc/thotsecure/targets.yaml:ro
+      # Voir le commentaire du service `thotsecure` : `uid`/`gid` ne sont pas des clés
+      # valides du bloc `tmpfs:` en syntaxe longue, et le mode 1777 les rend inutiles.
       - type: tmpfs
         target: /tmp
         tmpfs:
           size: 67108864
           mode: 1777
-          uid: "10001"
-          gid: "10001"
     read_only: true
     cap_drop:
       - ALL

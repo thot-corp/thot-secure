@@ -41,6 +41,31 @@ RFC3164 = re.compile(
 #: Sans en-tête PRI : on accepte quand même (beaucoup d'équipements en omettent).
 BARE = re.compile(r"^(?P<ts>[A-Z][a-z]{2}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})\s+(?P<rest>.*)$", re.DOTALL)
 
+#: Composantes d'un horodatage RFC 3164 : « Mon dd hh:mm:ss », **sans année** (c'est le
+#: format). Analysé par composantes plutôt qu'avec ``strptime`` : depuis Python 3.13,
+#: demander à ``strptime`` une date sans année émet un ``DeprecationWarning``, que le projet
+#: transforme en erreur pour ses propres modules.
+_RFC3164_TS = re.compile(
+    r"^(?P<month>[A-Za-z]{3})\s+(?P<day>\d{1,2})\s+"
+    r"(?P<hour>\d{2}):(?P<minute>\d{2}):(?P<second>\d{2})"
+)
+
+#: Numéro de mois par abréviation anglaise, seule forme normalisée par la RFC 3164.
+_MONTHS: dict[str, int] = {
+    "jan": 1,
+    "feb": 2,
+    "mar": 3,
+    "apr": 4,
+    "may": 5,
+    "jun": 6,
+    "jul": 7,
+    "aug": 8,
+    "sep": 9,
+    "oct": 10,
+    "nov": 11,
+    "dec": 12,
+}
+
 SEVERITY_BY_CODE: dict[int, str] = {
     0: "critical",  # Emergency
     1: "critical",  # Alert
@@ -154,16 +179,45 @@ def _parse_rfc5424_ts(value: str) -> datetime:
 
 
 def _parse_rfc3164_ts(value: str) -> datetime:
-    try:
-        parsed = datetime.strptime(value, "%b %d %H:%M:%S")
-    except ValueError:
+    """Analyse un horodatage RFC 3164, qui ne comporte **pas** d'année.
+
+    L'année ne peut donc pas être demandée à ``strptime`` : Python 3.13 déprécie l'analyse
+    d'une date sans année (« Parsing dates involving a day of month without a year specified
+    is ambiguous »), et le projet transforme les ``DeprecationWarning`` venant de ses propres
+    modules en erreurs — le test de conformité pytest échouait donc sur Python 3.13.
+
+    On analyse explicitement les composantes avec une expression régulière, puis on rattache
+    l'année courante en corrigeant le passage d'année : un message de décembre reçu en janvier
+    appartient à l'année précédente. C'est le comportement que le code appliquait déjà, mais
+    cette fois sans dépendre d'une analyse ambiguë.
+    """
+    match = _RFC3164_TS.match(" ".join(value.split()))
+    if match is None:
         return utcnow()
+    month = _MONTHS.get(match.group("month").lower())
+    if month is None:
+        return utcnow()
+
     now = utcnow()
-    # RFC 3164 n'inclut pas l'année : on prend l'année courante, en corrigeant le passage
-    # d'année (un message de décembre reçu en janvier appartient à l'année précédente).
-    candidate = parsed.replace(year=now.year, tzinfo=UTC)
+    try:
+        candidate = datetime(
+            now.year,
+            month,
+            int(match.group("day")),
+            int(match.group("hour")),
+            int(match.group("minute")),
+            int(match.group("second")),
+            tzinfo=UTC,
+        )
+    except ValueError:  # 31 février ou heure hors bornes : message non exploitable
+        return utcnow()
+
+    # Passage d'année : un message de décembre reçu en janvier appartient à l'année précédente.
     if candidate > now.replace(microsecond=0) and (candidate - now).days > 1:
-        candidate = candidate.replace(year=now.year - 1)
+        try:
+            candidate = candidate.replace(year=now.year - 1)
+        except ValueError:  # 29 février d'une année bissextile
+            return utcnow()
     return candidate
 
 
