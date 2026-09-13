@@ -220,7 +220,7 @@ mentions de copyright, indiquer les fichiers modifiés, et inclure une copie de 
 
 La licence fournit le logiciel **sans garantie** : ni qualité marchande, ni aptitude à un usage
 particulier. Détail des obligations : [governance.md](governance.md) et le fichier
-[LICENSE](../LICENSE) à la racine du dépôt. Cette FAQ n'est pas un avis juridique.
+[LICENSE](https://github.com/thot-corp/thot-secure/blob/main/LICENSE) à la racine du dépôt. Cette FAQ n'est pas un avis juridique.
 
 ## 16. Où sont mes données ?
 
@@ -281,7 +281,7 @@ Pour l'aide : les issues et discussions du dépôt, ainsi que [support.md](suppo
 contribuer : [contributing.md](contributing.md) et [governance.md](governance.md).
 
 Pour une vulnérabilité : **jamais d'issue publique**. Suivez la politique de sécurité du dépôt,
-`SECURITY.md` à la racine ([lien](../SECURITY.md)), qui décrit les canaux privés, les délais visés
+`SECURITY.md` à la racine ([lien](https://github.com/thot-corp/thot-secure/blob/main/SECURITY.md)), qui décrit les canaux privés, les délais visés
 et la politique de crédit. Les rapports publiés mettent en danger tous les déploiements avant
 qu'un correctif n'existe.
 

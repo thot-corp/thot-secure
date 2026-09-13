@@ -7,15 +7,15 @@ résume et les relie ; en cas de divergence, ce sont les fichiers d'origine qui 
 
 | Fichier (racine) | Objet |
 |---|---|
-| [`LICENSE`](../LICENSE) | Licence Apache-2.0 |
-| [`NOTICE`](../NOTICE) | Mentions et attributions |
-| [`CONTRIBUTING.md`](../CONTRIBUTING.md) | Guide de contribution de référence |
-| [`CODE_OF_CONDUCT.md`](../CODE_OF_CONDUCT.md) | Code de conduite et application |
-| [`SECURITY.md`](../SECURITY.md) | Politique de sécurité et divulgation responsable |
-| [`CHANGELOG.md`](../CHANGELOG.md) | Journal des modifications, source unique de vérité |
-| [`README.md`](../README.md) | Point d'entrée du projet |
-| [`GOVERNANCE.md`](../GOVERNANCE.md) | Gouvernance détaillée (rôles, votes, invariants) |
-| [`MAINTAINERS.md`](../MAINTAINERS.md) | Registre des mainteneurs et des contacts |
+| [`LICENSE`](https://github.com/thot-corp/thot-secure/blob/main/LICENSE) | Licence Apache-2.0 |
+| [`NOTICE`](https://github.com/thot-corp/thot-secure/blob/main/NOTICE) | Mentions et attributions |
+| [`CONTRIBUTING.md`](https://github.com/thot-corp/thot-secure/blob/main/CONTRIBUTING.md) | Guide de contribution de référence |
+| [`CODE_OF_CONDUCT.md`](https://github.com/thot-corp/thot-secure/blob/main/CODE_OF_CONDUCT.md) | Code de conduite et application |
+| [`SECURITY.md`](https://github.com/thot-corp/thot-secure/blob/main/SECURITY.md) | Politique de sécurité et divulgation responsable |
+| [`CHANGELOG.md`](https://github.com/thot-corp/thot-secure/blob/main/CHANGELOG.md) | Journal des modifications, source unique de vérité |
+| [`README.md`](https://github.com/thot-corp/thot-secure/blob/main/README.md) | Point d'entrée du projet |
+| [`GOVERNANCE.md`](https://github.com/thot-corp/thot-secure/blob/main/GOVERNANCE.md) | Gouvernance détaillée (rôles, votes, invariants) |
+| [`MAINTAINERS.md`](https://github.com/thot-corp/thot-secure/blob/main/MAINTAINERS.md) | Registre des mainteneurs et des contacts |
 | `.github/` | Modèles d'issues et de pull requests, financement (`FUNDING.yml`), workflows |
 
 !!! note
@@ -53,7 +53,7 @@ même licence. Toute contribution est donc fournie sous Apache-2.0, sans conditi
 
 Il n'y a **pas de CLA lourde** au MVP : vous conservez vos droits et vous accordez au projet le
 droit de distribuer votre contribution sous Apache-2.0. En revanche, le projet exige un
-**Developer Certificate of Origin** : le fichier [`CONTRIBUTING.md`](../CONTRIBUTING.md) à la racine
+**Developer Certificate of Origin** : le fichier [`CONTRIBUTING.md`](https://github.com/thot-corp/thot-secure/blob/main/CONTRIBUTING.md) à la racine
 décrit la procédure de signature des commits. **Ce fichier réel fait foi** sur la mécanique exacte,
 qui peut évoluer.
 
@@ -86,9 +86,9 @@ Deux principes encadrent le reste :
   correctifs ou les versions.
 * Les décisions se prennent **en public** : issues, discussions et pull requests du dépôt.
 * Les branches et la mécanique de fusion sont décrites dans
-  [`CONTRIBUTING.md`](../CONTRIBUTING.md) ; les modèles d'issues et de PR vivent dans `.github/`.
+  [`CONTRIBUTING.md`](https://github.com/thot-corp/thot-secure/blob/main/CONTRIBUTING.md) ; les modèles d'issues et de PR vivent dans `.github/`.
 * **Politique de support : « au mieux ».** Aucun SLA n'est offert par le projet open source.
-  Le fichier [`SECURITY.md`](../SECURITY.md) indique à ce jour que la ligne `0.1.x` est la seule
+  Le fichier [`SECURITY.md`](https://github.com/thot-corp/thot-secure/blob/main/SECURITY.md) indique à ce jour que la ligne `0.1.x` est la seule
   supportée — à confirmer en le relisant, car c'est lui qui fait foi.
 * Une offre de **support professionnel** peut exister le cas échéant, hors du dépôt ; elle
   n'affecte ni la licence, ni les correctifs de sécurité, ni la gouvernance.
@@ -100,7 +100,7 @@ pull request, discussion, réseau social). Un rapport public met en danger tous 
 avant qu'un correctif n'existe.
 
 Les canaux privés, le périmètre, les délais visés et la politique de crédit sont définis dans
-[`SECURITY.md`](../SECURITY.md) à la racine. À ce jour, ce fichier documente :
+[`SECURITY.md`](https://github.com/thot-corp/thot-secure/blob/main/SECURITY.md) à la racine. À ce jour, ce fichier documente :
 
 * un **accusé de réception** sous 72 heures ;
 * un **triage** sous 7 jours calendaires ;
@@ -169,7 +169,7 @@ Toute contribution contraire à l'un de ces invariants est refusée. Voir
 ## Pour contribuer
 
 Le point d'entrée pratique est [contributing.md](contributing.md) ; le texte de référence reste
-[`CONTRIBUTING.md`](../CONTRIBUTING.md) à la racine. Pour les questions d'usage :
+[`CONTRIBUTING.md`](https://github.com/thot-corp/thot-secure/blob/main/CONTRIBUTING.md) à la racine. Pour les questions d'usage :
 [support.md](support.md) et la [FAQ](faq.md).
 
 <!-- Métadonnées: statut=stable, version=0.1.0 (MVP), dernière revue=2026-09-13 -->

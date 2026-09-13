@@ -3,7 +3,7 @@
 *Guide de première contribution à Thot Secure : par où commencer, comment proposer une règle, une politique, un playbook ou de la documentation, et ce que le projet refuse.*
 
 !!! note
-    Le **guide de référence** est [`CONTRIBUTING.md`](../CONTRIBUTING.md), **à la racine du
+    Le **guide de référence** est [`CONTRIBUTING.md`](https://github.com/thot-corp/thot-secure/blob/main/CONTRIBUTING.md), **à la racine du
     dépôt** : il décrit l'environnement de développement, la convention de commits, le
     *Developer Certificate of Origin* et la checklist de pull request. Cette page-ci est le
     **guide de première contribution** : elle vous met le pied à l'étrier. En cas de divergence,
@@ -14,7 +14,7 @@
 ## 1. Code de conduite
 
 Toute participation — issue, discussion, revue, pull request — est encadrée par
-[`CODE_OF_CONDUCT.md`](../CODE_OF_CONDUCT.md), à la racine du dépôt. En contribuant, vous vous
+[`CODE_OF_CONDUCT.md`](https://github.com/thot-corp/thot-secure/blob/main/CODE_OF_CONDUCT.md), à la racine du dépôt. En contribuant, vous vous
 engagez à le respecter. Les signalements se font par les canaux indiqués dans ce fichier, jamais en
 public.
 
@@ -190,14 +190,14 @@ avez essayé. Voir [support.md](support.md).
 !!! warning
     **N'ouvrez jamais d'issue publique pour une vulnérabilité.** Un rapport public expose tous les
     déploiements avant qu'un correctif n'existe. Suivez
-    [`SECURITY.md`](../SECURITY.md), à la racine du dépôt : il décrit les canaux privés, le
+    [`SECURITY.md`](https://github.com/thot-corp/thot-secure/blob/main/SECURITY.md), à la racine du dépôt : il décrit les canaux privés, le
     périmètre, les délais visés (accusé de réception, triage, correctif) et la politique de crédit.
     Les rapports publiés dans un canal public sont retirés et vous serez invité à les re-soumettre
     en privé.
 
 ## 11. Reconnaissance
 
-Les contributions sont créditées dans [`CHANGELOG.md`](../CHANGELOG.md) et dans les notes de
+Les contributions sont créditées dans [`CHANGELOG.md`](https://github.com/thot-corp/thot-secure/blob/main/CHANGELOG.md) et dans les notes de
 version, ainsi que dans l'historique Git qui reste la trace la plus fiable. Le crédit est donné par
 défaut, sous le nom ou le pseudonyme que vous indiquez, et vous pouvez demander l'anonymat.
 

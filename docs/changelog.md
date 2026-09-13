@@ -7,7 +7,7 @@ comment s'en servir.
 
 ## 1. La source unique de vérité
 
-Le journal officiel est le fichier **[`CHANGELOG.md`](../CHANGELOG.md) à la racine du dépôt**. Il
+Le journal officiel est le fichier **[`CHANGELOG.md`](https://github.com/thot-corp/thot-secure/blob/main/CHANGELOG.md) à la racine du dépôt**. Il
 est tenu à jour par les contributions qui modifient le comportement visible du produit, et il fait
 foi : en cas de divergence avec cette page, ou avec toute autre page de documentation, c'est
 `CHANGELOG.md` qui a raison.

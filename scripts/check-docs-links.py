@@ -168,6 +168,22 @@ def main(argv: list[str] | None = None) -> int:
                     }
                 )
                 continue
+            # Un lien qui sort de `docs/` est introuvable **pour MkDocs**, même si le fichier
+            # existe sur le disque : `mkdocs build --strict` échoue dessus. C'est le piège le
+            # plus courant d'un dépôt où la documentation vit dans un sous-répertoire, et il
+            # ne se voit pas en local — d'où ce contrôle explicite.
+            if not resolved.is_relative_to(docs):
+                broken.append(
+                    {
+                        "file": str(path.relative_to(docs)),
+                        "target": target,
+                        "reason": (
+                            "cible hors de docs/ : MkDocs ne peut pas la résoudre — utilisez "
+                            "l'URL absolue du fichier sur la forge"
+                        ),
+                    }
+                )
+                continue
             if anchor and resolved.suffix == ".md":
                 known = anchors_by_file.get(resolved)
                 if known is None:
