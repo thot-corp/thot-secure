@@ -2,7 +2,7 @@ name: Security contact — read this first
 description: Do NOT disclose a vulnerability here. This form routes you to the private reporting channels.
 title: "[Security]: read SECURITY.md before posting — do not include vulnerability details"
 labels:
-  - "security"
+  - "type/security"
   - "needs-triage"
 body:
   - type: markdown

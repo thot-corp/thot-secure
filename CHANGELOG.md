@@ -580,6 +580,20 @@ detection at all.
   moved to the privileged deploy job, where a failure is reported as a warning with the exact
   one-time action the owner must take, instead of a permanent red cross that trains people to
   ignore it.
+- **Auto-labelling failed on every pull request, including Dependabot's**: the workflow passed
+  `sync-labels: ''` to `actions/labeler@v5`, and the action parses that input as YAML — an empty
+  string is not a valid scalar of the Core 1.2 schema, so the job died with a `TypeError` before
+  labelling anything. The input is gone (its default is already `false`), and a test now asserts
+  it is not reintroduced.
+- **Three references pointed at labels that did not exist** — and a label that does not exist is
+  silently ignored, never an error: Dependabot asked for `dependencies`, `security`,
+  `area/packaging`, `area/ci` and `area/sdk`; two issue templates asked for `security` and
+  `type/false-positive`. Dependency pull requests therefore arrived with **no labels at all**,
+  which is precisely how they end up unread. Labels now come from the single taxonomy
+  (`dependabot.yml` uses `area/deploy`, `area/sdks` and `type/security`; the templates use
+  `false-positive` and `type/security`), `dependencies` is declared, and
+  `tests/test_github_metadata.py` cross-checks every consumer of a label against
+  `.github/labels.yml` so the next mismatch fails the build instead of disappearing.
 
 ### Security
 

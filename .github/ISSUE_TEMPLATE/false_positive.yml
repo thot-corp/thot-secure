@@ -3,7 +3,7 @@ description: A shipped detection rule fired on legitimate activity. This is a bu
 title: "[False positive]: "
 labels:
   - "rules"
-  - "type/false-positive"
+  - "false-positive"
   - "needs-triage"
 body:
   - type: markdown

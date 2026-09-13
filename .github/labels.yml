@@ -116,3 +116,9 @@
 - name: "false-positive"
   color: "E4E669"
   description: "Règle déclenchée sur une activité légitime : bruit à corriger."
+# Étiquette appliquée par Dependabot (.github/dependabot.yml). Elle est déclarée ici parce
+# qu'une étiquette absente est silencieusement ignorée : les pull requests de dépendances
+# arrivaient donc sans aucune étiquette, et il était impossible de les filtrer.
+- name: "dependencies"
+  color: "0366D6"
+  description: "Mise à jour d'une dépendance (Dependabot), à relire comme du code."

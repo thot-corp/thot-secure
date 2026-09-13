@@ -35,7 +35,7 @@ updates:
     versioning-strategy: "increase-if-necessary"
     labels:
       - "dependencies"
-      - "area/packaging"
+      - "area/deploy"
     commit-message:
       prefix: "build(deps)"
       include: "scope"
@@ -83,7 +83,7 @@ updates:
     versioning-strategy: "increase"
     labels:
       - "dependencies"
-      - "area/ci"
+      - "area/deploy"
     commit-message:
       prefix: "build(web)"
       include: "scope"
@@ -126,7 +126,7 @@ updates:
     versioning-strategy: "increase"
     labels:
       - "dependencies"
-      - "area/sdk"
+      - "area/sdks"
     commit-message:
       prefix: "build(sdk-ts)"
       include: "scope"
@@ -152,7 +152,7 @@ updates:
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
-      - "area/sdk"
+      - "area/sdks"
     commit-message:
       prefix: "build(sdk-go)"
       include: "scope"
@@ -179,8 +179,8 @@ updates:
     open-pull-requests-limit: 10
     labels:
       - "dependencies"
-      - "area/ci"
-      - "security"
+      - "area/deploy"
+      - "type/security"
     commit-message:
       prefix: "ci(deps)"
       include: "scope"
@@ -213,7 +213,7 @@ updates:
     labels:
       - "dependencies"
       - "area/deploy"
-      - "security"
+      - "type/security"
     commit-message:
       prefix: "build(docker)"
       include: "scope"
@@ -234,7 +234,7 @@ updates:
     labels:
       - "dependencies"
       - "area/deploy"
-      - "security"
+      - "type/security"
     commit-message:
       prefix: "build(docker)"
       include: "scope"

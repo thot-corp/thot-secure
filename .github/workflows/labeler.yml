@@ -60,12 +60,18 @@ jobs:
       - name: Apply labels
         uses: actions/labeler@v5
         with:
-          # `sync-labels: ''` — the v5 way of disabling the default. The action
-          # would otherwise remove every label it manages as soon as the matching
-          # files disappear from the diff, and it would also strip a label a human
-          # added by hand. An empty string turns that off and keeps the config, and
-          # the contributors' labels, intact.
-          sync-labels: ''
+          # Pas d'entrée `sync-labels` : sa valeur par défaut est déjà `false`, et la
+          # renseigner casse l'action sur cette version.
+          #
+          # Cause d'échec corrigée ici : la configuration passait `sync-labels: ''`, la
+          # « façon v5 » de désactiver la synchronisation. Or l'action analyse cette entrée
+          # comme du YAML, et une chaîne vide n'est pas un scalaire valide du schéma Core 1.2 :
+          # `TypeError: Input does not meet YAML 1.2 "Core Schema" specification: sync-labels`.
+          # Le job échouait donc à chaque pull request, y compris celles de Dependabot.
+          #
+          # La synchronisation reste désactivée — c'est le comportement voulu : sinon l'action
+          # retire les étiquettes qu'elle gère dès que les fichiers correspondants sortent du
+          # diff, et elle efface aussi celles ajoutées à la main par un contributeur.
           # `dot: true` is required for the `.github/**` glob in labeler.yml to
           # match: dot-directories are skipped by the glob engine otherwise.
           dot: true
