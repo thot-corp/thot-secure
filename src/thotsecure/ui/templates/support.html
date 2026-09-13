@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Soutenir le projet{% endblock %}
+{% block content %}
+
+<section class="card">
+  <h2>Soutenir Thot Secure</h2>
+  <p>
+    Thot Secure est un logiciel libre sous licence <strong>{{ license }}</strong>, développé et
+    maintenu sur du temps bénévole. Les dons sont <strong>volontaires et sans contrepartie</strong>.
+    Ils financent concrètement : l'hébergement de la documentation et des miroirs, les
+    certificats TLS, les audits de sécurité externes, la signature des binaires (Sigstore),
+    les runners de CI/CD, la rédaction de la documentation et le temps de maintenance.
+  </p>
+
+  <div class="alert alert-info">
+    <strong>Dons volontaires, aucune contrepartie attendue.</strong>
+    Vérifiez toujours l'adresse depuis le dépôt officiel.
+  </div>
+</section>
+
+<section class="card">
+  <h2>Adresses officielles</h2>
+  <table class="table">
+    <thead><tr><th>Réseau</th><th>Adresse</th><th></th></tr></thead>
+    <tbody>
+    {% for symbol, address in funding.addresses.items() %}
+      <tr>
+        <td>
+          <strong>{{ symbol }}</strong><br>
+          <small class="muted">{{ funding.networks.get(symbol, '') }}</small>
+        </td>
+        <td><code class="address" id="addr-{{ symbol }}">{{ address }}</code></td>
+        <td>
+          <button type="button" class="ghost" data-copy="{{ address }}" data-target="addr-{{ symbol }}">
+            Copier
+          </button>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="alert alert-warn">
+    <h3>⚠️ Avertissement anti-arnaque</h3>
+    <p>{{ funding.antiscam }}</p>
+    <p>
+      <strong>Vérifiez toujours ces adresses depuis ce dépôt officiel</strong> — seule la source
+      officielle (dépôt Git et site du projet) fait foi. Un message privé, un commentaire, un
+      courriel ou un « mainteneur » qui vous contacte ne sont <em>jamais</em> légitimes.
+    </p>
+    <p>
+      Thot Secure ne demandera <strong>jamais</strong> votre clé privée, votre phrase de
+      récupération (seed), ni un accès à votre portefeuille. Aucun avantage, support prioritaire
+      ou fonctionnalité n'est accordé en échange d'un don.
+    </p>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Autres façons de soutenir</h2>
+  <ul>
+    <li><strong>GitHub Sponsors</strong> — pour un financement récurrent et traçable.</li>
+    <li><strong>Open Collective</strong> — dépenses transparentes et publiées.</li>
+    <li><strong>Liberapay</strong> — dons récurrents sans commission de plateforme.</li>
+  </ul>
+  <p class="muted">
+    Ces canaux sont déclarés dans <code>.github/FUNDING.yml</code> du dépôt : si un canal n'y
+    figure pas, il n'est pas officiel.
+  </p>
+
+  <h3>Soutenir sans argent</h3>
+  <ul>
+    <li>Contribuer une règle de détection (voir <code>CONTRIBUTING.md</code>).</li>
+    <li>Signaler un faux positif : c'est la contribution la plus utile à la qualité.</li>
+    <li>Traduire la documentation ou signaler une imprécision.</li>
+    <li>Dire simplement que vous utilisez l'outil dans une Discussion GitHub.</li>
+  </ul>
+</section>
+
+<section class="card">
+  <h2>Transparence</h2>
+  <p>
+    Si le projet reçoit des dons, il publie un <strong>registre agrégé</strong> (montants totaux
+    par période et par usage), jamais nominatif sans consentement explicite. L'objectif est de
+    montrer où va l'argent, pas de mettre en avant les donateurs.
+  </p>
+  <p class="muted small">
+    Cette page est également disponible dans la documentation : <code>docs/support.md</code>.
+  </p>
+</section>
+
+{% endblock %}

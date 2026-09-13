@@ -1,0 +1,79 @@
+# Normalisation des fins de ligne et des diffs.
+#
+# Le projet est développé sur Windows, macOS et Linux : sans ce fichier, Git produit des
+# diffs entiers sur des changements d'espaces et un contributeur Windows peut committer des
+# CRLF qui casseront les scripts bash. Règle de base : **LF partout dans le dépôt**, et Git
+# convertit à la volée sur les systèmes qui utilisent CRLF.
+
+* text=auto eol=lf
+
+# --- Fichiers toujours en LF (dépôts et scripts) ---------------------------------------
+*.py            text eol=lf
+*.pyi           text eol=lf
+*.sh            text eol=lf
+*.bash          text eol=lf
+*.yml           text eol=lf
+*.yaml          text eol=lf
+*.json          text eol=lf
+*.md            text eol=lf
+*.toml          text eol=lf
+*.cfg           text eol=lf
+*.ini           text eol=lf
+*.ts            text eol=lf
+*.tsx           text eol=lf
+*.js            text eol=lf
+*.jsx           text eol=lf
+*.css           text eol=lf
+*.html          text eol=lf
+*.go            text eol=lf
+*.tf            text eol=lf
+*.rego          text eol=lf
+*.service       text eol=lf
+Makefile        text eol=lf
+Dockerfile      text eol=lf
+LICENSE         text eol=lf
+NOTICE          text eol=lf
+CODEOWNERS      text eol=lf
+REUSE.toml      text eol=lf
+
+# --- Fichiers qui DOIVENT conserver CRLF ----------------------------------------------
+*.ps1           text eol=crlf
+*.psm1          text eol=crlf
+*.psd1          text eol=crlf
+*.cmd           text eol=crlf
+*.bat           text eol=crlf
+
+# --- Binaires (jamais de conversion ni de diff textuel) --------------------------------
+*.png           binary
+*.jpg           binary
+*.jpeg          binary
+*.gif           binary
+*.ico           binary
+*.webp          binary
+*.pdf           binary
+*.zip           binary
+*.gz            binary
+*.tgz           binary
+*.whl           binary
+*.db            binary
+*.sqlite        binary
+*.sqlite3       binary
+*.woff          binary
+*.woff2         binary
+*.ttf           binary
+
+# --- Artefacts : exclus des statistiques de langage et des diffs -----------------------
+poetry.lock         linguist-generated=true
+pnpm-lock.yaml      linguist-generated=true
+package-lock.json   linguist-generated=true
+go.sum              linguist-generated=true
+*.min.js            linguist-generated=true
+*.min.css           linguist-generated=true
+*.sarif             linguist-generated=true
+sbom*.json          linguist-generated=true
+*.cdx.json          linguist-generated=true
+*.spdx.json         linguist-generated=true
+
+# --- Documentation : masquer les blocs de diagrammes dans les diffs --------------------
+docs/**/*.md        linguist-documentation=true
+content/**/*.md     linguist-documentation=true

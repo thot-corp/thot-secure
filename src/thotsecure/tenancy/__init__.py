@@ -1,0 +1,58 @@
+"""Multi-tenant : rôles, capacités (RBAC) et authentification."""
+
+from __future__ import annotations
+
+from .auth import ApiKeyService, generate_secret_key, mask_key
+from .rbac import (
+    ALL_CAPABILITIES,
+    CAP_ADMIN_KEYS,
+    CAP_ADMIN_POLICIES,
+    CAP_ADMIN_RULES,
+    CAP_ADMIN_SYSTEM,
+    CAP_ADMIN_TENANTS,
+    CAP_APPROVE_ACTIONS,
+    CAP_EXECUTE_ACTIONS,
+    CAP_READ_AUDIT,
+    CAP_READ_EVENTS,
+    CAP_READ_FINDINGS,
+    CAP_READ_POLICIES,
+    CAP_READ_RULES,
+    CAP_READ_STATS,
+    CAP_WRITE_EVENTS,
+    CAP_WRITE_FINDINGS,
+    ROLE_DESCRIPTIONS,
+    build_principal,
+    capabilities_for,
+    has_capability,
+    require_capability,
+    role_matrix,
+)
+
+__all__ = [
+    "ALL_CAPABILITIES",
+    "AUTH_CACHE_TTL",
+    "CAP_ADMIN_KEYS",
+    "CAP_ADMIN_POLICIES",
+    "CAP_ADMIN_RULES",
+    "CAP_ADMIN_SYSTEM",
+    "CAP_ADMIN_TENANTS",
+    "CAP_APPROVE_ACTIONS",
+    "CAP_EXECUTE_ACTIONS",
+    "CAP_READ_AUDIT",
+    "CAP_READ_EVENTS",
+    "CAP_READ_FINDINGS",
+    "CAP_READ_POLICIES",
+    "CAP_READ_RULES",
+    "CAP_READ_STATS",
+    "CAP_WRITE_EVENTS",
+    "CAP_WRITE_FINDINGS",
+    "ROLE_DESCRIPTIONS",
+    "ApiKeyService",
+    "build_principal",
+    "capabilities_for",
+    "generate_secret_key",
+    "has_capability",
+    "mask_key",
+    "require_capability",
+    "role_matrix",
+]

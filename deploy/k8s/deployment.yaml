@@ -1,0 +1,311 @@
+# =============================================================================
+# Thot Secure — Deployment durci
+# =============================================================================
+# Résumé des durcissements (aucun n'est optionnel dans cet exemple) :
+#   * runAsNonRoot + runAsUser/runAsGroup 10001 + fsGroup 10001
+#   * readOnlyRootFilesystem: true (écritures uniquement sur les volumes montés)
+#   * allowPrivilegeEscalation: false
+#   * capabilities.drop: [ALL] (aucune capability ajoutée)
+#   * seccompProfile: RuntimeDefault
+#   * automountServiceAccountToken: false
+#   * aucun hostNetwork / hostPID / hostIPC / hostPath, jamais `privileged`
+#   * requests et limits CPU/mémoire explicites
+#   * sondes startup + readiness + liveness sur /healthz et /readyz
+#   * topologySpreadConstraints + PodDisruptionBudget (voir pdb.yaml)
+#
+# IMPORTANT — RÉPLICAS ET SQLITE
+# La persistance du MVP est `sqlite3` de la stdlib sur un volume ReadWriteOnce :
+# plusieurs réplicas concurrents sur le MÊME fichier SQLite provoquent des
+# verrous d'écriture et des corruptions de chaîne d'audit. Ce manifeste fixe donc
+# `replicas: 1` avec la stratégie `Recreate` (aucun chevauchement d'écriture), et
+# `hpa.yaml` est désactivé avec `minReplicas == maxReplicas == 1` par défaut.
+# Pour monter en charge : passez à un backend partagé (PostgreSQL/TimescaleDB,
+# DDL fourni par le projet), activez le bus NATS, puis seulement ensuite
+# augmentez `replicas`/`maxReplicas` et retirez la stratégie `Recreate`.
+#
+# SÛRETÉ : les garde-fous `THOT_DRY_RUN=true` et
+# `THOT_AUTONOMY=supervised` proviennent du ConfigMap `thotsecure-config`.
+# Ne les neutralisez pas ici : une levée de garde-fou doit être tracée, revue et
+# limitée à un tenant (deploy/README.md -> « Désactiver dry_run »).
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: thotsecure
+  namespace: thotsecure
+  labels:
+    app.kubernetes.io/name: thotsecure
+    app.kubernetes.io/instance: thotsecure
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/component: security-operations
+    app.kubernetes.io/part-of: thotsecure
+    app.kubernetes.io/managed-by: kubectl
+  annotations:
+    thotsecure.io/safety-defaults: "dry_run=true, autonomy=supervised"
+    thotsecure.io/defensive-only: "true"
+spec:
+  # Voir « RÉPLICAS ET SQLITE » ci-dessus avant toute modification.
+  replicas: 1
+  revisionHistoryLimit: 3
+  # `Recreate` garantit qu'aucune ancienne instance n'écrit dans le fichier
+  # SQLite pendant le démarrage de la nouvelle (pas de double écrivain).
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: thotsecure
+      app.kubernetes.io/instance: thotsecure
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: thotsecure
+        app.kubernetes.io/instance: thotsecure
+        app.kubernetes.io/version: "0.1.0"
+        app.kubernetes.io/component: security-operations
+        app.kubernetes.io/part-of: thotsecure
+      annotations:
+        # Redémarre les pods quand la configuration change (kubectl apply -f
+        # configmap.yaml puis rollout restart, ou via kustomize configMapGenerator).
+        thotsecure.io/config-revision: "1"
+        thotsecure.io/safety-defaults: "dry_run=true, autonomy=supervised"
+    spec:
+      serviceAccountName: thotsecure
+      automountServiceAccountToken: false
+      # Grace period généreuse : les actions en cours doivent pouvoir se
+      # terminer (ou être rollbackées) avant l'arrêt.
+      terminationGracePeriodSeconds: 60
+      # Aucun contrôleur privilégié : ni hostNetwork, ni hostPID, ni hostIPC.
+      hostNetwork: false
+      hostPID: false
+      hostIPC: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+        supplementalGroups: []
+        sysctls: []
+      imagePullSecrets: []
+      initContainers:
+        # ---------------------------------------------------------------------
+        # Fusion des contenus : la bibliothèque livrée dans l'image est copiée
+        # dans le volume `content`, puis les compléments du ConfigMap viennent
+        # s'y ajouter. Les fichiers du ConfigMap écrasent ceux de l'image en cas
+        # de collision de nom.
+        # ---------------------------------------------------------------------
+        - name: prepare-content
+          image: thotsecure:0.1.0
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+              mkdir -p /content/rules /content/policies /content/playbooks
+              cp -a /etc/thotsecure/rules/. /content/rules/ 2>/dev/null || true
+              cp -a /etc/thotsecure/policies/. /content/policies/ 2>/dev/null || true
+              cp -a /etc/thotsecure/playbooks/. /content/playbooks/ 2>/dev/null || true
+              cp -a /overrides/rules/. /content/rules/ 2>/dev/null || true
+              cp -a /overrides/policies/. /content/policies/ 2>/dev/null || true
+              cp -a /overrides/playbooks/. /content/playbooks/ 2>/dev/null || true
+              chown -R 10001:10001 /content
+              echo "Contenus prepares : $(find /content -type f | wc -l) fichier(s)"
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          volumeMounts:
+            - name: content
+              mountPath: /content
+            - name: config
+              mountPath: /overrides
+              readOnly: true
+      containers:
+        - name: thotsecure
+          image: thotsecure:0.1.0
+          imagePullPolicy: IfNotPresent
+          # Forme exec : uvicorn est PID 1 et reçoit SIGTERM directement.
+          command: ["uvicorn"]
+          args:
+            - "thotsecure.main:app"
+            - "--host"
+            - "0.0.0.0"
+            - "--port"
+            - "8080"
+            # Derrière un Ingress : les en-têtes X-Forwarded-* sont pris en
+            # compte. Restreignez `--forwarded-allow-ips` aux plages du
+            # contrôleur d'Ingress si votre cluster est partagé.
+            - "--proxy-headers"
+            - "--forwarded-allow-ips"
+            - "*"
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          # --- Configuration non sensible (envFrom) ---------------------------
+          envFrom:
+            - configMapRef:
+                name: thotsecure-config
+            - secretRef:
+                name: thotsecure-secrets
+          # --- Surcharges explicites -----------------------------------------
+          env:
+            # Monte l'espace de travail en lecture seule : le pod n'écrit que
+            # dans /var/lib/thotsecure et /tmp.
+            - name: HOME
+              value: "/tmp"
+            - name: TMPDIR
+              value: "/tmp"
+            - name: PYTHONDONTWRITEBYTECODE
+              value: "1"
+            - name: PYTHONUNBUFFERED
+              value: "1"
+          # --- Sondes ---------------------------------------------------------
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 24
+            successThreshold: 1
+          readinessProbe:
+            # /readyz vérifie base + bus + règles et renvoie 503 si une
+            # dépendance est KO : le pod est retiré des Endpoints.
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+            successThreshold: 1
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+            successThreshold: 1
+          lifecycle:
+            preStop:
+              exec:
+                # Laisse le temps aux connexions en cours (WebSocket compris) de
+                # se fermer proprement avant le SIGTERM.
+                command: ["/bin/sh", "-c", "sleep 10"]
+          # --- Ressources -----------------------------------------------------
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          # --- Contexte de sécurité du conteneur ------------------------------
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            privileged: false
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+            procMount: Default
+          volumeMounts:
+            # Données persistantes : base SQLite + quarantaine.
+            - name: data
+              mountPath: /var/lib/thotsecure
+            # Contenus fusionnés (règles, politiques, playbooks) : lecture seule.
+            - name: content
+              mountPath: /etc/thotsecure/rules
+              subPath: rules
+              readOnly: true
+            - name: content
+              mountPath: /etc/thotsecure/policies
+              subPath: policies
+              readOnly: true
+            - name: content
+              mountPath: /etc/thotsecure/playbooks
+              subPath: playbooks
+              readOnly: true
+            # Zones inscriptibles malgré le rootfs en lecture seule.
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: thotsecure-data
+        - name: content
+          emptyDir:
+            medium: ""
+            sizeLimit: 128Mi
+        - name: config
+          configMap:
+            name: thotsecure-config
+            defaultMode: 0440
+            # `items` ne projette QUE les clés listées : les variables
+            # d'environnement non sensibles du ConfigMap ne deviennent pas des
+            # fichiers (elles sont injectées via `envFrom`).
+            #
+            # `path` conserve la structure de sous-répertoires : chaque clé est
+            # montée comme un RÉPERTOIRE (subPath) contenant le fichier — un
+            # montage `subPath` sur `rules/README.txt` échouerait, car le
+            # fichier projeté n'existe pas dans la couche de l'image.
+            items:
+              - key: targets.yaml
+                path: targets.yaml
+              - key: rules/README.txt
+                path: rules/README.txt
+              - key: policies/README.txt
+                path: policies/README.txt
+              - key: playbooks/README.txt
+                path: playbooks/README.txt
+        - name: tmp
+          emptyDir:
+            medium: ""
+            sizeLimit: 64Mi
+      # -----------------------------------------------------------------------
+      # Répartition : évite que tous les pods (si plusieurs réplicas avec un
+      # backend partagé) atterrissent dans la même zone ou sur le même nœud.
+      # `DoNotSchedule` avec `minDomains` élevé empêche tout démarrage sur un
+      # cluster mono-zone : on reste donc en `ScheduleAnyway` pour ne pas bloquer
+      # un cluster de test, tout en gardant la préférence explicite.
+      # -----------------------------------------------------------------------
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: thotsecure
+              app.kubernetes.io/instance: thotsecure
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: thotsecure
+              app.kubernetes.io/instance: thotsecure
+      # Pas de PriorityClass privilégiée : le SOAR ne doit pas évincer des
+      # charges critiques du cluster. Déclarez la vôtre et référencez-la ici si
+      # votre politique de priorité l'exige.

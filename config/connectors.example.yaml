@@ -1,0 +1,121 @@
+# Connecteurs d'action — EXEMPLE à copier :
+#     cp config/connectors.example.yaml config/connectors.yaml
+#
+# Un connecteur est le seul endroit du produit capable de produire un effet réel. Les
+# playbooks ne connaissent que des noms LOGIQUES (« waf », « ticketing ») : ce fichier décide
+# quel pilote les réalise. C'est ce qui permet de tout tester en simulation, puis de brancher
+# le réel un connecteur à la fois, sans modifier un seul playbook.
+#
+# ⚠️ Valeur par défaut de tout le produit : `simulation`. Aucun connecteur réel n'est
+#    configuré à l'installation, et c'est volontaire.
+#
+# Pilotes disponibles :
+#   simulation       — n'agit sur rien, le dit, et reste simulé même si DRY_RUN=false
+#   nginx-local      — fichier d'inclusion Nginx (deny / rate-limit) + rechargement optionnel
+#   local-quarantine — mise en quarantaine de fichier (déplacement + SHA-256 + manifeste)
+#   local-ticket     — un ticket Markdown par incident, sans outil tiers
+#   http-webhook     — passerelle HTTP signée (Worker Cloudflare, Lambda, n8n, pfSense…)
+#
+# Ce fichier peut contenir un secret de signature : gardez-le hors du dépôt Git (il est déjà
+# dans .gitignore) et protégez-le (chmod 600).
+
+version: 1
+
+connectors:
+  # -- Filtrage réseau et applicatif ------------------------------------------------
+  waf:
+    driver: simulation
+    # Pour un Nginx local (effet réel, réversible) :
+    # driver: nginx-local
+    # settings:
+    #   deny_file: /etc/nginx/conf.d/thotsecure-deny.conf
+    #   state_file: /var/lib/thotsecure/nginx-state.json
+    #   reload_command: ["nginx", "-s", "reload"]   # laisser vide pour ne PAS recharger
+    #
+    # Pour une passerelle (Cloudflare Worker, AWS Lambda, pfSense, n8n) :
+    # driver: http-webhook
+    # settings:
+    #   url: "https://waf-bridge.interne/thotsecure"
+    #   rollback_url: "https://waf-bridge.interne/thotsecure/undo"
+    #   secret: "changeme-jeton-de-signature-hmac"
+    #   timeout_seconds: 10
+    #   verify_tls: true
+    #   headers:
+    #     X-Environnement: production
+
+  ratelimit:
+    driver: simulation
+    # driver: nginx-local
+    # settings:
+    #   deny_file: /etc/nginx/conf.d/thotsecure-ratelimit.conf
+    #   reload_command: ["nginx", "-s", "reload"]
+
+  network:
+    driver: simulation
+    # Isolation d'hôte : à brancher sur votre contrôleur réseau (webhook) ou votre EDR.
+    # driver: http-webhook
+    # settings:
+    #   url: "https://network-controller.interne/api/isolation"
+    #   secret: "changeme"
+
+  endpoint:
+    driver: simulation
+
+  harden:
+    driver: simulation
+    # driver: http-webhook
+    # settings:
+    #   url: "https://config-manager.interne/harden"
+    #   secret: "changeme"
+
+  # -- Identité et secrets ----------------------------------------------------------
+  iam:
+    driver: simulation
+    # Révocation de sessions : dépend de votre fournisseur d'identité (Keycloak, Entra ID…).
+    # driver: http-webhook
+    # settings:
+    #   url: "https://iam.interne/thotsecure/revoke-session"
+    #   secret: "changeme"
+
+  secretstore:
+    driver: simulation
+    # Rotation de secret : Vault, SOPS, gestionnaire cloud.
+    # driver: http-webhook
+    # settings:
+    #   url: "https://vault.interne/v1/thotsecure/rotate"
+    #   secret: "changeme"
+
+  ci:
+    driver: simulation
+    # Ouverture de PR de mise à jour de dépendance (jamais de fusion automatique).
+
+  # -- Artefacts et traçabilité -----------------------------------------------------
+  artifact:
+    driver: local-quarantine
+    settings:
+      quarantine_dir: /var/lib/thotsecure/quarantine
+      # Garde-fou essentiel : seuls ces chemins peuvent être mis en quarantaine. Sans cette
+      # limite, un playbook mal écrit pourrait déplacer /etc/passwd — c'est-à-dire provoquer
+      # un déni de service sur votre propre infrastructure.
+      allowed_roots:
+        - /srv
+        - /var/www
+        - /var/lib/thotsecure
+
+  ticketing:
+    driver: local-ticket
+    settings:
+      directory: /var/lib/thotsecure/tickets
+    # Pour Jira / GLPI / GitHub, utilisez la passerelle webhook :
+    # driver: http-webhook
+    # settings:
+    #   url: "https://tickets.interne/api/thotsecure"
+    #   secret: "changeme"
+
+  notify:
+    driver: simulation
+    # driver: http-webhook
+    # settings:
+    #   url: "https://hooks.slack.com/services/XXX/YYY/ZZZ"
+    #   secret: ""            # Slack n'exige pas de signature HMAC entrante
+    #   verify_tls: true

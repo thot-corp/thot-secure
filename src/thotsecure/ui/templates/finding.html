@@ -1,0 +1,228 @@
+{% extends "base.html" %}
+{% block title %}{{ finding.rule_id }}{% endblock %}
+{% block content %}
+
+<section class="card">
+  <div class="detail-head">
+    <div>
+      <h2>{{ finding.title }}</h2>
+      <p class="muted">
+        <code>{{ finding.finding_id }}</code> ·
+        <span class="sev sev-{{ finding.severity }}">{{ finding.severity }}</span> ·
+        score <strong>{{ '%.1f'|format(finding.risk_score) }}/100</strong>
+        ({{ risk_band(finding.risk_score) }}) ·
+        <span class="pill">{{ finding.status }}</span>
+      </p>
+    </div>
+    <div class="actions-row">
+      <a class="button ghost" href="/api/v1/findings/{{ finding.finding_id }}/report?format=md">Rapport Markdown</a>
+      <a class="button ghost" href="/api/v1/findings/{{ finding.finding_id }}/report?format=html">Rapport HTML</a>
+      <a class="button ghost" href="/api/v1/findings/{{ finding.finding_id }}/report?format=sarif">SARIF</a>
+    </div>
+  </div>
+
+  <div class="score score-lg"><span style="width: {{ finding.risk_score }}%"></span></div>
+
+  <div class="grid three">
+    <div><span class="muted">Règle</span><br><code>{{ finding.rule_id }}</code></div>
+    <div><span class="muted">Occurrences</span><br>{{ finding.count }}</div>
+    <div><span class="muted">Confiance</span><br>{{ '%.0f'|format(finding.confidence * 100) }} %</div>
+    <div><span class="muted">Première observation</span><br>{{ finding.first_seen.strftime('%d/%m/%Y %H:%M:%S') }}</div>
+    <div><span class="muted">Dernière observation</span><br>{{ finding.last_seen.strftime('%d/%m/%Y %H:%M:%S') }}</div>
+    <div><span class="muted">Durée</span><br>{{ humanize((finding.last_seen - finding.first_seen).total_seconds()) }}</div>
+  </div>
+
+  {% if finding.mitre or finding.tags %}
+  <p>
+    {% for tag in finding.tags %}<span class="pill">{{ tag }}</span> {% endfor %}
+  </p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Décision du moteur de politiques</h2>
+  <p>
+    <span class="pill {{ 'pill-warn' if decision.decision in ['auto', 'require_approval'] else '' }}">
+      {{ decision.decision }}
+    </span>
+    {% if decision.policy_id %}politique <code>{{ decision.policy_id }}</code>{% else %}aucune politique correspondante{% endif %}
+    {% if decision.playbook %}→ playbook <code>{{ decision.playbook }}</code>{% endif %}
+  </p>
+  <p class="muted small">{{ decision.reason }}</p>
+  {% if decision.guards %}
+    <p class="small">Garde-fous appliqués :
+      {% for guard in decision.guards %}<code class="guard">{{ guard }}</code> {% endfor %}
+    </p>
+  {% endif %}
+  <p class="hint">
+    Les garde-fous (cible protégée, périmètre, plafond horaire, cooldown, seuil critique,
+    dry-run) sont appliqués <strong>après</strong> la politique : aucune politique ne peut les
+    désactiver.
+  </p>
+  {% if decision.dry_run %}
+    <div class="alert alert-info">Mode simulation : l'action n'aurait aucun effet réel.</div>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Remédiation recommandée</h2>
+  <p>{{ finding.remediation or "Aucune remédiation documentée par la règle." }}</p>
+  {% if finding.description %}<p class="muted">{{ finding.description }}</p>{% endif %}
+  {% set false_positives = finding.evidence.get('false_positives', []) %}
+  {% if false_positives %}
+    <details>
+      <summary>Faux positifs connus ({{ false_positives|length }})</summary>
+      <ul>{% for item in false_positives %}<li>{{ item }}</li>{% endfor %}</ul>
+    </details>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Qualification</h2>
+  <div class="grid two">
+    <form method="post" action="/api/v1/findings/{{ finding.finding_id }}/ack" class="inline-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="text" name="comment" placeholder="Commentaire d'acquittement">
+      <button type="submit" class="ghost" disabled title="Utilisez l'API ou la CLI pour la qualification">
+        Acquitter (API)
+      </button>
+    </form>
+    <div>
+      <p class="hint">
+        La qualification (acquittement, clôture avec résolution typée, exception de bruit datée)
+        s'effectue via l'API ou la CLI afin que chaque transition soit horodatée et auditée :
+      </p>
+      <pre>thotsecure findings close {{ finding.finding_id }} \
+  --resolution true_positive --comment "corrigé"
+
+curl -X POST "$THOT/api/v1/findings/{{ finding.finding_id }}/close" \
+  -H "X-API-Key: $KEY" -H 'Content-Type: application/json' \
+  -d '{"resolution":"mitigated","comment":"règle WAF ajoutée"}'</pre>
+    </div>
+  </div>
+</section>
+
+{% if 'execute:actions' in principal.capabilities %}
+<section class="card">
+  <h2>Contre-mesures</h2>
+  <p class="muted">
+    Toute action est <strong>réversible</strong> et <strong>auditée</strong>. Un playbook
+    non réversible exige une approbation humaine, quel que soit le mode d'autonomie du tenant.
+  </p>
+
+  <form method="post" action="/api/v1/actions/plan" class="filters" id="plan-form">
+    <input type="hidden" name="finding_id" value="{{ finding.finding_id }}">
+    <label>Playbook
+      <select name="playbook">
+        {% for playbook in playbooks %}
+          <option value="{{ playbook.name }}">{{ playbook.name }} — {{ playbook.description }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Cible
+      <input type="text" name="target" placeholder="203.0.113.9 ou labels.src_ip" value="">
+    </label>
+    <label>Durée (s)
+      <input type="number" name="duration_seconds" value="3600" min="60" max="604800">
+    </label>
+    <button type="submit">Planifier (aucun effet)</button>
+  </form>
+  <p class="hint">
+    La planification n'a aucun effet de bord : elle produit un plan relisible, approuvable
+    puis exécutable. Utilisez la CLI ou l'API pour approuver et exécuter.
+  </p>
+</section>
+{% endif %}
+
+{% if actions %}
+<section class="card">
+  <h2>Actions déclenchées ({{ actions|length }})</h2>
+  <table class="table">
+    <thead><tr><th>Action</th><th>Playbook</th><th>Cible</th><th>Statut</th><th>Simulation</th><th>Rollback</th></tr></thead>
+    <tbody>
+    {% for action in actions %}
+      <tr>
+        <td><code>{{ action.action_id }}</code></td>
+        <td><code>{{ action.playbook }}</code></td>
+        <td><code>{{ action.target }}</code></td>
+        <td><span class="pill">{{ action.status }}</span></td>
+        <td>{{ 'oui' if action.dry_run else 'NON' }}</td>
+        <td>
+          {% if action.rollback.available and action.rollback.token %}
+            <form method="post" action="/ui/actions/{{ action.action_id }}/rollback" class="inline"
+                  data-confirm="Annuler cette action ? Le rollback sera appliqué et audité.">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <input type="hidden" name="comment" value="annulation depuis la fiche finding">
+              <button type="submit" class="ghost">Annuler</button>
+            </form>
+          {% else %}
+            <span class="muted">—</span>
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
+<section class="card">
+  <h2>Preuves (échantillon)</h2>
+  {% set samples = finding.evidence.get('samples', []) %}
+  {% if samples %}
+    {% for sample in samples %}
+      <details {{ 'open' if loop.last else '' }}>
+        <summary>
+          <code>{{ sample.get('kind', '') }}</code> — {{ sample.get('ts', '') }}
+          {% if sample.get('source', {}).get('host') %}· {{ sample.source.host }}{% endif %}
+        </summary>
+        <table class="table">
+          <tbody>
+          {% for key, value in (sample.get('labels', {}) | dictsort) %}
+            <tr><td class="muted"><code>{{ key }}</code></td><td><code>{{ value }}</code></td></tr>
+          {% endfor %}
+          {% for key, value in (sample.get('payload', {}) | dictsort) %}
+            <tr><td class="muted"><code>{{ key }}</code></td><td><code>{{ value }}</code></td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </details>
+    {% endfor %}
+    <p class="hint">
+      Les valeurs sont échappées à l'affichage et les secrets ont été masqués au moment de la
+      collecte : une preuve d'attaque ne doit jamais devenir une charge XSS ni une fuite.
+    </p>
+  {% else %}
+    <p class="muted">Aucun échantillon conservé.</p>
+  {% endif %}
+
+  {% set risk = finding.evidence.get('risk', {}) %}
+  {% if risk.get('steps') %}
+    <details>
+      <summary>Calcul du score de risque</summary>
+      <pre>{{ risk.get('formula', '') }}</pre>
+      <ul>{% for step in risk['steps'] %}<li>{{ step }}</li>{% endfor %}</ul>
+    </details>
+  {% endif %}
+</section>
+
+{% if audit %}
+<section class="card">
+  <h2>Piste d'audit liée</h2>
+  <table class="table">
+    <thead><tr><th>Seq</th><th>Horodatage</th><th>Acteur</th><th>Action</th></tr></thead>
+    <tbody>
+    {% for record in audit %}
+      <tr>
+        <td>{{ record.seq }}</td>
+        <td class="muted">{{ record.ts.strftime('%d/%m %H:%M:%S') }}</td>
+        <td><code>{{ record.actor }}</code></td>
+        <td><code>{{ record.action }}</code></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
+{% endblock %}

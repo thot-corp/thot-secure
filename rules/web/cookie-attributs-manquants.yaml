@@ -1,0 +1,33 @@
+id: AO-WEB-052
+title: Cookie de session sans attributs de sécurité
+description: >-
+  Un cookie de session sans `Secure` peut fuiter lors d'une requête en clair ; sans
+  `HttpOnly`, il est lisible par un script injecté ; sans `SameSite`, il accompagne les
+  requêtes forgées depuis un autre site (CSRF).
+status: stable
+severity: medium
+confidence: 0.85
+enabled: true
+tags: [web, hardening, owasp:a07, session]
+source_types: [web_probe]
+kinds: [http.response]
+match:
+  any:
+    - field: labels.check
+      op: in
+      value: [cookie_without_secure, cookie_without_httponly, cookie_without_samesite]
+dedup:
+  key: [labels.host, labels.check]
+  ttl_seconds: 604800
+risk:
+  base: 32
+false_positives:
+  - >-
+    Cookie strictement non sensible (préférence d'affichage) : la règle vise l'ensemble des
+    cookies posés par l'actif, vérifiez le nom du cookie dans la preuve.
+remediation: >-
+  Poser les cookies de session avec `Secure; HttpOnly; SameSite=Lax` (ou `Strict` pour les
+  parcours sans navigation externe). Vérifier ensuite qu'aucun parcours fonctionnel ne
+  dépend du cookie en HTTP.
+references:
+  - https://owasp.org/www-project-secure-headers/

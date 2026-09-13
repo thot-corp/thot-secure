@@ -1,0 +1,71 @@
+# =============================================================================
+# Thot Secure — Services (ClusterIP applicatif + Service dédié aux métriques)
+# =============================================================================
+# Deux Services distincts, volontairement :
+#   * `thotsecure`       : API REST /api/v1, console embarquée, WebSocket, sondes
+#   * `thotsecure-metrics`: uniquement /metrics, pour que la supervision scrape
+#                         une cible dédiée sans exposer l'API au monitoring.
+# Aucun Service de type NodePort/LoadBalancer : l'exposition passe par l'Ingress
+# (voir ingress.yaml) ou par un port-forward explicite.
+# =============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: thotsecure
+  namespace: thotsecure
+  labels:
+    app.kubernetes.io/name: thotsecure
+    app.kubernetes.io/instance: thotsecure
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/component: security-operations
+    app.kubernetes.io/part-of: thotsecure
+    app.kubernetes.io/managed-by: kubectl
+  annotations:
+    thotsecure.io/description: "API REST /api/v1, console /, WebSocket /api/v1/ws/stream"
+spec:
+  type: ClusterIP
+  # `ClientIP` avec une session de 3 h : la console embarquée ouvre un WebSocket
+  # long ; sans affinité, un rechargement du proxy peut couper le flux.
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800
+  selector:
+    app.kubernetes.io/name: thotsecure
+    app.kubernetes.io/instance: thotsecure
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP
+      # Pas de `appProtocol` propriétaire : HTTP/1.1 + WebSocket.
+      appProtocol: http
+---
+# =============================================================================
+# Service dédié aux métriques (Prometheus / ServiceMonitor).
+# =============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: thotsecure-metrics
+  namespace: thotsecure
+  labels:
+    app.kubernetes.io/name: thotsecure
+    app.kubernetes.io/instance: thotsecure-metrics
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/component: metrics
+    app.kubernetes.io/part-of: thotsecure
+    app.kubernetes.io/managed-by: kubectl
+  annotations:
+    thotsecure.io/description: "Exposition Prometheus de GET /metrics"
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: thotsecure
+    app.kubernetes.io/instance: thotsecure
+  ports:
+    - name: metrics
+      port: 8080
+      targetPort: http
+      protocol: TCP
+      appProtocol: http

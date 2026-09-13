@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Audit{% endblock %}
+{% block content %}
+
+<section class="card {{ 'card-ok' if integrity.valid else 'card-bad' }}">
+  <h2>Intégrité de la chaîne d'audit</h2>
+  <p>
+    {% if integrity.valid %}
+      <span class="pill pill-ok">chaîne valide</span> — {{ integrity.records }} enregistrement(s) recalculés.
+    {% else %}
+      <span class="pill pill-bad">CHAÎNE ROMPUE</span> au seq <strong>{{ integrity.broken_at }}</strong> :
+      {{ integrity.reason }}
+    {% endif %}
+  </p>
+  <p class="muted small">
+    Dernier enregistrement : {{ integrity.last_record_at or '—' }}<br>
+    Empreinte : <code>{{ integrity.last_hash or '—' }}</code><br>
+    Vérifié à : {{ integrity.checked_at }}
+  </p>
+  <form method="post" action="/ui/audit/verify" class="inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button type="submit">Vérifier l'intégrité maintenant</button>
+  </form>
+  <p class="hint">
+    La vérification porte sur la chaîne <strong>globale</strong> (tous tenants) : les empreintes
+    relient les enregistrements entre eux. Filtrer par tenant laisserait passer une suppression
+    ciblée.
+  </p>
+</section>
+
+<section class="card">
+  <h2>Journal ({{ records|length }} derniers)</h2>
+  <form method="get" action="/ui/audit" class="filters">
+    <label>Action
+      <input type="text" name="action" value="{{ filter_action }}" placeholder="action.approve">
+    </label>
+    <button type="submit">Filtrer</button>
+  </form>
+
+  <table class="table">
+    <thead>
+      <tr><th>Seq</th><th>Horodatage</th><th>Acteur</th><th>Rôle</th><th>Action</th><th>Cible</th><th>Avant → Après</th></tr>
+    </thead>
+    <tbody>
+    {% for record in records %}
+      <tr>
+        <td>{{ record.seq }}</td>
+        <td class="muted">{{ record.ts.strftime('%d/%m/%Y %H:%M:%S') }}</td>
+        <td><code>{{ record.actor }}</code></td>
+        <td class="muted">{{ record.actor_role }}</td>
+        <td><code>{{ record.action }}</code></td>
+        <td class="muted"><code>{{ record.target.get('type', '') }}:{{ record.target.get('id', '') }}</code></td>
+        <td class="small">
+          {% if record.before or record.after %}
+            <code>{{ record.before }}</code> → <code>{{ record.after }}</code>
+          {% else %}
+            <span class="muted">—</span>
+          {% endif %}
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="7" class="muted">Aucun enregistrement.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+
+  <p class="hint">
+    Export SIEM : <code>GET /api/v1/audit/export?format=cef</code> ou
+    <code>format=jsonl</code> — la chaîne (<code>prev_hash</code>/<code>hash</code>) est
+    conservée en JSONL pour permettre une vérification externe.
+  </p>
+</section>
+
+{% endblock %}

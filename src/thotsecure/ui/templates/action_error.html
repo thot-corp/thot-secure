@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Action refusée{% endblock %}
+{% block content %}
+<section class="card card-warn">
+  <h2>Opération refusée</h2>
+  <p>
+    L'opération <code>{{ operation }}</code> sur l'action <code>{{ action_id }}</code> a été
+    refusée par le moteur d'actions.
+  </p>
+  <p><strong>Code</strong> : <code>{{ code }}</code><br><strong>Motif</strong> : {{ message }}</p>
+  <h3>Pourquoi ce refus est une bonne nouvelle</h3>
+  <p class="muted">
+    Les refus du moteur d'actions sont des garde-fous : action non approuvée, cible protégée,
+    playbook non réversible en mode automatique, action déjà terminale, rollback indisponible…
+    Ils empêchent une automatisation de produire un effet non maîtrisé.
+  </p>
+  <a class="button" href="/ui/actions">Retour aux actions</a>
+</section>
+{% endblock %}

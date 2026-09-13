@@ -1,0 +1,82 @@
+# =============================================================================
+# Thot Secure — configuration Promtail (collecte des journaux Docker -> Loki)
+# =============================================================================
+# Ne conserve que les conteneurs du projet Thot Secure (métadonnée
+# `com.docker.compose.project = thotsecure`) : la supervision ne doit pas aspirer
+# les journaux d'autres charges de l'hôte.
+#
+# NOTE DE SÛRETÉ : `/var/run/docker.sock` est monté en lecture seule. Ce socket
+# reste équivalent à un accès root sur l'hôte — voir l'avertissement dans
+# docker-compose.observability.yml.
+# =============================================================================
+
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+  log_level: warn
+
+positions:
+  filename: /positions/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+    # Compression et lots pour limiter la charge réseau.
+    batchwait: 1s
+    batchsize: 1048576
+    backoff_config:
+      min_period: 500ms
+      max_period: 5m
+      max_retries: 10
+    external_labels:
+      collector: promtail
+      cluster: thotsecure-local
+
+scrape_configs:
+  - job_name: docker-thotsecure
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 15s
+        # Filtre : uniquement les conteneurs du projet Compose `thotsecure`.
+        filters:
+          - name: label
+            values: ["com.docker.compose.project=thotsecure"]
+    relabel_configs:
+      # Nom lisible du conteneur.
+      - source_labels: ["__meta_docker_container_name"]
+        regex: "/(.*)"
+        target_label: container
+      - source_labels: ["__meta_docker_container_log_stream"]
+        target_label: stream
+      - source_labels: ["__meta_docker_container_label_com_docker_compose_service"]
+        target_label: service
+      - source_labels: ["__meta_docker_container_label_com_docker_compose_project"]
+        target_label: project
+      - source_labels: ["__meta_docker_container_label_org_opencontainers_image_title"]
+        target_label: app
+      # Chemin des journaux sur l'hôte.
+      - source_labels: ["__meta_docker_container_id"]
+        target_label: __path__
+        replacement: /var/lib/docker/containers/$1/$1-json.log
+    pipeline_stages:
+      # Thot Secure émet du JSON structuré (THOT_LOG_FORMAT=json).
+      - json:
+          expressions:
+            level: level
+            logger: logger
+            msg: message
+            tenant_id: tenant_id
+            event: event
+            dry_run: dry_run
+            autonomy: autonomy
+      - labels:
+          level:
+          tenant_id:
+      # Conserve la ligne brute tout en exposant les champs extraits.
+      - output:
+          source: msg
+      # Marquage explicite des journaux de sécurité à forte valeur.
+      - match:
+          selector: '{service="thotsecure"} |= "audit"'
+          stages:
+            - labels:
+                audit: "true"

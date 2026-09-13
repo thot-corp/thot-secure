@@ -1,0 +1,13 @@
+version: 1
+id: ignore-scan-noise-info
+priority: 5
+description: >-
+  Bruit de reconnaissance sans exploitation : un balayage détecté reste informatif, mais il ne
+  justifie ni action, ni notification dans le flux opérationnel. Les findings restent en base
+  et consultables (filtre « ignore » = silence, pas suppression) : c'est ce qui permet de
+  mesurer une recrudescence sans inonder l'astreinte.
+when:
+  finding.severity: [info, low]
+  finding.tags_any: [scanner, reconnaissance]
+then:
+  decision: ignore

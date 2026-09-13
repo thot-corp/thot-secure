@@ -1,0 +1,40 @@
+id: AO-CFG-002
+title: Conteneur lancé en mode privilégié ou avec le socket Docker
+description: >-
+  Un conteneur privilégié, ou disposant du socket Docker, peut s'échapper vers l'hôte et
+  obtenir un accès root sur la machine. C'est l'une des erreurs de configuration les plus
+  dangereuses en environnement conteneurisé, et l'une des plus fréquentes.
+status: stable
+severity: critical
+confidence: 0.95
+enabled: true
+tags: [config, hardening, cis:5.4, conteneur, mitre:T1610]
+source_types: [config_audit]
+kinds: [config.audit]
+match:
+  any:
+    - field: labels.check
+      op: eq
+      value: container_privileged
+    - field: labels.check
+      op: eq
+      value: container_docker_socket
+    - field: labels.check
+      op: eq
+      value: container_host_network
+dedup:
+  key: [labels.file, labels.check]
+  ttl_seconds: 86400
+risk:
+  base: 70
+false_positives:
+  - >-
+    Outil d'administration dont la fonction même exige le socket Docker : isolez-le alors sur
+    un hôte dédié, avec des accès restreints et une journalisation renforcée.
+remediation: >-
+  Supprimer `privileged: true` et le montage de `/var/run/docker.sock`, ajouter
+  `no-new-privileges:true`, monter le système de fichiers en lecture seule lorsque c'est
+  possible, et utiliser un socket proxy filtré si l'accès à l'API Docker est indispensable.
+references:
+  - CIS Docker Benchmark 5.4 / 5.31
+  - https://attack.mitre.org/techniques/T1610/

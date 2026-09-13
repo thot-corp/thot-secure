@@ -1,0 +1,103 @@
+---
+# =============================================================================
+# tasks/user.yml — compte système dédié et non privilégié
+# -----------------------------------------------------------------------------
+# Le service ne tourne JAMAIS en root : un compte système dédié (UID/GID fixes)
+# limite la portée d'une éventuelle compromission de l'API.
+#
+# La création est idempotente : si le compte existe déjà avec un autre UID/GID,
+# Ansible ne le modifie PAS (on ne veut pas casser les permissions existantes
+# d'un hôte déjà en service) mais le rôle vous le signale.
+# =============================================================================
+
+- name: "Utilisateur | Relever le compte système existant, le cas échéant"
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ thotsecure_user }}"
+    fail_key: false
+  register: thotsecure_getent_user
+  tags:
+    - install
+    - user
+
+- name: "Utilisateur | Avertir en cas d'UID différent de l'UID attendu"
+  ansible.builtin.debug:
+    msg: >-
+      AVERTISSEMENT : le compte '{{ thotsecure_user }}' existe déjà avec l'UID
+      {{ thotsecure_getent_user.ansible_facts.getent_passwd[thotsecure_user][1] }}
+      au lieu de {{ thotsecure_uid }}. Le rôle ne modifie pas un UID existant
+      (cela rendrait orphelins des fichiers déjà présents). Pour aligner les
+      valeurs, corrigez thotsecure_uid ou recréez le compte manuellement.
+  when:
+    # fail_key=false renvoie la clé associée à la valeur None quand le compte
+    # n'existe pas encore : on teste donc explicitement « is not none ».
+    - thotsecure_getent_user.ansible_facts.getent_passwd is defined
+    - thotsecure_getent_user.ansible_facts.getent_passwd[thotsecure_user] | default(none) is not none
+    - (thotsecure_getent_user.ansible_facts.getent_passwd[thotsecure_user][1] | string) != (thotsecure_uid | string)
+  tags:
+    - install
+    - user
+
+- name: "Utilisateur | Créer le groupe système {{ thotsecure_group }}"
+  ansible.builtin.group:
+    name: "{{ thotsecure_group }}"
+    gid: "{{ thotsecure_gid }}"
+    system: true
+    state: present
+  tags:
+    - install
+    - user
+
+- name: "Utilisateur | Créer le compte système {{ thotsecure_user }}"
+  ansible.builtin.user:
+    name: "{{ thotsecure_user }}"
+    group: "{{ thotsecure_group }}"
+    uid: "{{ thotsecure_uid }}"
+    # Compte système : pas d'expiration par âge, pas de mot de passe utilisable.
+    system: true
+    # Aucun shell : le compte ne sert qu'à exécuter le service via systemd.
+    # /usr/sbin/nologin existe sur Debian et sur EL (/sbin/nologin est un lien).
+    shell: /usr/sbin/nologin
+    home: "{{ thotsecure_home }}"
+    create_home: true
+    # Le HOME contient la base SQLite et la quarantaine : jamais lisible par les
+    # autres utilisateurs de l'hôte.
+    home_mode: "0750"
+    # Verrouille le mot de passe (*) : connexion interactive impossible.
+    password_lock: true
+    state: present
+  tags:
+    - install
+    - user
+
+- name: "Utilisateur | Vérifier que le compte n'a pas de shell interactif"
+  # command : getent est plus fiable que le module getent pour relire un champ
+  # précis juste après création (l'utilisateur peut déjà exister en cache).
+  ansible.builtin.command:
+    argv:
+      - getent
+      - passwd
+      - "{{ thotsecure_user }}"
+  register: thotsecure_user_passwd
+  changed_when: false
+  check_mode: false
+  tags:
+    - install
+    - user
+
+- name: "Utilisateur | Confirmer l'absence de shell interactif"
+  ansible.builtin.assert:
+    that:
+      - (thotsecure_user_passwd.stdout | default('')).split(':') | length >= 7
+      - (thotsecure_user_passwd.stdout.split(':')[6]) in ['/usr/sbin/nologin', '/sbin/nologin', '/bin/false']
+    fail_msg: >-
+      Le compte '{{ thotsecure_user }}' possède un shell interactif
+      ('{{ (thotsecure_user_passwd.stdout | default(':'.join([''] * 7))).split(':')[6] }}').
+      Le service Thot Secure ne doit pas disposer d'un accès shell : aucun
+      opérateur ne doit pouvoir ouvrir de session avec ce compte.
+      Corrigez avec : usermod -s /usr/sbin/nologin {{ thotsecure_user }}
+    success_msg: "Compte {{ thotsecure_user }} conforme : pas de shell interactif."
+    quiet: true
+  tags:
+    - install
+    - user

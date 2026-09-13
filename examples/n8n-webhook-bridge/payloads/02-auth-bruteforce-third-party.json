@@ -1,0 +1,38 @@
+{
+  "event_id": "c2b074ba-fc82-435e-8e8b-05883566fae1",
+  "schema_version": "1",
+  "tenant_id": "acme",
+  "ts": "2026-02-14T10:03:41.007Z",
+  "kind": "syslog",
+  "source": {
+    "type": "syslog",
+    "name": "vpn-gateway.acme.fr",
+    "host": "vpn-gw-01.acme.fr"
+  },
+  "severity_hint": "high",
+  "labels": {
+    "src_ip": "203.0.113.9",
+    "syslog_facility": "authpriv",
+    "syslog_severity": 4,
+    "syslog_tag": "sshd",
+    "syslog_pid": "28417",
+    "auth_service": "vpn",
+    "auth_result": "failure",
+    "auth_method": "password",
+    "user": "svc-backup",
+    "failure_count": 37,
+    "window_seconds": 300,
+    "detected_by": "third-party-detector",
+    "detector_rule": "AUTH-BRUTE-001"
+  },
+  "payload": {
+    "message": "<84>Feb 14 10:03:41 vpn-gw-01 sshd[28417]: Failed password for svc-backup from 203.0.113.9 port 51844 ssh2 (37 échecs en 300 s)",
+    "detector_note": "Constat produit par le détecteur tiers du fournisseur d'accès VPN. Thot Secure ne fait que normaliser, corréler et journaliser ce constat : la sonde n'émet aucune tentative d'authentification et ne teste aucun mot de passe.",
+    "source_port": 51844,
+    "protocol": "ssh2",
+    "first_failure_ts": "2026-02-14T09:58:52Z",
+    "last_failure_ts": "2026-02-14T10:03:41Z",
+    "account_locked_by_detector": true
+  },
+  "raw_ref": null
+}

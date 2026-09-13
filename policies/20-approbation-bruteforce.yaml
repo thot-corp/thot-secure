@@ -1,0 +1,23 @@
+version: 1
+id: approval-bruteforce-rate-limit
+priority: 180
+description: >-
+  Bourrage d'identifiants ou force brute : la limitation de débit est préférable au blocage
+  (moins de risque de couper un client légitime derrière une adresse partagée), mais elle
+  modifie le comportement du service — donc validation humaine.
+when:
+  finding.tags_any: [bruteforce]
+  finding.risk_score: { gte: 55 }
+  tenant.mode: [auto, supervised, manual]
+then:
+  decision: require_approval
+  playbook: rate-limit-source
+  params:
+    target: labels.src_ip
+    rate: "10r/s"
+    duration_seconds: 1800
+    reason: "Thot Secure — limitation de débit sur source abusive"
+  cooldown_seconds: 1800
+rollback:
+  playbook: remove-rate-limit
+  auto_after_seconds: 1800

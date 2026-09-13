@@ -1,0 +1,173 @@
+name: Bug report
+description: Report a defect in Thot Secure — something that does not behave as documented.
+title: "[Bug]: "
+labels:
+  - "type/bug"
+  - "needs-triage"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a report. A precise bug report gets
+        fixed; a vague one usually gets a question back, which costs everybody a
+        round trip.
+
+        **Before you continue:**
+
+        - This form is for defects. If Thot Secure is behaving *unsafely* — an action
+          runs outside `DRY_RUN`, tenant isolation fails, the audit chain can be
+          tampered with, a rollback does not reverse an effect, or a guard-rail can
+          be bypassed — **stop and use the private channel in
+          [SECURITY.md](https://github.com/thotsecure/thot-secure/blob/main/SECURITY.md)
+          instead.** That is a vulnerability, not a bug report, and it needs a fix
+          before it is public.
+        - Search the existing issues and Discussions first. If you find the same
+          report, add your version and environment details to it rather than
+          opening a duplicate.
+        - Never paste API keys, `THOT_SECRET_KEY`, tokens, private keys, real
+          customer hostnames or production telemetry. Redact before submitting.
+
+        Fill in every field you can. "Latest version, Docker Compose, on Ubuntu
+        24.04" is genuinely useful; the exact command and the exact error are
+        worth more than a paragraph of prose.
+
+  - type: input
+    id: version
+    attributes:
+      label: Thot Secure version
+      description: |
+        The output of `GET /version`, the container image tag or digest, or the
+        commit SHA you built from.
+      placeholder: "0.1.0 (commit 4f2a9c1)"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: How are you running Thot Secure?
+      options:
+        - Docker Compose (deploy/)
+        - Kubernetes / Helm (deploy/k8s, deploy/helm)
+        - Bare Python (pip install -e . / virtualenv)
+        - Local development checkout (python -m thotsecure)
+        - Other (describe in the details below)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: autonomy
+    attributes:
+      label: Autonomy mode and dry-run state
+      description: |
+        Report the effective values. `THOT_AUTONOMY` and `THOT_DRY_RUN`
+        change what the platform is allowed to do, so they change the diagnosis.
+      options:
+        - "AUTONOMY=manual, DRY_RUN=true"
+        - "AUTONOMY=manual, DRY_RUN=false"
+        - "AUTONOMY=supervised, DRY_RUN=true"
+        - "AUTONOMY=supervised, DRY_RUN=false"
+        - "AUTONOMY=auto, DRY_RUN=true"
+        - "AUTONOMY=auto, DRY_RUN=false"
+        - "Not sure / not configured"
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Operating system and Python version
+      description: Include the Node.js version only if the issue involves `web/`.
+      placeholder: "Windows Server 2022, Python 3.12.4 / Ubuntu 24.04, Python 3.11.9"
+    validations:
+      required: true
+
+  - type: input
+    id: datastore
+    attributes:
+      label: Datastore and event bus
+      description: The effective values of `THOT_DB_URL` and `THOT_BUS`.
+      placeholder: "sqlite:///./data/thotsecure.db, bus=sqlite"
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe the actual behaviour, in the order it occurred.
+      placeholder: "After ingesting 200 events, the finding for AO-WEB-001 shows count=7 instead of count=200."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: |
+        The smallest sequence that reproduces the defect, starting from a clean
+        state. Exact commands, exact requests — include the HTTP method, path,
+        query and body for API issues.
+      value: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+      description: |
+        What you expected instead, and why. If the interface contract or the
+        documentation says so, link or quote the relevant section — that turns a
+        debate into a citation.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs or error output
+      description: |
+        Structured logs, a traceback, or the normalized error envelope
+        (`{"error":{"code","message","details"}}`). **Redact secrets and
+        hostnames.** Raise `THOT_LOG_LEVEL=DEBUG` first if the output is thin.
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Relevant configuration
+      description: |
+        The `THOT_*` variables that differ from the defaults, plus any rule,
+        policy or playbook that is part of the reproduction. **Replace secrets
+        with `<redacted>` — do not paste real keys.**
+      render: yaml
+    validations:
+      required: false
+
+  - type: textarea
+    id: workaround
+    attributes:
+      label: Workaround
+      description: If you found a way around the problem, describe it — it helps others immediately and often points at the cause.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmations
+      options:
+        - label: I have searched the existing issues and Discussions, and this is not a duplicate.
+          required: true
+        - label: This report contains **no secrets, no API keys, no real customer data and no production credentials**.
+          required: true
+        - label: This is a functional defect, **not** a security vulnerability. I understand that anything affecting tenant isolation, the audit chain, `DRY_RUN`, the approval gate or rollback must be reported privately per SECURITY.md, not here.
+          required: true
+        - label: I have removed any hostname, IP address and log excerpt that does not belong to me or to infrastructure I am authorized to test.
+          required: true

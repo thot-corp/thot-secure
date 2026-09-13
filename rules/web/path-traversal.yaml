@@ -1,0 +1,37 @@
+id: AO-WEB-002
+title: Tentative de traversée de chemin (path traversal)
+description: >-
+  Détecte les séquences de remontée de répertoire et les encodages associés dans les
+  requêtes. Une traversée réussie permet de lire des fichiers arbitraires du serveur
+  (configuration, clés, code source).
+status: stable
+severity: high
+confidence: 0.8
+enabled: true
+tags: [web, owasp:a01, mitre:T1083, exploit-attempt]
+source_types: [log_tail, webhook, web_probe, syslog]
+kinds: [http.request, log.line]
+match:
+  all:
+    - field: labels.path
+      op: regex
+      value: "(?i)(\\.\\./|\\.\\.%2f|%2e%2e/|%2e%2e%2f|\\.\\.\\\\|/etc/passwd|/etc/shadow|win\\.ini|boot\\.ini|%252e%252e)"
+  threshold:
+    count: 3
+    window_seconds: 120
+    group_by: [labels.src_ip]
+dedup:
+  key: [labels.src_ip]
+  ttl_seconds: 1800
+risk:
+  base: 55
+false_positives:
+  - Client légitime manipulant des chemins relatifs dans une URL (rare en production).
+  - Analyseur de liens ou crawler suivant des liens mal formés.
+remediation: >-
+  Vérifier que l'application n'expose pas de fichier via un paramètre de chemin, normaliser et
+  valider les chemins côté serveur, puis bloquer la source au WAF. Les tentatives répétées sur
+  /etc/passwd indiquent une recherche automatisée de fichiers sensibles.
+references:
+  - https://owasp.org/Top10/A01_2021-Broken_Access_Control/
+  - https://attack.mitre.org/techniques/T1083/

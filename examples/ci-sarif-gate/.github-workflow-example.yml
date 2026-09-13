@@ -1,0 +1,112 @@
+# Exemple de workflow GitHub Actions pour le portail SARIF Thot Secure.
+#
+# À copier en `.github/workflows/thotsecure-sarif.yml`.
+#
+# Stratégie d'adoption en trois temps (voir le README de l'exemple) :
+#   semaine 1     : --warn-only + continue-on-error: true   → alertes visibles, rien n'est bloqué
+#   semaine 2-3   : --warn-only retiré, continue-on-error: true → job rouge mais fusion possible
+#   ensuite       : continue-on-error retiré                → la fusion est bloquée par un critique
+#
+# Le bloc `env:` ci-dessous porte le premier réglage : commentez/décommentez au fil des semaines.
+
+name: Thot Secure — portail SARIF
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+  schedule:
+    # Une passe quotidienne : l'état de sécurité change même sans commit (nouveaux événements).
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+# Nécessaire pour publier le SARIF dans l'onglet « Security » (Code Scanning).
+permissions:
+  contents: read
+  security-events: write
+
+concurrency:
+  # Deux exécutions simultanées sur la même référence ne servent à rien : on annule la plus ancienne.
+  group: thotsecure-sarif-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sarif-gate:
+    name: Findings Thot Secure → SARIF
+    runs-on: ubuntu-latest
+    # ── semaine 1 : ne pas bloquer la fusion ────────────────────────────────────────────────
+    continue-on-error: true
+    # ── semaine 3 : supprimer la ligne ci-dessus pour rendre le portail bloquant ────────────
+    env:
+      THOT_SECURE_URL: ${{ vars.THOT_SECURE_URL }}          # ex. https://thotsecure.interne
+      THOT_SECURE_API_KEY: ${{ secrets.THOT_SECURE_API_KEY }} # jamais en clair dans le workflow
+
+    steps:
+      - name: Récupérer le dépôt
+        uses: actions/checkout@v4
+
+      - name: Installer Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # Le portail n'utilise que la bibliothèque standard : aucune installation n'est nécessaire.
+      - name: Générer le SARIF et évaluer le portail
+        id: gate
+        working-directory: examples/ci-sarif-gate
+        run: |
+          python sarif_gate.py \
+            --out "$GITHUB_WORKSPACE/thotsecure.sarif" \
+            --fail-on critical \
+            --github-annotations \
+            --step-summary \
+            --verbose
+        # ── semaine 1 : ajouter `--warn-only` ci-dessus ─────────────────────────────────────
+        # Le code de sortie 3 signifie « portail échoué » (finding critique non acquitté),
+        # 1 une erreur d'exécution, 2 un problème de configuration.
+
+      - name: Résumé du portail
+        if: always()
+        run: |
+          {
+            echo "## Portail Thot Secure"
+            echo ""
+            echo "- Code de sortie : \`${{ steps.gate.outcome }}\`"
+            echo "- Artefact SARIF : \`thotsecure.sarif\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # `if: always()` est essentiel : on veut publier le SARIF MÊME si le portail échoue,
+      # sinon les alertes disparaissent précisément quand elles servent le plus.
+      - name: Publier le SARIF dans Code Scanning
+        if: always() && hashFiles('thotsecure.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: thotsecure.sarif
+          # `category` permet de cohabiter avec CodeQL ou un autre analyseur sans écraser
+          # leurs alertes respectives.
+          category: thotsecure
+          wait-for-processing: true
+
+      - name: Conserver le SARIF en artefact de construction
+        if: always() && hashFiles('thotsecure.sarif') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: thotsecure-sarif
+          path: thotsecure.sarif
+          retention-days: 30
+
+  # Job séparé : illustre un déploiement conditionné au portail.
+  # Tant que `continue-on-error: true` est actif, ce job s'exécute quand même (le résultat du
+  # job précédent est « success » du point de vue du graphe). Retirez `continue-on-error` pour
+  # que ce déploiement soit réellement bloqué par un finding critique.
+  deploy:
+    name: Déploiement (bloqué par un finding critique)
+    needs: sarif-gate
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Déployer
+        run: |
+          echo "Déploiement conditionné au franchissement du portail de sécurité."
+          echo "Remplacez cette étape par votre déploiement réel (helm, terraform, ansible…)."

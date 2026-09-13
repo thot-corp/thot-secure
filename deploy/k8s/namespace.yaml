@@ -1,0 +1,37 @@
+# =============================================================================
+# Thot Secure — espace de noms
+# =============================================================================
+# Le profil `restricted` du Pod Security Admission est appliqué au namespace :
+# tout pod non conforme (root, privilégié, capability ajoutée) est refusé par
+# l'API server, en plus des durcissements explicites du Deployment.
+#
+#   kubectl apply -f deploy/k8s/namespace.yaml
+#   # ou, via kustomize :
+#   kubectl apply -k deploy/k8s/
+# =============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: thotsecure
+  labels:
+    app.kubernetes.io/name: thotsecure
+    app.kubernetes.io/part-of: thotsecure
+    app.kubernetes.io/component: security-operations
+    app.kubernetes.io/managed-by: kubectl
+    # Pod Security Admission : le niveau le plus strict. `warn` et `audit`
+    # produisent en plus des avertissements/traces sans bloquer, ce qui aide
+    # au diagnostic lors d'une montée de version.
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: latest
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
+    # Indicateur de conformité : Thot Secure est un produit 100 % défensif.
+    thotsecure.io/profile: defensive
+  annotations:
+    thotsecure.io/description: >-
+      SOAR/CSPM defensif multi-tenant. Aucune capacite offensive : collecte,
+      detection, scoring, decision, contre-mesure reversible.
+    thotsecure.io/safety-defaults: >-
+      THOT_DRY_RUN=true et THOT_AUTONOMY=supervised par defaut.

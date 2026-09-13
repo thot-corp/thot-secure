@@ -1,0 +1,317 @@
+---
+# =============================================================================
+# Thot Secure — variables par défaut du rôle « thotsecure »
+# -----------------------------------------------------------------------------
+# Toutes les valeurs sont sûres par défaut : service lié à 127.0.0.1 derrière
+# Nginx, DRY_RUN actif, autonomie supervisée, aucun secret dans le dépôt.
+#
+# Priorité Ansible : les variables d'inventaire (group_vars / host_vars /
+# inventory.ini) ÉCRASENT ces defaults. Relisez tasks/preflight.yml : le rôle
+# refuse activement les combinaisons dangereuses.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 1. Paquet et emplacements
+# -----------------------------------------------------------------------------
+# Version du paquet thotsecure à installer. Doit correspondre à une version
+# réellement publiée (voir pyproject.toml du dépôt).
+thotsecure_version: "0.1.0"
+
+# Compte système dédié : le service ne tourne JAMAIS en root.
+thotsecure_user: "thotsecure"
+thotsecure_group: "thotsecure"
+# UID/GID fixes : indispensables pour que les sauvegardes, montages NFS ou
+# politiques SELinux restent stables d'un hôte à l'autre.
+thotsecure_uid: 10001
+thotsecure_gid: 10001
+
+# Données persistantes : base SQLite + quarantaine des artefacts suspects.
+thotsecure_home: "/var/lib/thotsecure"
+thotsecure_state_dir: "/var/lib/thotsecure"
+thotsecure_log_dir: "/var/log/thotsecure"
+thotsecure_run_dir: "/run/thotsecure"
+
+# Configuration déclarative, montée en LECTURE SEULE côté application.
+thotsecure_etc_dir: "/etc/thotsecure"
+
+# Code applicatif et environnement virtuel.
+thotsecure_install_dir: "/opt/thotsecure"
+thotsecure_venv: "/opt/thotsecure/venv"
+
+# Interpréteur utilisé pour créer le venv. Python 3.11 est le minimum requis
+# par le paquet (requires-python = ">=3.11").
+thotsecure_python: "python3.11"
+
+# Fichier d'environnement du service (systemd EnvironmentFile), écrit en 0600 :
+# il contient THOT_SECRET_KEY. Voir tasks/secrets.yml.
+thotsecure_env_file: "{{ thotsecure_etc_dir }}/thotsecure.env"
+
+# umask appliquée par le service. Reflétée dans l'unit systemd (UMask=0027).
+thotsecure_umask: "027"
+
+# -----------------------------------------------------------------------------
+# 2. Écoute réseau
+# -----------------------------------------------------------------------------
+# ⚠ L'application écoute sur la boucle locale : c'est Nginx qui expose le
+#   service. Ne passez à 0.0.0.0 que si vous savez exactement pourquoi (et
+#   renseignez alors thotsecure_firewall_app_cidrs, sinon le rôle refuse).
+thotsecure_host: "127.0.0.1"
+thotsecure_bind_public: false
+thotsecure_port: 8080
+
+# URL utilisée par les vérifications de santé post-installation. On interroge
+# directement l'application (pas Nginx) pour valider le service lui-même.
+thotsecure_healthcheck_url: "http://127.0.0.1:{{ thotsecure_port }}/healthz"
+
+# -----------------------------------------------------------------------------
+# 3. SÛRETÉ — les deux réglages à ne pas toucher sans procédure
+# -----------------------------------------------------------------------------
+# ⚠⚠ AVERTISSEMENT — THOT_DRY_RUN ⚠⚠
+#   true  = les contre-mesures sont SIMULÉES : aucune action réelle n'est
+#           appliquée sur les cibles. C'est la seule valeur acceptable pour un
+#           premier déploiement, une recette ou un environnement partagé.
+#   false = les playbooks de réponse peuvent MODIFIER ou COUPER des services
+#           réels (isolation d'hôte, blocage de compte, révocation de session).
+#   Le passage à false exige : validation humaine écrite, fenêtre de
+#   changement, et thotsecure_allow_dry_run_disable=true explicite.
+thotsecure_dry_run: true
+
+# ⚠⚠ AVERTISSEMENT — THOT_AUTONOMY ⚠⚠
+#   manual     = toute action attend une validation humaine explicite.
+#   supervised = (DÉFAUT) l'IA propose, un humain approuve avant exécution.
+#   auto       = exécution automatique des actions non destructives seulement —
+#                à n'activer qu'après une période d'observation en supervisé.
+#   NE JAMAIS mettre "auto" dans un déploiement par défaut.
+thotsecure_autonomy: "supervised"
+
+# Verrou de sûreté : autorise explicitement la désactivation du dry-run.
+# Sert de garde-fou contre une bascule accidentelle par variable d'inventaire :
+# thotsecure_dry_run=false + thotsecure_allow_dry_run_disable=false => échec du play.
+thotsecure_allow_dry_run_disable: false
+
+# Refuse thotsecure_env == "dev" lorsque le rôle est utilisé avec thotsecure_env
+# cohérent en production (garde-fou contre un déploiement de dev en prod).
+# Mettez false uniquement pour une machine de recette explicite.
+thotsecure_strict_env: true
+
+# -----------------------------------------------------------------------------
+# 4. Secrets — JAMAIS de valeur en clair dans ce fichier
+# -----------------------------------------------------------------------------
+# Clé de signature des sessions/jetons. Par défaut : VIDE, et générée sur
+# l'hôte par « openssl rand -hex 32 » (64 caractères hexadécimaux) puis écrite
+# dans {{ thotsecure_env_file }} en 0600. Voir tasks/secrets.yml.
+# Pour imposer une clé existante, fournissez-la via un vault Ansible :
+#   thotsecure_secret_key: !vault | ...
+thotsecure_secret_key: ""
+thotsecure_generate_secret_key: true
+
+# Clé d'amorçage de l'API (rôle bootstrap). Laissez vide : le rôle génère une
+# valeur aléatoire ao_<48 hex> au premier passage plutôt que d'utiliser le
+# défaut de développement « ao_dev_local_change_me ». Une valeur non vide ici
+# doit provenir d'un vault.
+thotsecure_bootstrap_api_key: ""
+thotsecure_generate_bootstrap_api_key: true
+
+# -----------------------------------------------------------------------------
+# 5. Configuration applicative (THOT_*)
+# -----------------------------------------------------------------------------
+thotsecure_env: "prod"
+
+# Bus d'événements interne : memory | sqlite | nats.
+#   memory = mono-processus, aucun état externe (suffisant pour un premier
+#            déploiement mono-nœud) ; sqlite = persistant ; nats = multi-nœuds.
+thotsecure_bus: "memory"
+thotsecure_nats_url: "nats://127.0.0.1:4222"
+
+# Rétention des données (journal d'audit, événements, quarantaine).
+thotsecure_retention_days: 30
+
+# Journalisation : json (recommandé, exploitable par Loki/ELK) ou console.
+thotsecure_log_level: "INFO"
+thotsecure_log_format: "json"
+
+# Limitation de débit globale de l'API (requêtes/minute et par client).
+thotsecure_rate_limit_per_min: 600
+
+# TLS applicatif interne. false = Nginx termine le TLS et parle en HTTP à
+# l'application via la boucle locale. true n'a de sens que si vous exposez
+# uvicorn directement en HTTPS.
+thotsecure_tls_enabled: false
+
+# ⚠ Volume applicatif unique : SQLite via le module sqlite3 de la stdlib.
+#   Thot Secure n'utilise ni PostgreSQL, ni Redis, ni SQLAlchemy.
+#   4 slashes = chemin absolu (sqlite:////var/lib/...). Ne remplacez pas le
+#   schéma par un autre SGBD : ce n'est pas supporté.
+thotsecure_db_url: "sqlite:////var/lib/thotsecure/thotsecure.db"
+
+# Répertoires de configuration déclarative relus par l'application (lecture seule).
+thotsecure_rules_dir: "{{ thotsecure_etc_dir }}/rules"
+thotsecure_policies_dir: "{{ thotsecure_etc_dir }}/policies"
+thotsecure_playbooks_dir: "{{ thotsecure_etc_dir }}/playbooks"
+# Périmètre déclaré, par tenant. Le défaut applicatif « ./config/targets.yaml »
+# ne convient pas à un service systemd : on pointe vers /etc/thotsecure.
+thotsecure_targets_file: "{{ thotsecure_etc_dir }}/targets.yaml"
+
+# Binaire OPA (policy-as-code). Vide = évaluation interne des politiques.
+thotsecure_opa_bin: ""
+
+# Source de contenu déclaratif à copier vers /etc/thotsecure (règles, politiques,
+# playbooks). Vide = on ne touche pas au contenu existant. Pointez vers un
+# répertoire du dépôt ou un chemin local de la machine de contrôle.
+thotsecure_content_src: ""
+
+# -----------------------------------------------------------------------------
+# 6. Installation du paquet Python
+# -----------------------------------------------------------------------------
+# pypi      : pip install thotsecure=={{ thotsecure_version }} depuis PyPI.
+# wheel     : installation depuis un wheel local (thotsecure_wheel_path).
+# local_dir : installation depuis un arbre source local (thotsecure_local_dir),
+#             typiquement un « pip install -e » de recette.
+# Les modes sdist et git ne sont volontairement PAS implémentés : utilisez
+# wheel ou local_dir (voir tasks/python.yml qui échoue explicitement sinon).
+thotsecure_install_from: "pypi"
+
+# Chemin du wheel quand thotsecure_install_from == "wheel".
+# Exemple : "/tmp/thotsecure-0.1.0-py3-none-any.whl"
+thotsecure_wheel_path: ""
+
+# Arbre source quand thotsecure_install_from == "local_dir".
+# Exemple : "/tmp/thotsecure"
+thotsecure_local_dir: ""
+
+# Arguments supplémentaires passés à pip (proxy, index interne…).
+# ⚠ S'ils contiennent un identifiant ou un jeton, activez thotsecure_pip_no_log.
+# Exemple : "--index-url https://user:token@nexus.example.com/repository/pypi/simple"
+thotsecure_pip_extra_args: ""
+thotsecure_pip_no_log: false
+
+# Installation sans accès réseau depuis un wheelhouse local :
+#   thotsecure_offline: true + thotsecure_wheelhouse: /opt/thotsecure/wheelhouse
+# ajoute « --no-index --find-links <wheelhouse> » à chaque appel pip.
+thotsecure_offline: false
+thotsecure_wheelhouse: "{{ thotsecure_install_dir }}/wheelhouse"
+
+# Paquets OS optionnels, installés en « best effort » (un échec ne fait pas
+# échouer le playbook mais produit un avertissement). Exemple sur Debian :
+#   thotsecure_optional_packages: ["haveged"]
+thotsecure_optional_packages: []
+
+# -----------------------------------------------------------------------------
+# 7. Reverse-proxy Nginx
+# -----------------------------------------------------------------------------
+thotsecure_manage_nginx: true
+
+# Nom de domaine public. DOIT être renseigné si thotsecure_manage_nginx est vrai
+# et thotsecure_tls_mode != "none" (le rôle échoue sinon).
+thotsecure_domain: "thotsecure.example.com"
+
+# letsencrypt | selfsigned | provided | none
+thotsecure_tls_mode: "letsencrypt"
+
+# Chemins utilisés quand thotsecure_tls_mode == "provided". Obligatoires dans ce
+# mode : le rôle vérifie que les deux fichiers existent avant de recharger Nginx.
+thotsecure_tls_cert_path: ""
+thotsecure_tls_key_path: ""
+
+# E-mail de contact ACME (Let's Encrypt). Obligatoire pour tls_mode=letsencrypt.
+thotsecure_le_email: ""
+
+# Taille maximale des requêtes entrantes (import de journaux, d'export CSV,
+# de captures de quarantaine).
+thotsecure_nginx_client_max_body_size: "32m"
+
+# Délai (secondes) des connexions longues : le flux WebSocket applicatif
+# /api/v1/ws/stream reste ouvert, il faut un timeout largement supérieur au
+# défaut de 60 s.
+thotsecure_nginx_ws_timeout: 3600
+
+# CSP : la console est rendue par Jinja2 et charge du JS/CSS statiques.
+# Par défaut on n'autorise PAS 'unsafe-inline' pour les scripts (protection XSS).
+# Si un template de la console contient du <script> en ligne, passez à true —
+# en sachant que cela affaiblit la protection contre l'injection de script.
+# Préférez à terme l'extraction du script vers ui/static/js/.
+thotsecure_csp_allow_inline_scripts: false
+
+# Durée (secondes) du HSTS. 1 an est la valeur recommandée dès que le domaine
+# est entièrement servi en HTTPS. Mettez 0 pour désactiver l'en-tête pendant la
+# période de mise au point.
+thotsecure_hsts_max_age: 31536000
+
+# -----------------------------------------------------------------------------
+# 8. Pare-feu
+# -----------------------------------------------------------------------------
+thotsecure_manage_firewall: true
+
+# ⚠ Si cette liste est VIDE (défaut), le rôle NE TOUCHE PAS à la règle SSH
+#   existante : on ne peut pas connaître à l'avance l'adresse depuis laquelle
+#   vous administrez la machine, et couper SSH rendrait l'hôte inaccessible.
+#   Renseignez vos plages d'administration, par exemple :
+#     thotsecure_firewall_allowed_ssh_cidrs:
+#       - "192.0.2.0/24"      # plage d'administration (RFC 5737, exemple)
+#       - "2001:db8::/32"
+thotsecure_firewall_allowed_ssh_cidrs: []
+
+# Ports publics autorisés : HTTP/HTTPS pour le site et le renouvellement ACME.
+thotsecure_firewall_allowed_public_ports:
+  - 80
+  - 443
+
+# ⚠ Le port de l'application n'est JAMAIS ouvert publiquement tant que
+#   thotsecure_bind_public est false : l'application écoute sur 127.0.0.1 et seul
+#   Nginx y accède localement. Si vous passez thotsecure_bind_public à true, il
+#   FAUT restreindre l'accès par CIDR ici, sinon tasks/preflight.yml échoue.
+thotsecure_firewall_app_cidrs: []
+
+# Refus par défaut du trafic entrant, autorisation par défaut du sortant.
+thotsecure_ufw_default_deny: true
+
+# -----------------------------------------------------------------------------
+# 9. Durcissement
+# -----------------------------------------------------------------------------
+thotsecure_harden_ssh: true
+
+# sshd : pas de connexion directe en root, pas d'authentification par mot de
+# passe (clés SSH uniquement). ⚠ Vérifiez qu'un accès par clé fonctionne AVANT
+# d'appliquer ces valeurs : une erreur ici ferme l'accès à la machine.
+thotsecure_ssh_permit_root_login: "no"
+thotsecure_ssh_password_authentication: "no"
+thotsecure_ssh_x11_forwarding: "no"
+thotsecure_ssh_max_auth_tries: 4
+
+# Durcissement noyau appliqué via ansible.posix.sysctl.
+thotsecure_sysctl_settings:
+  net.ipv4.conf.all.rp_filter: 1
+  net.ipv4.conf.default.rp_filter: 1
+  net.ipv4.tcp_syncookies: 1
+  net.ipv4.conf.all.accept_redirects: 0
+  net.ipv4.conf.default.accept_redirects: 0
+  net.ipv4.conf.all.accept_source_route: 0
+  net.ipv4.conf.all.log_martians: 1
+  net.ipv6.conf.all.accept_redirects: 0
+  kernel.dmesg_restrict: 1
+  kernel.kptr_restrict: 2
+  kernel.yama.ptrace_scope: 1
+
+# Mises à jour de sécurité automatiques (unattended-upgrades sur Debian,
+# dnf-automatic sur EL). Désactivé par défaut : en production, les redémarrages
+# se planifient. Voir tasks/hardening.yml pour la documentation.
+thotsecure_manage_unattended_upgrades: false
+
+# -----------------------------------------------------------------------------
+# 10. systemd
+# -----------------------------------------------------------------------------
+thotsecure_manage_systemd: true
+
+# -----------------------------------------------------------------------------
+# 11. Sauvegarde
+# -----------------------------------------------------------------------------
+thotsecure_backup_enabled: false
+thotsecure_backup_dir: "/var/backups/thotsecure"
+thotsecure_backup_retention_days: 14
+
+# Planification du timer de sauvegarde (format OnCalendar systemd).
+# 03:30 avec décalage aléatoire pour éviter la collision entre hôtes.
+thotsecure_backup_on_calendar: "*-*-* 03:30:00"
+
+# Chemin du script de sauvegarde déployé par le rôle.
+thotsecure_backup_script: "/usr/local/sbin/thotsecure-backup"

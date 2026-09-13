@@ -1,0 +1,69 @@
+# CodeQL — static analysis for Python and TypeScript/JavaScript.
+#
+# Runs on every push to a protected branch, on every pull request, and weekly on
+# a schedule. The schedule matters: CodeQL queries are improved over time, so a
+# tree that was clean last month can be found to have a new issue today even if
+# nothing changed.
+#
+# Permissions are minimal and per-job. `security-events: write` is required to
+# upload results to GitHub code scanning; it is granted only to the analysis job
+# and never at workflow level.
+
+name: CodeQL
+
+on:
+  push:
+    branches:
+      - main
+      - "release/**"
+  pull_request:
+    branches:
+      - main
+  schedule:
+    # Weekly, Tuesday 03:17 UTC. Off the hour on purpose: the top of the hour is
+    # the busiest slot on GitHub-hosted runners.
+    - cron: "17 3 * * 2"
+  workflow_dispatch:
+
+concurrency:
+  group: codeql-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language:
+          - python
+          - javascript-typescript
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          # security-and-quality is broader than the default security suite: for a
+          # security product, correctness and maintainability findings are worth
+          # the extra noise, and the query pack is maintained by GitHub.
+          queries: security-and-quality
+
+      - name: Perform CodeQL analysis
+        # Results are uploaded to GitHub code scanning with a per-language
+        # category, so the alerts of each language are tracked separately and a
+        # pull request shows only the diff it introduced.
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"

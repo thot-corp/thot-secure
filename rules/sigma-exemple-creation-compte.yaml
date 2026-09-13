@@ -1,0 +1,33 @@
+# Exemple de règle écrite au format Sigma puis traduite automatiquement par Thot Secure.
+# Vérifiez TOUJOURS la sémantique traduite avant de l'activer en production : le traducteur
+# Sigma-lite refuse ce qu'il ne peut pas représenter fidèlement, mais il ne peut pas deviner
+# votre contexte. Voir docs/detection/sigma.md.
+title: Création de compte utilisateur suivie d'une élévation de privilèges
+id: 8f2c1e40-7b3a-4d55-9c21-0d5f6a7b8c90
+status: experimental
+description: >-
+  Motif Sigma d'exemple : création de compte puis ajout à un groupe privilégié, sur un
+  système Linux dont les journaux sont collectés par syslog.
+logsource:
+  product: linux
+  service: auth
+detection:
+  selection:
+    EventType: useradd
+  privilege:
+    GroupName: sudo
+  filter:
+    UserName: ansible
+  # « 1 of selection* » = au moins une des selections dont le nom commence par « selection »,
+  # combinée à l'exclusion du filtre. Formes supportées : « A and B », « A and not B »,
+  # « A or B » (branches simples), « 1 of motif* », « all of motif* », « them ».
+  condition: 1 of selection* and not filter
+level: high
+tags:
+  - attack.t1136
+  - attack.t1078
+falsepositives:
+  - Provisionnement automatisé par un outil de gestion de configuration (exclu par 'filter').
+  - Création de compte par un administrateur légitime documenté.
+references:
+  - https://attack.mitre.org/techniques/T1136/

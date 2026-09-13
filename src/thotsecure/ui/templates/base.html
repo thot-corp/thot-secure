@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>{% block title %}Thot Secure{% endblock %} · Thot Secure</title>
+<link rel="stylesheet" href="/ui/static/css/app.css">
+</head>
+<body>
+{% if principal %}
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">TS</span>
+    <div>
+      <strong>Thot Secure</strong>
+      <small>v{{ version }} · {{ license }}</small>
+    </div>
+  </div>
+  <nav>
+    <a href="/ui/dashboard">Tableau de bord</a>
+    <a href="/ui/findings">Findings</a>
+    <a href="/ui/actions">Actions</a>
+    <a href="/ui/collectors">Collecteurs</a>
+    <a href="/ui/rules">Détection</a>
+    <a href="/ui/audit">Audit</a>
+    <a href="/ui/support">Soutenir</a>
+  </nav>
+  <div class="session">
+    <span class="pill">{{ principal.tenant_id }} · {{ principal.role }}</span>
+    <form method="post" action="/ui/logout" class="inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="ghost" type="submit">Déconnexion</button>
+    </form>
+  </div>
+</header>
+
+<div class="safety {{ 'safety-warn' if safety.dry_run else 'safety-live' }}">
+  {% if safety.dry_run %}
+    <strong>Mode simulation actif</strong> — aucune contre-mesure n'a d'effet réel
+    (<code>THOT_DRY_RUN=true</code>). Les actions sont planifiées, journalisées et
+    réversibles, mais n'agissent pas sur l'infrastructure.
+  {% else %}
+    <strong>Mode réel</strong> — les actions configurées ont un effet sur l'infrastructure.
+    Autonomie : <code>{{ safety.autonomy }}</code>. Chaque action reste auditée et réversible.
+  {% endif %}
+  {% if safety.simulated_connectors_only %}
+    <span class="muted">Tous les connecteurs sont en simulation.</span>
+  {% endif %}
+</div>
+
+{% if safety.unsafe_defaults %}
+<details class="warnings">
+  <summary>{{ safety.unsafe_defaults|length }} avertissement(s) de configuration</summary>
+  <ul>{% for warning in safety.unsafe_defaults %}<li>{{ warning }}</li>{% endfor %}</ul>
+</details>
+{% endif %}
+{% endif %}
+
+<main>
+  {% block content %}{% endblock %}
+</main>
+
+<footer>
+  <p>
+    Thot Secure v{{ version }} — licence {{ license }} — outil <strong>strictement défensif</strong> :
+    aucun test offensif, aucune exploitation, aucune riposte.
+  </p>
+  <p class="muted">
+    Soutenir le projet : <a href="/ui/support">page dédiée</a>.
+    Dons volontaires, aucune contrepartie attendue. Vérifiez toujours les adresses depuis le
+    dépôt officiel.
+  </p>
+</footer>
+<script src="/ui/static/js/app.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,30 @@
+id: AO-TLS-002
+title: Protocole TLS obsolète négocié
+description: >-
+  Le service accepte encore SSLv3, TLS 1.0 ou TLS 1.1. Ces protocoles sont considérés comme
+  cassés (attaques POODLE, BEAST, et faiblesses de chiffrement associées) et sont refusés par
+  les navigateurs modernes comme par les exigences de conformité (PCI-DSS).
+status: stable
+severity: high
+confidence: 0.95
+enabled: true
+tags: [tls, hardening, cis:2.4]
+source_types: [tls_cert, web_probe]
+kinds: [tls.cert, http.response]
+match:
+  all:
+    - field: labels.check
+      op: eq
+      value: tls_legacy_protocol
+dedup:
+  key: [labels.host]
+  ttl_seconds: 86400
+risk:
+  base: 50
+remediation: >-
+  Restreindre la configuration à TLS 1.2 minimum (idéalement TLS 1.2 + TLS 1.3), avec des
+  suites de chiffrement modernes et la préférence serveur activée. Vérifier ensuite qu'aucun
+  client métier ancien ne dépend d'un protocole obsolète — le corriger plutôt que de
+  rétrograder la sécurité.
+references:
+  - https://www.ssllabs.com/projects/best-practices/

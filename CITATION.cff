@@ -1,0 +1,66 @@
+# Citation File Format (CFF) 1.2.0
+# https://citation-file-format.github.io/
+#
+# Thot Secure is developed by an unaffiliated group of contributors; there is no
+# single corporate author, so attribution goes to the collective. If you cite a
+# specific release, cite the version and the tag you actually ran.
+#
+# `date-released` is deliberately omitted rather than guessed: it is added in the
+# same pull request that cuts the release tag, so that the value in this file
+# always matches a real release.
+
+cff-version: 1.2.0
+
+message: "If you use Thot Secure in research, in a publication, or in a product, please cite it using this metadata."
+
+title: "Thot Secure: a defensive multi-tenant SOAR and CSPM platform"
+
+abstract: >-
+  Thot Secure is an open source defensive security automation platform (SOAR) with
+  continuous security posture management (CSPM) capabilities. It ingests
+  normalized telemetry from collectors, detects suspicious behaviour with
+  declarative YAML rules, scores risk, decides a response through
+  policy-as-code, and applies reversible counter-measures that are recorded in a
+  tamper-evident hash-chained audit log. It is multi-tenant by construction,
+  safe by default (dry-run enabled, supervised autonomy, explicit approval gate)
+  and contains no offensive capability: it collects from and acts only on
+  infrastructure a tenant has explicitly declared as owned. The project is
+  distributed under the Apache License 2.0.
+
+type: software
+
+authors:
+  - name: "The Thot Secure Authors"
+    website: "https://thotsecure.dev"
+    alias: "thotsecure"
+
+contact:
+  - name: "Thot Secure Maintainers"
+    email: "maintainers@thotsecure.dev"
+    website: "https://thotsecure.dev"
+    # The authoritative roster is MAINTAINERS.md in the repository.
+
+repository-code: "https://github.com/thotsecure/thot-secure"
+repository-artifact: "https://github.com/thotsecure/thot-secure/releases"
+url: "https://thotsecure.dev"
+
+license: "Apache-2.0"
+license-url: "https://github.com/thotsecure/thot-secure/blob/main/LICENSE"
+
+version: "0.1.0"
+
+keywords:
+  - "security"
+  - "soar"
+  - "cspm"
+  - "defensive security"
+  - "incident response"
+  - "security automation"
+  - "detection engineering"
+  - "policy as code"
+  - "multi-tenant"
+  - "audit log"
+  - "blue team"
+  - "mitre att&ck"
+  - "sarif"
+  - "open source"

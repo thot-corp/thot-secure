@@ -1,0 +1,355 @@
+# =============================================================================
+# Thot Secure — règles d'alerte Prometheus
+# =============================================================================
+# Cinq familles d'alertes, alignées sur les exigences de sécurité du produit :
+#   1. AuditChainBroken        — la chaîne de hash du journal d'audit est cassée
+#   2. PipelineLagHigh         — le pipeline d'ingestion/décision prend du retard
+#   3. AutoActionSpike         — pic d'actions automatiques (emballement possible)
+#   4. DryRunDisabled          — le mode simulation a été désactivé sur un tenant
+#   5. IngestionStalled        — plus aucun événement ingéré (collecteurs muets)
+#
+# Métriques sources (GET /metrics) :
+#   thotsecure_events_ingested_total, thotsecure_findings_total{severity},
+#   thotsecure_actions_total{status,playbook}, thotsecure_rule_eval_seconds,
+#   thotsecure_pipeline_lag_seconds, thotsecure_audit_records_total
+#
+# Le journal d'audit chaîné est vérifiable à la demande via
+# GET /api/v1/audit/verify — ces alertes détectent la régression en continu.
+# =============================================================================
+
+groups:
+  # ---------------------------------------------------------------------------
+  # 1. Intégrité du journal d'audit
+  # ---------------------------------------------------------------------------
+  - name: thotsecure-audit
+    interval: 30s
+    rules:
+      - alert: ThotSecureAuditChainBroken
+        # Une chaîne cassée signifie soit une falsification, soit une corruption
+        # du stockage. L'alerte est volontairement immédiate (for: 0s).
+        expr: |
+          thotsecure_audit_chain_valid == 0
+        for: 0m
+        labels:
+          severity: critical
+          category: audit
+          runbook: deploy/README.md#audit
+        annotations:
+          summary: "Chaîne d'audit Thot Secure invalide"
+          description: >-
+            Le journal d'audit chaîné par hash n'est plus vérifiable. Traitez
+            comme un incident de sécurité : gelez les écritures, exportez le
+            journal (GET /api/v1/audit/export?format=jsonl), conservez une copie
+            hors ligne, puis exécutez GET /api/v1/audit/verify pour localiser
+            l'enregistrement cassé (`broken_at`).
+          action: "Vérifier /api/v1/audit/verify, isoler la base, préserver les preuves."
+
+      - alert: ThotSecureAuditChainVerifyFailing
+        # Variante sans métrique dédiée : détecte l'absence de progression du
+        # journal corrélée à une ingestion active (écritures refusées).
+        expr: |
+          sum(increase(thotsecure_audit_records_total[30m])) == 0
+          and
+          sum(increase(thotsecure_events_ingested_total[30m])) > 0
+        for: 15m
+        labels:
+          severity: warning
+          category: audit
+        annotations:
+          summary: "Audit à l'arrêt alors que l'ingestion est active"
+          description: >-
+            Des événements sont ingérés mais aucun enregistrement d'audit n'est
+            ajouté. Vérifiez l'espace disque de /var/lib/thotsecure et l'état de la
+            base SQLite ; une écriture d'audit qui échoue doit faire échouer
+            l'action correspondante (fail-closed).
+
+  # ---------------------------------------------------------------------------
+  # 2. Retard du pipeline
+  # ---------------------------------------------------------------------------
+  - name: thotsecure-pipeline
+    interval: 30s
+    rules:
+      - alert: ThotSecurePipelineLagHigh
+        expr: |
+          max(thotsecure_pipeline_lag_seconds) > 300
+        for: 10m
+        labels:
+          severity: critical
+          category: pipeline
+        annotations:
+          summary: "Pipeline Thot Secure en retard (> 5 min)"
+          description: >-
+            Le retard entre l'ingestion d'un événement et sa décision dépasse
+            300 s. Causes usuelles : bus saturé (THOT_BUS), collecteurs trop
+            nombreux, règles catastrophiques (regex non bornée), ou base SQLite
+            verrouillée. Vérifiez thotsecure_rule_eval_seconds et les logs
+            (THOT_LOG_LEVEL=DEBUG temporairement).
+
+      - alert: ThotSecurePipelineLagDegraded
+        expr: |
+          max(thotsecure_pipeline_lag_seconds) > 60
+        for: 15m
+        labels:
+          severity: warning
+          category: pipeline
+        annotations:
+          summary: "Pipeline Thot Secure dégradé (> 1 min)"
+          description: "Retard modéré mais persistant : surveiller la tendance avant escalade."
+
+      - alert: ThotSecureRuleEvalSlow
+        expr: |
+          max(thotsecure_rule_eval_seconds) > 5
+        for: 10m
+        labels:
+          severity: warning
+          category: detection
+        annotations:
+          summary: "Évaluation des règles lente (> 5 s)"
+          description: >-
+            Une règle coûteuse ralentit toute la détection. Identifiez-la via
+            GET /api/v1/rules et POST /api/v1/rules/validate, puis bornez les
+            expressions régulières (les regex de règle sont compilées avec un
+            timeout d'exécution).
+
+  # ---------------------------------------------------------------------------
+  # 3. Pic d'actions automatiques
+  # ---------------------------------------------------------------------------
+  - name: thotsecure-actions
+    interval: 30s
+    rules:
+      - alert: ThotSecureAutoActionSpike
+        expr: |
+          sum(increase(thotsecure_actions_total[10m])) > 25
+        for: 5m
+        labels:
+          severity: critical
+          category: actions
+        annotations:
+          summary: "Pic d'actions Thot Secure (> 25 en 10 min)"
+          description: >-
+            Volume d'actions anormal. Cela peut indiquer un emballement
+            automatique (mode `auto` sur un tenant) ou une campagne hostile
+            déclenchant massivement des règles. Vérifiez immédiatement les
+            garde-fous : max_actions_per_hour par tenant, cooldown par
+            (tenant, playbook, cible), et la liste des actions récentes
+            (GET /api/v1/actions). En cas de doute, repassez le tenant en
+            THOT_AUTONOMY=supervised.
+
+      - alert: ThotSecureAutoActionFailureRate
+        expr: |
+          (
+            sum(increase(thotsecure_actions_total{status="failed"}[30m]))
+            /
+            clamp_min(sum(increase(thotsecure_actions_total[30m])), 1)
+          ) > 0.25
+        for: 15m
+        labels:
+          severity: warning
+          category: actions
+        annotations:
+          summary: "Taux d'échec des actions > 25 %"
+          description: >-
+            Beaucoup d'actions échouent : connecteurs mal configurés (WAF, EDR),
+            cibles injoignables, ou permissions insuffisantes. Les échecs sont
+            journalisés avec `result` et `audit_seq`.
+
+      - alert: ThotSecureRollbackNotAvailable
+        expr: |
+          sum(increase(thotsecure_actions_total{status="succeeded"}[1h])) > 0
+          and
+          sum(increase(thotsecure_actions_total{status="rolled_back"}[1h])) == 0
+          and
+          thotsecure_actions_rollback_available == 0
+        for: 30m
+        labels:
+          severity: warning
+          category: actions
+        annotations:
+          summary: "Aucune action réversible disponible"
+          description: >-
+            Toute action doit être réversible. Si plus aucun jeton de rollback
+            n'est disponible, vérifiez le stockage des jetons et la politique de
+            rollback automatique.
+
+  # ---------------------------------------------------------------------------
+  # 4. Dry-run désactivé sur un tenant
+  # ---------------------------------------------------------------------------
+  - name: thotsecure-safety
+    interval: 30s
+    rules:
+      - alert: ThotSecureDryRunDisabled
+        # Exposée par /metrics sous forme de jauge par tenant : 1 = simulation
+        # active (sûr), 0 = actions réelles possibles.
+        expr: |
+          min(thotsecure_tenant_dry_run) < 1
+        for: 0m
+        labels:
+          severity: critical
+          category: safety
+        annotations:
+          summary: "THOT_DRY_RUN désactivé sur un tenant"
+          description: >-
+            Au moins un tenant exécute des actions RÉELLES. Confirmez que cette
+            levée de garde-fou est intentionnelle, documentée et couverte par une
+            procédure de validation humaine (voir deploy/README.md, section
+            « Désactiver dry_run »). Si ce n'est pas le cas, remettez
+            THOT_DRY_RUN=true puis PATCH /api/v1/tenants/{id}
+            {"dry_run": true}.
+
+      - alert: ThotSecureAutonomyAuto
+        expr: |
+          max(thotsecure_tenant_autonomy{mode="auto"}) > 0
+        for: 5m
+        labels:
+          severity: warning
+          category: safety
+        annotations:
+          summary: "Un tenant est en autonomie `auto`"
+          description: >-
+            Le mode `auto` autorise l'exécution sans approbation humaine
+            (uniquement pour les politiques qui le prévoient). Vérifiez
+            l'`autonomy_allowlist` du tenant : les cibles d'infrastructure
+            propre ne doivent jamais y figurer comme actionnables.
+
+      - alert: ThotSecureAllowlistEmpty
+        expr: |
+          min(thotsecure_tenant_autonomy_allowlist_size) == 0
+        for: 30m
+        labels:
+          severity: warning
+          category: safety
+        annotations:
+          summary: "Allowlist de cibles protégées vide"
+          description: >-
+            Un tenant n'a déclaré aucune cible protégée. Sans allowlist, rien
+            n'empêche une action automatique d'atteindre votre propre
+            infrastructure. Déclarez les plages d'infrastructure propre dans le
+            tenant (autonomy_allowlist).
+
+  # ---------------------------------------------------------------------------
+  # 5. Ingestion à zéro
+  # ---------------------------------------------------------------------------
+  - name: thotsecure-ingestion
+    interval: 30s
+    rules:
+      - alert: ThotSecureIngestionStalled
+        expr: |
+          sum(increase(thotsecure_events_ingested_total[30m])) == 0
+        for: 15m
+        labels:
+          severity: critical
+          category: ingestion
+        annotations:
+          summary: "Aucun événement ingéré depuis 30 min"
+          description: >-
+            Plus rien n'entre : collecteurs arrêtés, cibles injoignables,
+            credentials expirés, ou partitionnement réseau. Un SOAR aveugle est
+            pire qu'un SOAR absent. Vérifiez GET /api/v1/collectors (dernier run,
+            items, erreurs) puis POST /api/v1/collectors/{name}/run sur une cible
+            déclarée.
+
+      - alert: ThotSecureIngestionDrop
+        expr: |
+          sum(increase(thotsecure_events_ingested_total[15m]))
+          <
+          0.2 * clamp_min(sum(increase(thotsecure_events_ingested_total[15m] offset 1h)), 1)
+        for: 15m
+        labels:
+          severity: warning
+          category: ingestion
+        annotations:
+          summary: "Chute d'ingestion > 80 % vs J-1"
+          description: >-
+            Le volume ingéré s'est effondré par rapport à la même fenêtre hier.
+            Vérifiez les collecteurs et, si la chute est volontaire, ajustez le
+            seuil.
+
+      - alert: ThotSecureIngestionRejected
+        expr: |
+          (
+            sum(rate(thotsecure_events_rejected_total[5m]))
+            /
+            clamp_min(sum(rate(thotsecure_events_ingested_total[5m])), 0.001)
+          ) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+          category: ingestion
+        annotations:
+          summary: "Plus de 10 % des événements rejetés"
+          description: >-
+            Rejets élevés : schéma invalide, `payload` > 32 Kio, rate limit
+            atteint (THOT_RATE_LIMIT_PER_MIN), ou `tenant_id` absent.
+
+      - alert: ThotSecureNoFindings
+        expr: |
+          sum(increase(thotsecure_events_ingested_total[1h])) > 100
+          and
+          sum(increase(thotsecure_findings_total[1h])) == 0
+        for: 30m
+        labels:
+          severity: warning
+          category: detection
+        annotations:
+          summary: "Ingestion active mais aucun finding produit"
+          description: >-
+            Beaucoup d'événements, aucune détection : règles désactivées
+            (`enabled: false`), bibliothèque de règles vide ou non chargée, ou
+            chemins `THOT_RULES_DIR` erronés. Utilisez POST
+            /api/v1/rules/reload et consultez le tableau de bord « Règles ».
+
+      - alert: ThotSecureCriticalFindings
+        expr: |
+          sum(increase(thotsecure_findings_total{severity="critical"}[15m])) > 0
+        for: 0m
+        labels:
+          severity: warning
+          category: detection
+        annotations:
+          summary: "Nouveaux findings critiques"
+          description: >-
+            Des findings de sévérité `critical` ont été créés. Vérifiez leur
+            statut et l'existence d'actions associées (GET /api/v1/findings).
+
+  # ---------------------------------------------------------------------------
+  # 6. Santé du service (méta)
+  # ---------------------------------------------------------------------------
+  - name: thotsecure-service
+    interval: 30s
+    rules:
+      - alert: ThotSecureTargetDown
+        expr: |
+          up{job="thotsecure"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          category: availability
+        annotations:
+          summary: "Thot Secure injoignable par Prometheus"
+          description: "Le scrape de /metrics échoue depuis 5 min. Vérifiez /healthz, les logs et l'état du conteneur."
+
+      - alert: ThotSecureNotReady
+        expr: |
+          thotsecure_ready == 0
+        for: 10m
+        labels:
+          severity: critical
+          category: availability
+        annotations:
+          summary: "Thot Secure répond 503 sur /readyz"
+          description: >-
+            Une dépendance est KO (base de données, bus, chargement des règles).
+            /readyz détaille la dépendance fautive.
+
+      - alert: ThotSecureRateLimited
+        expr: |
+          sum(rate(thotsecure_http_requests_total{status="429"}[10m])) > 1
+        for: 10m
+        labels:
+          severity: warning
+          category: abuse
+        annotations:
+          summary: "Rate limiting actif sur l'ingestion"
+          description: >-
+            Des clients sont limités (THOT_RATE_LIMIT_PER_MIN, défaut 600).
+            Vérifiez s'il s'agit d'un collecteur légitime mal réglé ou d'un abus.

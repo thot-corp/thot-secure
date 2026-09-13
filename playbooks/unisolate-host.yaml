@@ -1,0 +1,29 @@
+name: unisolate-host
+description: Rétablit la connectivité d'un hôte précédemment isolé (fin d'investigation validée).
+reversible: true
+dry_run_capable: true
+connectors: [network]
+params:
+  target:
+    type: host
+    required: true
+    description: Hôte à reconnecter.
+  reason:
+    type: string
+    default: "Thot Secure — fin d'isolement"
+    description: Motif de la reconnexion (investigation terminée, faux positif).
+execute:
+  - connector: network
+    call: unisolate_host
+    with:
+      host: "${params.target}"
+      note: "${params.reason}"
+rollback:
+  - connector: network
+    call: isolate_host
+    with:
+      host: "${params.target}"
+      keep_management_access: true
+      note: "réapplication de l'isolement après annulation"
+audit:
+  severity: high

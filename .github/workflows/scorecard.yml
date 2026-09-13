@@ -1,0 +1,78 @@
+# OpenSSF Scorecard — automated assessment of the project's own security posture.
+#
+# Scorecard checks the things a security project is expected to get right:
+# branch protection, code review, dependency update tooling, pinned action
+# versions, token permissions, signed releases, dangerous workflow patterns and
+# more. Results are published to the OpenSSF public dataset and uploaded as SARIF
+# to GitHub code scanning, so a regression appears as an alert on the commit that
+# caused it.
+#
+# Requirements that are easy to miss:
+#   * `id-token: write` — Scorecard signs its results with the workflow's OIDC
+#     identity before publishing them. Without it, `publish_results: true` fails.
+#   * `security-events: write` — needed to upload the SARIF report.
+#   * `persist-credentials: false` on checkout — the workflow must not leave a
+#     usable git credential behind for later steps.
+#   * The repository must be public for results to be published.
+
+name: OpenSSF Scorecard
+
+on:
+  # Re-run whenever branch protection settings change: that is precisely the
+  # signal Scorecard grades, and a change should be reflected immediately.
+  branch_protection_rule:
+  schedule:
+    # Weekly, Monday 04:23 UTC.
+    - cron: "23 4 * * 1"
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: scorecard-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: read-all
+
+jobs:
+  analysis:
+    name: Scorecard analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+      security-events: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Run OpenSSF Scorecard
+        uses: ossf/scorecard-action@v2.4.0
+        with:
+          results_file: scorecard-results.sarif
+          results_format: sarif
+          # Publish to the OpenSSF public dataset. Requires a public repository
+          # and a workflow triggered by a scheduled or branch-protection event;
+          # run manually on a fork, results are simply not published.
+          publish_results: true
+
+      - name: Upload SARIF as a workflow artifact
+        # Kept as an artifact as well as uploaded to code scanning, so the raw
+        # result can be inspected when code scanning is unavailable.
+        uses: actions/upload-artifact@v4
+        with:
+          name: scorecard-sarif
+          path: scorecard-results.sarif
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Upload SARIF to code scanning
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: scorecard-results.sarif
+          category: scorecard

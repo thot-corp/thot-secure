@@ -1,0 +1,42 @@
+name: quarantine-artifact
+description: >-
+  Met un fichier suspect en quarantaine : déplacement vers un répertoire isolé, empreinte
+  SHA-256 enregistrée dans un manifeste, restauration possible à l'identique. Le fichier n'est
+  **jamais supprimé** — la preuve est conservée pour l'investigation.
+reversible: true
+dry_run_capable: true
+connectors: [artifact]
+params:
+  target:
+    type: path
+    required: true
+    description: Chemin du fichier à mettre en quarantaine (doit être sous « allowed_roots »).
+  reason:
+    type: string
+    default: "Thot Secure — mise en quarantaine"
+    description: Motif (règle déclenchée, signalement, analyse).
+execute:
+  - connector: artifact
+    call: quarantine_file
+    with:
+      path: "${params.target}"
+      reason: "${params.reason}"
+  - connector: ticketing
+    call: open_ticket
+    optional: true
+    with:
+      title: "Fichier mis en quarantaine : ${params.target}"
+      severity: high
+      tenant_id: "${tenant.id}"
+      finding_id: "${finding.id}"
+      action_id: "${action.id}"
+      description: "${params.reason}"
+rollback:
+  - connector: artifact
+    call: restore_file
+    with:
+      rollback_token: "${params.rollback_token}"
+      path: "${params.target}"
+audit:
+  severity: high
+  notify: [ticketing]

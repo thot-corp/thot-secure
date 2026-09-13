@@ -1,0 +1,35 @@
+id: AO-WEB-004
+title: Tentative d'injection de commande système
+description: >-
+  Détecte les séparateurs de commandes et les appels système dans les paramètres de requête.
+  Ce type d'injection mène directement à l'exécution de code sur le serveur.
+status: stable
+severity: critical
+confidence: 0.8
+enabled: true
+tags: [web, owasp:a03, mitre:T1059, exploit-attempt]
+source_types: [log_tail, webhook, syslog]
+kinds: [http.request, log.line]
+match:
+  any:
+    - field: labels.path
+      op: regex
+      value: "(?i)(;\\s*(cat|ls|id|whoami|curl|wget|nc|bash|sh)\\b|\\|\\s*(cat|id|whoami|nc|bash)\\b|`[^`]+`|\\$\\([^)]+\\)|%3b\\s*(cat|id|whoami)|&&\\s*(cat|id|whoami|curl))"
+  threshold:
+    count: 2
+    window_seconds: 300
+    group_by: [labels.src_ip]
+dedup:
+  key: [labels.src_ip]
+  ttl_seconds: 3600
+risk:
+  base: 70
+false_positives:
+  - Paramètre légitime contenant un point-virgule suivi d'un mot courant (URL de redirection).
+remediation: >-
+  Traiter comme un incident prioritaire : vérifier les processus exécutés sur l'hôte à
+  l'horodatage détecté, rechercher des indicateurs de persistance, isoler l'hôte si
+  nécessaire, puis corriger la validation d'entrée. Bloquer la source immédiatement.
+references:
+  - https://owasp.org/Top10/A03_2021-Injection/
+  - https://attack.mitre.org/techniques/T1059/

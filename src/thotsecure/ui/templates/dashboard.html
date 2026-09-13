@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}Tableau de bord{% endblock %}
+{% block content %}
+
+<div class="grid kpis">
+  <div class="card kpi">
+    <span class="kpi-label">Événements ({{ overview.window_hours }} h)</span>
+    <span class="kpi-value">{{ overview.events_total }}</span>
+    <span class="muted">{{ overview.events_by_kind|length }} type(s)</span>
+  </div>
+  <div class="card kpi">
+    <span class="kpi-label">Findings ouverts</span>
+    <span class="kpi-value">{{ overview.findings_open }}</span>
+    <span class="muted">{{ overview.findings_total }} au total</span>
+  </div>
+  <div class="card kpi">
+    <span class="kpi-label">Actions en attente</span>
+    <span class="kpi-value">{{ overview.actions_by_status.get('pending_approval', 0) }}</span>
+    <span class="muted">{{ overview.actions_total }} demandées</span>
+  </div>
+  <div class="card kpi">
+    <span class="kpi-label">MTTD / MTTR</span>
+    <span class="kpi-value small">
+      {{ humanize(overview.mttd_seconds) }} / {{ humanize(overview.mttr_seconds) }}
+    </span>
+    <span class="muted">détection / résolution</span>
+  </div>
+  <div class="card kpi {{ 'kpi-ok' if overview.audit_valid else 'kpi-bad' }}">
+    <span class="kpi-label">Intégrité de l'audit</span>
+    <span class="kpi-value small">{{ 'chaîne valide' if overview.audit_valid else 'CHAÎNE ROMPUE' }}</span>
+    <span class="muted">{{ overview.audit_records }} enregistrements</span>
+  </div>
+  <div class="card kpi">
+    <span class="kpi-label">Autonomie du tenant</span>
+    <span class="kpi-value small">{{ tenant.mode }}</span>
+    <span class="muted">dry-run : {{ 'actif' if (dry_run or tenant.dry_run) else 'DÉSACTIVÉ' }}</span>
+  </div>
+</div>
+
+<section class="card">
+  <h2>Flux temps réel</h2>
+  <p class="muted">
+    Connexion WebSocket authentifiée par jeton de session à courte durée de vie.
+    <span id="live-status" class="pill">déconnecté</span>
+  </p>
+  <div id="live-feed" class="live-feed" data-tenant="{{ principal.tenant_id }}">
+    <p class="muted">En attente d'événements…</p>
+  </div>
+</section>
+
+<div class="grid two">
+  <section class="card">
+    <h2>Findings par sévérité</h2>
+    <table class="table">
+      <thead><tr><th>Sévérité</th><th>Nombre</th></tr></thead>
+      <tbody>
+      {% for severity in ['critical', 'high', 'medium', 'low', 'info'] %}
+        <tr>
+          <td><span class="sev sev-{{ severity }}">{{ severity }}</span></td>
+          <td>{{ overview.findings_by_severity.get(severity, 0) }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <h2>Règles les plus déclenchées</h2>
+    <table class="table">
+      <thead><tr><th>Règle</th><th>Findings</th><th>Score max</th></tr></thead>
+      <tbody>
+      {% for rule in overview.top_rules %}
+        <tr>
+          <td><code>{{ rule.rule_id }}</code></td>
+          <td>{{ rule.count }}</td>
+          <td>{{ '%.1f'|format(rule.max_risk or 0) }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="3" class="muted">Aucun finding sur la fenêtre.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="card">
+    <h2>Collecteurs</h2>
+    <table class="table">
+      <thead><tr><th>Collecteur</th><th>État</th><th>Dernière</th><th>Évén.</th></tr></thead>
+      <tbody>
+      {% for collector in collectors %}
+        <tr>
+          <td>
+            <code>{{ collector.name }}</code>
+            {% if not collector.enabled %}<span class="pill pill-warn">désactivé</span>{% endif %}
+          </td>
+          <td>
+            <span class="pill {{ 'pill-ok' if collector.last_status == 'ok' else ('pill-bad' if collector.last_status == 'error' else '') }}">
+              {{ collector.last_status }}
+            </span>
+          </td>
+          <td class="muted">{{ collector.last_run.strftime('%d/%m %H:%M') if collector.last_run else '—' }}</td>
+          <td>{{ collector.events_emitted }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <p class="hint">
+      Un collecteur n'agit que sur le périmètre déclaré dans <code>config/targets.yaml</code>.
+      L'audit de surface exige en plus <code>allow_probe: true</code>.
+    </p>
+    <a class="button" href="/ui/collectors">Détail des collecteurs</a>
+  </section>
+</div>
+
+<section class="card">
+  <h2>État du service</h2>
+  <div class="grid three">
+    <div><span class="muted">Bus</span><br><code>{{ stats.bus.bus }}</code> ({{ stats.bus.published }} publiés, {{ stats.bus.dropped }} écartés)</div>
+    <div><span class="muted">Détection</span><br>{{ stats.detection.rules_loaded }} règles · {{ stats.detection.matched }} correspondances · {{ stats.detection.avg_eval_ms }} ms/événement</div>
+    <div><span class="muted">Décision</span><br>{{ stats.decision.policies }} politiques · {{ stats.decision.evaluations }} évaluations</div>
+    <div><span class="muted">Pipeline</span><br>{{ stats.pipeline.processed_events }} événements traités · {{ stats.pipeline.errors }} erreurs</div>
+    <div><span class="muted">Limitation de débit</span><br>{{ stats.api.rate_limiter.limit_per_minute }}/min · {{ stats.api.rate_limiter.rejected }} refus</div>
+    <div><span class="muted">Version</span><br>{{ version }} · {{ license }}</div>
+  </div>
+</section>
+
+{% if collections.rule_diagnostics or collections.policy_diagnostics or collections.playbook_diagnostics %}
+<section class="card card-warn">
+  <h2>Éléments de configuration rejetés</h2>
+  <p class="muted">
+    Ces fichiers ne sont pas chargés. Un élément rejeté est une détection absente ou une
+    décision non appliquée : à corriger.
+  </p>
+  <table class="table">
+    <thead><tr><th>Fichier</th><th>Identifiant</th><th>Erreur</th></tr></thead>
+    <tbody>
+    {% for group in [collections.rule_diagnostics, collections.policy_diagnostics, collections.playbook_diagnostics] %}
+      {% for item in group %}
+        <tr><td><code>{{ item.path }}</code></td><td>{{ item.rule_id or '—' }}</td><td>{{ item.error }}</td></tr>
+      {% endfor %}
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
+{% endblock %}

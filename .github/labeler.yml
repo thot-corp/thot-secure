@@ -1,0 +1,94 @@
+# Auto-labelling rules for actions/labeler (see workflows/labeler.yml).
+#
+# Schema — this is the v5 shape, which is NOT the v4 shape:
+#     <label name>:
+#       - changed-files:
+#           - any-glob-to-any-file: <glob or list of globs>
+#           - all-globs-to-all-files: <glob or list of globs>   # optional
+#
+# The v4 form (`<label>: [ 'path/**' ]`, a flat list of globs) is rejected by v5
+# with "Invalid labeler config". If this file is edited, keep the nesting.
+#
+# Caveat: a label name may appear only ONCE as a top-level key. YAML keeps the
+# last duplicate and silently discards the earlier one, so every glob for a label
+# has to live under the same key. Extra globs therefore go in the list, not in a
+# second block.
+#
+# Two documented traps that matter here:
+#   * `.github/**` lives in a directory whose name starts with a dot, and glob
+#     matching skips dot-directories unless the workflow sets `dot: true` on the
+#     action. labeler.yml sets it, otherwise the `.github/**` glob below would
+#     never match.
+#   * `**/*.md` intentionally overlaps `docs/**` in the `type/docs` rule. Both
+#     globs sit under a single rule so the label is applied once; a document moved
+#     out of `docs/` to the repository root still gets labelled.
+#
+# Only labels declared in .github/labels.yml are used. A label that is missing
+# there is ignored at runtime with no error at all, which is why the two files are
+# reviewed together.
+
+# --- Components --------------------------------------------------------------
+"area/collectors":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/thotsecure/collectors/**"
+
+"area/detection":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/thotsecure/detection/**"
+          - "src/thotsecure/scoring/**"
+          - "rules/**"
+
+"area/decision":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/thotsecure/decision/**"
+          - "src/thotsecure/actions/**"
+          - "policies/**"
+          - "playbooks/**"
+
+"area/api":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/thotsecure/api/**"
+          - "src/thotsecure/cli.py"
+          - "src/thotsecure/main.py"
+
+"area/ui":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/thotsecure/ui/**"
+          - "web/**"
+
+# Infrastructure, and the CI that delivers it. `.github/**` is release
+# infrastructure for this project — a broken workflow blocks every other fix — so
+# it is labelled `area/deploy` rather than inventing an `area/ci` label outside
+# the taxonomy. (.github/dependabot.yml already asks for `area/ci`, which does not
+# exist; see the header of labels.yml for why it is not created here.)
+"area/deploy":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "deploy/**"
+          - "Dockerfile"
+          - "docker-compose*.yml"
+          - "scripts/**"
+          - ".github/**"
+
+"area/sdks":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "sdks/**"
+
+"area/tests":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "tests/**"
+
+# --- Cross-cutting kinds -----------------------------------------------------
+"type/docs":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "docs/**"
+          - "mkdocs.yml"
+          - "**/*.md"

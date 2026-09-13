@@ -1,0 +1,120 @@
+# Périmètre déclaré — EXEMPLE à copier :
+#     cp config/targets.example.yaml config/targets.yaml
+#
+# Ce fichier est la SEULE source de vérité sur ce que Thot Secure a le droit d'observer et de
+# modifier. Il n'est jamais déduit automatiquement d'un scan ou d'une découverte réseau : un
+# outil qui devine son périmètre finira par agir sur la mauvaise cible.
+#
+# Il est exclu du dépôt Git (`.gitignore`) car il décrit votre patrimoine : gardez-le dans
+# votre gestion de configuration, avec une revue des changements.
+
+tenants:
+  # Un bloc par tenant (un client MSP, une entité, un environnement).
+  acme:
+    # -- Actifs surveillés -----------------------------------------------------------
+    # Ce que vous possédez et que l'on surveille. Les URL ne sont auditées que si
+    # `allow_probe: true` ci-dessous.
+    assets:
+      - host: shop.acme.fr
+        urls:
+          - "https://shop.acme.fr"
+          - "https://www.shop.acme.fr"
+        criticality: 1.5          # multiplicateur de score (0.1 à 3.0)
+        tags: [production, pci]
+        notes: "Boutique en ligne — exposition publique, trafic client élevé."
+      - host: api.acme.fr
+        urls:
+          - "https://api.acme.fr/health"
+        criticality: 2.0
+        tags: [production, api]
+        notes: "API partenaires — impact direct sur le chiffre d'affaires si indisponible."
+      - host: intranet.acme.fr
+        urls: []
+        criticality: 1.0
+        tags: [interne]
+        notes: "Pas d'audit de surface : accès restreint au réseau interne."
+
+    # -- Périmètre d'action ----------------------------------------------------------
+    # Plages que vous possédez : une action qui MODIFIE votre infrastructure (isoler un
+    # hôte, durcir un service) n'est autorisée que sur ces plages.
+    owned_cidrs:
+      - "198.51.100.0/24"
+      - "192.0.2.15/32"
+
+    # -- Cibles protégées ------------------------------------------------------------
+    # JAMAIS modifiées automatiquement, quel que soit le score du finding. À renseigner
+    # systématiquement : passerelle réseau, contrôleur de domaine, hyperviseur, base de
+    # données de production, équipement de sécurité.
+    protected_targets:
+      - "192.0.2.1"          # passerelle
+      - "192.0.2.10/32"      # contrôleur de domaine
+      - "192.0.2.20/32"      # hyperviseur de production
+
+    # -- Audit de surface ------------------------------------------------------------
+    # Opt-in explicite. Sans cette ligne, les collecteurs `web_probe` et `tls_cert` refusent
+    # de s'exécuter : auditer sa propre surface est défensif, mais cela reste une décision.
+    allow_probe: true
+
+    # -- Journaux locaux -------------------------------------------------------------
+    # Chemins explicites : Thot Secure ne cherche jamais vos journaux tout seul.
+    log_sources:
+      - path: /var/log/nginx/access.log
+        format: nginx        # nginx | apache | json | auto
+        tags: [web]
+      - path: /var/log/nginx/error.log
+        format: nginx
+      - path: /var/log/app/app.jsonl
+        format: json
+
+    # -- Manifestes de dépendances ---------------------------------------------------
+    # Analysés face à l'instantané d'avis local (aucune requête réseau).
+    manifests:
+      - /srv/shop/backend/requirements.txt
+      - /srv/shop/frontend/package.json
+
+    # -- Fichiers de configuration audités -------------------------------------------
+    config_files:
+      - path: /etc/ssh/sshd_config
+        kind: ssh            # ssh | nginx | apache | docker | auto
+      - path: /etc/nginx/nginx.conf
+        kind: nginx
+      - path: /srv/shop/docker-compose.yml
+        kind: docker
+
+  # Exemple de tenant MSSP : un client avec un périmètre plus restreint.
+  globex:
+    assets:
+      - host: portail.globex.example
+        urls: ["https://portail.globex.example"]
+        criticality: 1.0
+        tags: [production]
+    owned_cidrs:
+      - "203.0.113.0/28"
+    protected_targets:
+      - "203.0.113.1"
+    # allow_probe volontairement absent : aucun audit de surface pour ce client tant que
+    # l'autorisation écrite n'est pas obtenue.
+    log_sources:
+      - path: /var/log/remote/globex/access.log
+        format: nginx
+    manifests: []
+    config_files: []
+
+  # Tenant de démonstration utilisé par « thotsecure demo ».
+  demo:
+    assets:
+      - host: demo.local
+        urls: ["http://127.0.0.1:8000"]
+        criticality: 1.0
+        tags: [demonstration]
+    owned_cidrs: ["127.0.0.1/32"]
+    protected_targets: ["10.0.0.1", "10.0.0.0/24"]
+    allow_probe: true
+    log_sources:
+      - path: ./data/demo/access.log
+        format: nginx
+    manifests:
+      - ./data/demo/requirements.txt
+    config_files:
+      - path: ./data/demo/sshd_config
+        kind: ssh

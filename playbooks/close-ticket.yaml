@@ -1,0 +1,30 @@
+name: close-ticket
+description: Clôture un ticket précédemment ouvert par Thot Secure, avec la résolution retenue.
+reversible: true
+dry_run_capable: true
+connectors: [ticketing]
+params:
+  ticket_id:
+    type: string
+    required: true
+    description: Identifiant du ticket à clôturer.
+  resolution:
+    type: string
+    default: "traité"
+    description: Résolution appliquée (vrai positif corrigé, faux positif, mesure de contournement).
+execute:
+  - connector: ticketing
+    call: close_ticket
+    with:
+      ticket_id: "${params.ticket_id}"
+      resolution: "${params.resolution}"
+      comment: "clôturé par Thot Secure (finding ${finding.id})"
+rollback:
+  - connector: ticketing
+    call: open_ticket
+    with:
+      title: "Réouverture : ticket ${params.ticket_id}"
+      severity: medium
+      description: "Réouverture après annulation de la clôture par Thot Secure."
+audit:
+  severity: low

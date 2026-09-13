@@ -1,0 +1,37 @@
+id: AO-WEB-003
+title: Tentative d'injection de script (XSS) dans une requête
+description: >-
+  Détecte les balises de script, gestionnaires d'événements et schémas d'URL dangereux dans
+  les paramètres. Un XSS stocké permet de voler des sessions ou de détourner les actions des
+  utilisateurs de l'application.
+status: stable
+severity: high
+confidence: 0.75
+enabled: true
+tags: [web, owasp:a03, mitre:T1059.007, exploit-attempt]
+source_types: [log_tail, webhook, syslog]
+kinds: [http.request, log.line]
+match:
+  any:
+    - field: labels.path
+      op: regex
+      value: "(?i)(<script|%3cscript|onerror\\s*=|onload\\s*=|javascript:|<img[^>]+src\\s*=|document\\.cookie|alert\\s*\\(|<svg[^>]*onload)"
+  threshold:
+    count: 2
+    window_seconds: 300
+    group_by: [labels.src_ip]
+dedup:
+  key: [labels.src_ip]
+  ttl_seconds: 3600
+risk:
+  base: 50
+false_positives:
+  - Application de gestion de contenu où des utilisateurs saisissent du HTML légitime.
+  - Tests automatisés de l'équipe sur un environnement de recette (ajouter une exception).
+remediation: >-
+  Identifier le paramètre injecté, vérifier l'échappement en sortie côté application, activer
+  une politique de sécurité de contenu (CSP) restrictive, puis bloquer la source si les
+  tentatives se répètent.
+references:
+  - https://owasp.org/Top10/A03_2021-Injection/
+  - https://attack.mitre.org/techniques/T1059/007/

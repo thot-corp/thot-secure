@@ -1,0 +1,36 @@
+id: AO-WEB-006
+title: Balayage automatisé de la surface web (user-agent d'outil offensif)
+description: >-
+  Détecte les signatures d'outils d'analyse et de scanners dans les journaux. Le balayage en
+  lui-même n'est pas une compromission, mais il précède presque toujours une tentative
+  d'exploitation : c'est un signal de renseignement, pas une alerte.
+status: test
+severity: low
+confidence: 0.6
+enabled: true
+tags: [web, mitre:T1595, reconnaissance, scanner]
+source_types: [log_tail, webhook]
+kinds: [http.request]
+match:
+  all:
+    - field: labels.user_agent
+      op: regex
+      value: "(?i)(sqlmap|nikto|nmap|masscan|acunetix|nessus|openvas|dirbuster|gobuster|wfuzz|ffuf|nuclei|zgrab|hydra|wpscan|whatweb)"
+  threshold:
+    count: 5
+    window_seconds: 600
+    group_by: [labels.src_ip]
+dedup:
+  key: [labels.src_ip]
+  ttl_seconds: 86400
+risk:
+  base: 25
+false_positives:
+  - "Audit de sécurité mandaté et planifié : dans ce cas, créez une exception de bruit datée."
+  - Moteur de recherche légitime utilisant une bibliothèque dont le user-agent correspond.
+remediation: >-
+  Vérifier si le balayage est autorisé et planifié. S'il ne l'est pas, relever les adresses
+  source et les chemins ciblés, puis décider d'une limitation de débit ou d'un blocage. Ne pas
+  répondre agressivement : un scanner n'est pas une attaque, c'est un précurseur.
+references:
+  - https://attack.mitre.org/techniques/T1595/

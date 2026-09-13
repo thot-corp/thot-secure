@@ -1,0 +1,33 @@
+id: AO-CFG-003
+title: Protocole TLS obsolète autorisé dans la configuration du serveur web
+description: >-
+  Le fichier de configuration du serveur web active encore TLS 1.0, TLS 1.1 ou SSLv3. La
+  configuration est la cause racine : corriger le fichier évite que le problème réapparaisse au
+  prochain déploiement, contrairement à un correctif appliqué à chaud.
+status: stable
+severity: high
+confidence: 0.95
+enabled: true
+tags: [config, hardening, cis:2.4, tls]
+source_types: [config_audit]
+kinds: [config.audit]
+match:
+  any:
+    - field: labels.check
+      op: eq
+      value: web_tls_legacy_protocol
+    - field: labels.check
+      op: eq
+      value: web_directory_listing
+dedup:
+  key: [labels.file, labels.check]
+  ttl_seconds: 86400
+risk:
+  base: 45
+remediation: >-
+  Corriger `ssl_protocols` pour n'autoriser que TLSv1.2 et TLSv1.3, désactiver `autoindex`,
+  valider la syntaxe (`nginx -t`) puis recharger. Versionner la correction dans votre
+  infrastructure-as-code pour qu'elle soit reproductible.
+references:
+  - CIS Benchmark — configuration Nginx
+  - https://www.ssllabs.com/projects/best-practices/

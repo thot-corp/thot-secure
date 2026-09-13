@@ -1,0 +1,39 @@
+id: AO-DEP-001
+title: Dépendance vulnérable détectée (gravité élevée)
+description: >-
+  Une dépendance déclarée dans un manifeste correspond à une vulnérabilité connue de gravité
+  élevée ou critique (CVSS ≥ 7). La chaîne d'approvisionnement logicielle est aujourd'hui l'un
+  des vecteurs d'attaque les plus exploités, car la faille est publique et le correctif existe.
+status: stable
+severity: high
+confidence: 0.85
+enabled: true
+tags: [supply-chain, owasp:a06, mitre:T1195, vulnerabilite]
+source_types: [dependency]
+kinds: [dependency]
+match:
+  all:
+    - field: labels.check
+      op: eq
+      value: vulnerable_dependency
+    - field: labels.cvss
+      op: gte
+      value: 7.0
+dedup:
+  key: [labels.package, labels.version, labels.cve]
+  ttl_seconds: 604800
+risk:
+  base: 50
+false_positives:
+  - Version épinglée mais non utilisée en production (dépendance de développement).
+  - >-
+    Faux positif de l'instantané d'avis local : vérifiez toujours l'avis à la source
+    (OSV/NVD) avant de conclure, et mettez à jour l'instantané si nécessaire.
+remediation: >-
+  Mettre à jour vers la version corrigée indiquée (`fixed_version`) après lecture de l'avis,
+  reconstruire et redéployer l'artefact, puis vérifier qu'aucune autre dépendance ne
+  dépend de la version vulnérable. Vérifier également que la vulnérabilité est réellement
+  atteignable dans votre usage (chemin de code exposé ou non).
+references:
+  - https://owasp.org/Top10/A06_2021-Vulnerable_and_Outdated_Components/
+  - https://osv.dev

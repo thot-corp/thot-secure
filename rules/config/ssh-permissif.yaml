@@ -1,0 +1,34 @@
+id: AO-CFG-001
+title: Configuration SSH permissive (connexion root autorisée)
+description: >-
+  La configuration SSH autorise la connexion directe du compte root. Un mot de passe root
+  compromis (ou réutilisé) donne immédiatement un accès total, et les journaux ne permettent
+  pas d'attribuer l'action à une personne.
+status: stable
+severity: high
+confidence: 0.95
+enabled: true
+tags: [config, hardening, cis:5.2, ssh]
+source_types: [config_audit]
+kinds: [config.audit]
+match:
+  any:
+    - field: labels.check
+      op: eq
+      value: ssh_permit_root_login
+    - field: labels.check
+      op: eq
+      value: ssh_password_authentication
+dedup:
+  key: [labels.file, labels.check]
+  ttl_seconds: 86400
+risk:
+  base: 50
+remediation: >-
+  Positionner `PermitRootLogin no` puis recharger le service SSH (`sshd -t` avant rechargement
+  pour valider la syntaxe). Utiliser des comptes nominatifs avec élévation de privilèges
+  tracée, et privilégier l'authentification par clé (`PasswordAuthentication no`) une fois les
+  clés distribuées.
+references:
+  - CIS Benchmark — section 5.2 (SSH Server Configuration)
+  - https://www.ssi.gouv.fr/guide/recommandations-de-securite-relatives-a-openssh/

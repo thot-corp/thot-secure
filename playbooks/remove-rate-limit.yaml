@@ -1,0 +1,25 @@
+name: remove-rate-limit
+description: Retire une limitation de débit précédemment appliquée (rollback ou levée manuelle).
+reversible: true
+dry_run_capable: true
+connectors: [ratelimit]
+params:
+  target:
+    type: ip
+    required: true
+    description: Adresse source dont la limitation doit être retirée.
+execute:
+  - connector: ratelimit
+    call: remove_rate_limit
+    with:
+      ip: "${params.target}"
+rollback:
+  - connector: ratelimit
+    call: rate_limit
+    with:
+      ip: "${params.target}"
+      rate: "10r/s"
+      ttl: 1800
+      note: "réapplication de la limitation après annulation"
+audit:
+  severity: low

@@ -1,0 +1,188 @@
+# Stale issue and pull request management.
+#
+# The point of this workflow is not to close things — it is to make sure an
+# unanswered item is *visible* rather than quietly forgotten. A project with a
+# growing pile of unreplied issues looks alive from the outside and is dead on the
+# inside, and a contributor who waits three months for a first response does not
+# come back.
+#
+# Timings, and why: 60 days of inactivity before the reminder is long enough that
+# a maintainer working on this project in their spare time is not nagged, and 21
+# days after the reminder is enough for someone to answer before closure. Anything
+# closed here stays one comment away from being reopened — during the MVP phase a
+# false closure costs a comment, while an unread security report costs far more.
+#
+# Exemptions are the important part. These labels mean "do not touch, ever":
+#   * `good first issue` — the label is a promise to a newcomer. Closing a
+#     newcomer's issue on a timer breaks that promise and burns the contributor.
+#   * `security` and `severity/critical` — a security report must never expire.
+#     Note that `security` is NOT in the taxonomy of .github/labels.yml: it is
+#     used by .github/dependabot.yml and security_contact.yml. Listing a
+#     non-existent label here is harmless (it simply never matches), so it is kept
+#     as a belt-and-braces exemption in case the label is added later.
+#   * `blocked` — waiting on something external. The timer is not the blocker.
+#   * `funding` — support and sponsorship conversations are not abandoned work.
+# The same set is used for issues and pull requests; `exempt-pr-labels` /
+# `exempt-issue-labels` do not inherit from each other, so both are listed, and
+# `exempt-all-*` is left at its default (false) so a label can be added per item
+# without switching staleness off repository-wide.
+#
+# No `close-*-label` is set, on purpose: `stale-issue-label` / `stale-pr-label`
+# mark the item as stale, and the merge of a `closing` label would muddy the
+# taxonomy. The stale label used is `needs-triage` — an item that has gone a whole
+# reminder cycle without an answer is, by definition, untriaged again.
+
+name: Close stale issues and pull requests
+
+on:
+  schedule:
+    # Daily at 01:37 UTC. An off-the-hour minute on purpose: GitHub's scheduler is
+    # busiest on the hour and drops or delays runs queued at :00.
+    - cron: "37 1 * * *"
+  workflow_dispatch:
+
+concurrency:
+  # Never two runs at once: both would evaluate the same items against the same
+  # activity dates, and the action is a mutating one. Not cancelled — a run that
+  # is halfway through commenting should finish rather than leave an item in a
+  # half-labelled state.
+  group: stale-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  stale:
+    name: Mark and close stale items
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Mark and close stale items
+        uses: actions/stale@v10
+        with:
+          # --- Timings ---------------------------------------------------------
+          days-before-stale: 60
+          days-before-close: 21
+          # Stated explicitly rather than relying on the values above being
+          # inherited, so the policy is readable at a glance.
+          days-before-issue-stale: 60
+          days-before-issue-close: 21
+          days-before-pr-stale: 60
+          days-before-pr-close: 21
+
+          # --- Labels ----------------------------------------------------------
+          stale-issue-label: "needs-triage"
+          stale-pr-label: "needs-triage"
+          exempt-issue-labels: "good first issue,security,severity/critical,blocked,funding"
+          exempt-pr-labels: "good first issue,security,severity/critical,blocked,funding"
+
+          # --- Behaviour -------------------------------------------------------
+          # Any comment or push de-stales an item: a conversation that moved is not
+          # stale, and leaving the label on would be a lie.
+          remove-stale-when-updated: true
+          # Draft pull requests are a work-in-progress signal by definition.
+          exempt-draft-pr: true
+          # A fixed ceiling on API calls per run. With a small tracker the default
+          # is never reached; it is set so that a first run against a large backlog
+          # cannot burn the rate limit and fail halfway.
+          operations-per-run: 200
+
+          # --- Messages (French first, then English) ---------------------------
+          stale-issue-message: |
+            Bonjour, et merci d'avoir pris le temps d'ouvrir ce ticket.
+
+            Il n'a pas reçu d'activité depuis 60 jours, donc nous le mettons en
+            pause — ce n'est **pas** un rejet, et ce n'est pas un jugement sur sa
+            qualité. Le projet est mené par des bénévoles et le temps de triage est
+            limité. Sans réponse d'ici 21 jours, il sera fermé automatiquement pour
+            garder la liste lisible ; **un simple commentaire suffit à le relancer**
+            et il reviendra en triage immédiatement.
+
+            Si vous avez depuis trouvé une solution, ou si le problème ne se
+            reproduit plus, dites-le nous : nous fermerons le ticket avec plaisir.
+
+            ---
+
+            Hello, and thank you for taking the time to open this issue.
+
+            It has seen no activity for 60 days, so we are putting it on hold. That
+            is **not** a rejection, and it is no judgement on its quality: this
+            project is run by volunteers and triage time is limited. Without a reply
+            within 21 days it will be closed automatically to keep the tracker
+            readable — **a single comment is enough to revive it**, and it returns to
+            triage straight away.
+
+            If you have since found a workaround, or the problem no longer
+            reproduces, tell us and we will gladly close it.
+
+          close-issue-message: |
+            Ce ticket est fermé automatiquement après 60 jours d'inactivité et 21
+            jours sans réponse au rappel. Il n'est pas rejeté : il est **en pause**.
+
+            **Comment le relancer :** postez un commentaire — nous le rouvrirons. Si
+            le sujet compte toujours pour vous, c'est la meilleure chose à faire.
+
+            Merci encore pour votre contribution.
+
+            ---
+
+            This issue was closed automatically after 60 days of inactivity and 21
+            days without an answer to the reminder. It is not rejected — it is
+            **paused**.
+
+            **How to revive it:** leave a comment and we will reopen it. If the topic
+            still matters to you, that is the best thing to do.
+
+            Thank you again for your contribution.
+
+          stale-pr-message: |
+            Bonjour, et merci pour cette contribution.
+
+            Aucune activité depuis 60 jours : nous mettons la pull request en pause.
+            Ce n'est **pas** un refus — une pull request utile qui dort est souvent
+            simplement en attente de relecture. Sans activité d'ici 21 jours, elle
+            sera fermée automatiquement ; **un commentaire ou un simple rebase suffit
+            à la relancer**.
+
+            Si vous préférez abandonner ce travail, dites-le nous : nous fermerons la
+            pull request proprement, et quelqu'un d'autre pourra reprendre le sujet
+            sans marcher sur vos pieds.
+
+            ---
+
+            Hello, and thank you for this contribution.
+
+            No activity for 60 days, so we are putting the pull request on hold. That
+            is **not** a refusal — a useful pull request that goes quiet is usually
+            just waiting for review. Without activity within 21 days it will be closed
+            automatically; **a comment or a simple rebase is enough to revive it**.
+
+            If you would rather drop this work, tell us and we will close it cleanly,
+            so someone else can pick the topic up without stepping on your toes.
+
+          close-pr-message: |
+            Cette pull request est fermée automatiquement après 60 jours d'inactivité
+            et 21 jours sans réponse au rappel. Ce n'est pas un rejet : c'est une
+            **mise en pause**.
+
+            **Comment la relancer :** postez un commentaire, ou rouvrez-la directement
+            en la rebasant sur `main`. Le travail n'est pas perdu et reste
+            attribuable à son auteur.
+
+            Merci pour le temps que vous y avez consacré.
+
+            ---
+
+            This pull request was closed automatically after 60 days of inactivity and
+            21 days without an answer to the reminder. It is not a rejection — it is
+            **paused**.
+
+            **How to revive it:** leave a comment, or reopen it directly by rebasing
+            onto `main`. The work is not lost and remains attributed to its author.
+
+            Thank you for the time you put into it.

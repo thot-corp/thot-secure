@@ -1,0 +1,204 @@
+# SBOM generation, Sigstore signing and build provenance.
+#
+# Every artefact this project publishes is accompanied by a machine-readable
+# inventory of what is inside it, a signature that binds the artefact to a
+# workflow identity, and an attestation that records how it was built. For a
+# security tool, "trust us" is not good enough: an operator must be able to
+# verify that the image they run was built from this repository, by this
+# workflow, from this commit.
+#
+# Everything here uses **keyless** signing: there is no long-lived signing key to
+# leak, steal or forget to rotate. Sigstore's Fulcio issues a short-lived
+# certificate bound to the workflow's OIDC identity, and the signature is
+# recorded in the Rekor transparency log, which makes it publicly auditable.
+# That is why `id-token: write` is required.
+#
+# No repository secret is needed. `GITHUB_TOKEN` is automatic, and the OIDC token
+# is issued by GitHub at runtime.
+
+name: SBOM and signing
+
+on:
+  release:
+    types:
+      - published
+  push:
+    tags:
+      - "v*"
+  # A weekly refresh keeps an up-to-date SBOM for `main` available even between
+  # releases, so that a CVE can be matched against the current tree.
+  schedule:
+    - cron: "0 5 * * 3"
+  workflow_dispatch:
+
+concurrency:
+  group: sbom-sign-${{ github.workflow }}-${{ github.ref }}
+  # Never cancel: a partially published set of artefacts is worse than a slow
+  # one, and signing must not be interrupted midway.
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  sbom:
+    name: Generate, sign and attest
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      actions: read
+      contents: write # attach assets to a release
+      id-token: write # keyless Sigstore signing and provenance (OIDC)
+      attestations: write # actions/attest-build-provenance
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            version="${GITHUB_REF_NAME}"
+          else
+            version="main-$(git rev-parse --short HEAD)"
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "Resolved version: ${version}"
+
+      - name: Install Syft
+        # Official downloader action: installs the pinned Syft release and puts it
+        # on PATH, so the next steps call `syft` directly and stay readable.
+        uses: anchore/sbom-action/download-syft@v0
+
+      - name: Show Syft version
+        run: syft version
+
+      # --- Source tree SBOMs --------------------------------------------------
+      - name: Generate SPDX SBOM (source tree)
+        run: |
+          syft dir:. \
+            --output "spdx-json=thotsecure-${{ steps.version.outputs.version }}.spdx.json"
+
+      - name: Generate CycloneDX SBOM (source tree)
+        run: |
+          syft dir:. \
+            --output "cyclonedx-json=thotsecure-${{ steps.version.outputs.version }}.cdx.json"
+
+      - name: Generate human-readable SBOM summary
+        run: |
+          syft dir:. --output "table=thotsecure-${{ steps.version.outputs.version }}.sbom.txt" || true
+          wc -l thotsecure-${{ steps.version.outputs.version }}.sbom.txt || true
+
+      - name: Show the SBOM inventory
+        run: |
+          syft dir:. --output table | head -50 || true
+
+      # --- Sign the SBOMs -----------------------------------------------------
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Show cosign version
+        run: cosign version
+
+      - name: Sign the SBOMs (keyless, OIDC)
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in \
+            "thotsecure-${{ steps.version.outputs.version }}.spdx.json" \
+            "thotsecure-${{ steps.version.outputs.version }}.cdx.json"; do
+            echo "Signing ${file}"
+            # --bundle writes the signature, the certificate and the Rekor proof
+            # into a single portable file. Unlike a detached .sig, a bundle can be
+            # verified later without network access to the transparency log.
+            cosign sign-blob \
+              --yes \
+              --oidc-issuer=https://token.actions.githubusercontent.com \
+              --bundle "${file}.sigstore.json" \
+              "${file}"
+          done
+
+      - name: Verify the signatures (self-check)
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in \
+            "thotsecure-${{ steps.version.outputs.version }}.spdx.json" \
+            "thotsecure-${{ steps.version.outputs.version }}.cdx.json"; do
+            # --insecure-ignore-tlog is NOT used: a broken transparency log proof
+            # must fail here rather than be discovered by a user.
+            cosign verify-blob \
+              --bundle "${file}.sigstore.json" \
+              --certificate-identity-regexp "^https://github.com/${GITHUB_REPOSITORY}/" \
+              --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+              "${file}"
+          done
+
+      # --- Provenance attestation --------------------------------------------
+      - name: Attest build provenance for the SBOMs
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: |
+            thotsecure-${{ steps.version.outputs.version }}.spdx.json
+            thotsecure-${{ steps.version.outputs.version }}.cdx.json
+
+      # --- Artefacts ---------------------------------------------------------
+      - name: Upload SBOMs, signatures and certificates as workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ steps.version.outputs.version }}
+          path: |
+            thotsecure-${{ steps.version.outputs.version }}.spdx.json
+            thotsecure-${{ steps.version.outputs.version }}.spdx.json.sigstore.json
+            thotsecure-${{ steps.version.outputs.version }}.cdx.json
+            thotsecure-${{ steps.version.outputs.version }}.cdx.json.sigstore.json
+            thotsecure-${{ steps.version.outputs.version }}.sbom.txt
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Attach SBOMs and signatures to the GitHub Release
+        if: github.event_name == 'release' || startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          # --clobber so that a re-run of this workflow replaces assets instead of
+          # failing on the second attempt.
+          gh release upload "${tag}" \
+            "thotsecure-${{ steps.version.outputs.version }}.spdx.json" \
+            "thotsecure-${{ steps.version.outputs.version }}.spdx.json.sigstore.json" \
+            "thotsecure-${{ steps.version.outputs.version }}.cdx.json" \
+            "thotsecure-${{ steps.version.outputs.version }}.cdx.json.sigstore.json" \
+            --clobber
+
+      - name: Publish verification instructions in the job summary
+        if: always()
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          ## Verifying these artefacts
+
+          ```console
+          # 1. Install cosign (https://docs.sigstore.dev/cosign/installation/)
+          # 2. Verify the SBOM signature against this repository's workflow identity
+          cosign verify-blob \
+            --bundle thotsecure-<version>.spdx.json.sigstore.json \
+            --certificate-identity-regexp "^https://github.com/thotsecure/thot-secure/" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            thotsecure-<version>.spdx.json
+
+          # 3. Verify build provenance
+          gh attestation verify thotsecure-<version>.spdx.json --repo thotsecure/thot-secure
+          ```
+
+          A successful verification proves the artefact was produced by this
+          repository's workflow, from a specific commit, and that it has not been
+          modified since. See SECURITY.md for how to report a verification failure.
+          EOF

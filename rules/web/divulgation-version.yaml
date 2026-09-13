@@ -1,0 +1,29 @@
+id: AO-WEB-053
+title: Divulgation de version dans les en-têtes HTTP
+description: >-
+  Le serveur annonce une version précise (`Server`, `X-Powered-By`). Cette information permet
+  à un attaquant de cibler une vulnérabilité connue sans aucune phase d'identification
+  préalable : c'est un coût nul pour lui, et un risque évitable pour vous.
+status: stable
+severity: low
+confidence: 0.95
+enabled: true
+tags: [web, hardening, owasp:a05, information-disclosure]
+source_types: [web_probe]
+kinds: [http.response]
+match:
+  all:
+    - field: labels.check
+      op: eq
+      value: version_disclosure
+dedup:
+  key: [labels.host, labels.header]
+  ttl_seconds: 604800
+risk:
+  base: 18
+remediation: >-
+  Masquer la version exacte dans la configuration du serveur web (`server_tokens off` pour
+  Nginx, `ServerTokens Prod` pour Apache) et supprimer les en-têtes applicatifs inutiles
+  (`X-Powered-By`). Cela ne remplace pas la mise à jour, mais supprime un avantage gratuit.
+references:
+  - https://owasp.org/Top10/A05_2021-Security_Misconfiguration/

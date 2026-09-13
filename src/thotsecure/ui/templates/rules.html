@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% block title %}Détection{% endblock %}
+{% block content %}
+
+<section class="card">
+  <h2>Règles de détection ({{ rules|length }})</h2>
+  <table class="table">
+    <thead><tr><th>ID</th><th>Titre</th><th>Sévérité</th><th>Confiance</th><th>Étiquettes</th><th>Sources</th><th>Actif</th></tr></thead>
+    <tbody>
+    {% for rule in rules %}
+      <tr>
+        <td><code>{{ rule.rule_id }}</code>{% if rule.sigma_compat %} <span class="pill" title="Traduite depuis Sigma">σ</span>{% endif %}</td>
+        <td>{{ rule.title }}</td>
+        <td><span class="sev sev-{{ rule.severity }}">{{ rule.severity }}</span></td>
+        <td>{{ '%.0f'|format(rule.confidence * 100) }} %</td>
+        <td>{% for tag in rule.tags %}<span class="pill">{{ tag }}</span> {% endfor %}</td>
+        <td class="muted small">{{ rule.source_types|join(', ') or 'toutes' }}<br>{{ rule.kinds|join(', ') or 'tous types' }}</td>
+        <td>{{ 'oui' if rule.enabled else 'non' }}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="7" class="muted">Aucune règle chargée : vérifiez <code>THOT_RULES_DIR</code>.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="card">
+  <h2>Politiques de décision ({{ policies|length }})</h2>
+  <p class="muted">Évaluées par priorité décroissante ; la première qui correspond gagne.</p>
+  <table class="table">
+    <thead><tr><th>Priorité</th><th>Politique</th><th>Conditions</th><th>Décision</th><th>Playbook</th><th>Actif</th></tr></thead>
+    <tbody>
+    {% for policy in policies %}
+      <tr>
+        <td>{{ policy.priority }}</td>
+        <td><code>{{ policy.policy_id }}</code><br><small class="muted">{{ policy.description }}</small></td>
+        <td class="small"><code>{{ policy.when }}</code></td>
+        <td>
+          <span class="pill {{ 'pill-warn' if policy.decision == 'auto' else '' }}">{{ policy.decision }}</span>
+        </td>
+        <td><code>{{ policy.playbook or '—' }}</code></td>
+        <td>{{ 'oui' if policy.enabled else 'non' }}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="6" class="muted">Aucune politique : toute détection est notifiée, aucune action automatique.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="card">
+  <h2>Playbooks ({{ playbooks|length }})</h2>
+  <table class="table">
+    <thead><tr><th>Nom</th><th>Description</th><th>Réversible</th><th>Connecteurs</th><th>Paramètres</th><th>Étapes</th></tr></thead>
+    <tbody>
+    {% for playbook in playbooks %}
+      <tr>
+        <td><code>{{ playbook.name }}</code></td>
+        <td class="small">{{ playbook.description }}</td>
+        <td>
+          {% if playbook.reversible %}<span class="pill pill-ok">oui</span>
+          {% else %}<span class="pill pill-bad">NON</span>{% endif %}
+        </td>
+        <td class="small">{{ playbook.connectors|join(', ') }}</td>
+        <td class="small">
+          {% for name, spec in playbook.params_schema.items() %}
+            <code>{{ name }}</code>{% if spec.required %}*{% endif %}
+          {% endfor %}
+        </td>
+        <td>{{ playbook.steps }} (rollback : {{ playbook.rollback_steps }})</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <p class="hint">
+    Un playbook marqué <strong>non réversible</strong> ne peut <em>jamais</em> être exécuté
+    automatiquement : il exige une approbation humaine explicite, quel que soit le mode
+    d'autonomie du tenant.
+  </p>
+</section>
+
+{% if diagnostics.rule_diagnostics or diagnostics.policy_diagnostics or diagnostics.playbook_diagnostics %}
+<section class="card card-warn">
+  <h2>Diagnostics de chargement</h2>
+  <table class="table">
+    <thead><tr><th>Fichier</th><th>Identifiant</th><th>Erreur</th></tr></thead>
+    <tbody>
+    {% for group in [diagnostics.rule_diagnostics, diagnostics.policy_diagnostics, diagnostics.playbook_diagnostics] %}
+      {% for item in group %}
+        <tr><td><code>{{ item.path }}</code></td><td>{{ item.rule_id or '—' }}</td><td>{{ item.error }}</td></tr>
+      {% endfor %}
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
+<section class="card">
+  <h2>Contrôles de collecte disponibles</h2>
+  <p class="hint">
+    Ces contrôles s'exécutent uniquement sur les actifs déclarés du tenant, avec un aller-retour
+    par contrôle et sans charge d'attaque. Ils produisent des événements, pas des findings :
+    c'est une règle qui décide si l'écart mérite votre attention.
+  </p>
+  <details>
+    <summary>En-têtes de sécurité vérifiés</summary>
+    <ul>
+      <li><code>Strict-Transport-Security</code> (HSTS)</li>
+      <li><code>Content-Security-Policy</code></li>
+      <li><code>X-Content-Type-Options</code> · <code>X-Frame-Options</code> · <code>Referrer-Policy</code> · <code>Permissions-Policy</code></li>
+      <li>Attributs des cookies : <code>Secure</code>, <code>HttpOnly</code>, <code>SameSite</code></li>
+      <li>Divulgation de version (<code>Server</code>, <code>X-Powered-By</code>)</li>
+      <li>Fichiers de configuration exposés (<code>/.git/config</code>, <code>/.env</code>, <code>/server-status</code>…)</li>
+      <li>Présence de <code>/.well-known/security.txt</code></li>
+    </ul>
+  </details>
+</section>
+
+{% endblock %}

@@ -1,0 +1,37 @@
+id: AO-IDN-001
+title: Échecs d'authentification répétés signalés par syslog
+description: >-
+  Les journaux système signalent une série d'échecs d'authentification (SSH, sudo, service).
+  Ce signal, corrélé à une source unique, indique une tentative d'accès non autorisé — souvent
+  la première étape visible d'une intrusion.
+status: stable
+severity: high
+confidence: 0.7
+enabled: true
+tags: [identity, mitre:T1110, syslog, bruteforce]
+source_types: [syslog, log_tail]
+kinds: [syslog, log.line]
+match:
+  all:
+    - field: labels.message
+      op: regex
+      value: "(?i)(failed password|authentication failure|invalid user|failed publickey|too many authentication failures|pam_unix\\(.*\\): authentication failure)"
+  threshold:
+    count: 10
+    window_seconds: 300
+    group_by: [labels.src_ip, labels.host]
+dedup:
+  key: [labels.src_ip, labels.host]
+  ttl_seconds: 3600
+risk:
+  base: 48
+false_positives:
+  - Utilisateur ayant changé de mot de passe sur un client automatique (sauvegarde, cron).
+  - Sonde de supervision avec des identifiants expirés.
+remediation: >-
+  Identifier la source (adresse IP, compte ciblé), vérifier qu'aucune authentification n'a
+  réussi ensuite (rechercher un succès après la série), puis bloquer la source et activer
+  l'authentification par clé avec limitation du nombre d'essais.
+references:
+  - https://attack.mitre.org/techniques/T1110/
+  - https://www.ssi.gouv.fr/guide/recommandations-de-securite-relatives-a-openssh/

@@ -1,0 +1,61 @@
+---
+# =============================================================================
+# Thot Secure — métadonnées du rôle « thotsecure »
+# -----------------------------------------------------------------------------
+# Rôle : installe et configure le service Thot Secure (SOAR/CSPM défensif) sur un
+# hôte Linux, derrière un reverse-proxy Nginx en TLS, avec durcissement
+# systemd, pare-feu UFW/firewalld et vérifications post-installation.
+#
+# Philosophie de sûreté : le rôle n'active JAMAIS l'automatisation destructive.
+# Les valeurs par défaut sont THOT_DRY_RUN=true et THOT_AUTONOMY=supervised.
+# =============================================================================
+
+galaxy_info:
+  role_name: thotsecure
+  namespace: thotsecure
+  author: The Thot Secure Authors
+  description: >-
+    Installe et durcit Thot Secure (SOAR/CSPM défensif, API FastAPI + console web)
+    sur Debian/Ubuntu et RedHat/EL : utilisateur système dédié, venv Python 3.11,
+    unit systemd sandboxée, reverse-proxy Nginx TLS, pare-feu et vérifications
+    de santé. Mode dry-run et autonomie supervisée par défaut.
+  company: Thot Secure
+  license: Apache-2.0
+  min_ansible_version: "2.15"
+
+  # Plateformes testées / supportées.
+  platforms:
+    - name: Debian
+      versions:
+        - bookworm
+        - trixie
+    - name: Ubuntu
+      versions:
+        - jammy
+        - noble
+    - name: EL
+      versions:
+        - "9"
+
+  galaxy_tags:
+    - security
+    - soar
+    - monitoring
+    - hardening
+    - systemd
+    - nginx
+    - blue_team
+
+  # Le rôle est autonome : aucune dépendance de rôle.
+dependencies: []
+
+# -----------------------------------------------------------------------------
+# Collections requises (à installer avec `ansible-galaxy collection install -r
+# requirements.yml` depuis deploy/ansible/). Déclarées ici pour la documentation
+# et pour les outils qui lisent meta/main.yml ; Ansible ne les installe pas
+# automatiquement depuis ce bloc.
+# -----------------------------------------------------------------------------
+collections:
+  - community.general # ufw, firewalld, callback stdout « yaml »
+  - ansible.posix # sysctl, firewalld (repli), seboolean
+  - ansible.utils # filtres ipaddr (validation des CIDR du pare-feu)

@@ -1,0 +1,535 @@
+---
+# =============================================================================
+# tasks/preflight.yml — refus explicite des configurations dangereuses
+# -----------------------------------------------------------------------------
+# Ce fichier ne modifie RIEN sur l'hôte : il ne fait que lire et décider.
+# Il s'exécute avec le tag « always » : même une exécution ciblée sur
+# « --tags nginx » passe d'abord par ces contrôles.
+#
+# Principe directeur : mieux vaut un arrêt net et lisible avant écriture qu'une
+# machine à moitié configurée, ou un service qui démarre avec un secret par
+# défaut et le pare-feu ouvert.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 1. Système d'exploitation supporté
+# -----------------------------------------------------------------------------
+- name: "Préflight | Vérifier que la famille d'OS est supportée"
+  ansible.builtin.assert:
+    that:
+      - ansible_os_family in ['Debian', 'RedHat']
+    fail_msg: >-
+      Système non supporté : ansible_os_family='{{ ansible_os_family }}'
+      (distribution détectée : {{ ansible_distribution | default('inconnue') }}
+      {{ ansible_distribution_version | default('') }}).
+      Ce rôle supporte Debian/Ubuntu et RedHat/EL (RHEL, Rocky, AlmaLinux,
+      Oracle Linux, Fedora). Adaptez tasks/packages.yml et tasks/firewall.yml,
+      puis relancez.
+    success_msg: >-
+      Famille d'OS supportée : {{ ansible_os_family }}
+      ({{ ansible_distribution }} {{ ansible_distribution_version }}).
+    quiet: true
+  tags:
+    - always
+    - preflight
+
+# -----------------------------------------------------------------------------
+# 2. Version de Python >= 3.11
+# -----------------------------------------------------------------------------
+# On interroge le binaire configuré dans thotsecure_python, sans shell (argv) :
+# aucun risque d'interprétation de métacaractères.
+- name: "Préflight | Détecter la version de l'interpréteur cible"
+  ansible.builtin.command:
+    argv:
+      - "{{ thotsecure_python }}"
+      - "-c"
+      - "import sys; print('%d.%d.%d' % sys.version_info[:3])"
+  register: thotsecure_preflight_python_version
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  tags:
+    - always
+    - preflight
+
+- name: "Préflight | Refuser un interpréteur absent ou trop ancien (Python >= 3.11 requis)"
+  ansible.builtin.assert:
+    that:
+      - thotsecure_preflight_python_version.rc | default(1) == 0
+      - thotsecure_preflight_pyver is version('3.11', '>=')
+    fail_msg: >-
+      Interpréteur '{{ thotsecure_python }}' introuvable ou trop ancien
+      (détecté : '{{ thotsecure_preflight_python_version.stdout | default('') | trim }}'
+      — code retour {{ thotsecure_preflight_python_version.rc | default('n/a') }}).
+      Thot Secure exige Python 3.11 minimum (requires-python = ">=3.11").
+      Installez python3.11 (sur EL : dnf install python3.11 ; sur Ubuntu 22.04 :
+      dépôt deadsnakes ou passage à 23.04+), ou surchargez thotsecure_python.
+    success_msg: "Interpréteur {{ thotsecure_python }} = {{ thotsecure_preflight_pyver }}."
+    quiet: true
+  vars:
+    # Sur échec de la commande, on retombe sur 0.0.0 : la comparaison de version
+    # reste valide et ne lève jamais d'erreur de filtre.
+    thotsecure_preflight_pyver: >-
+      {{ (thotsecure_preflight_python_version.stdout | default('') | trim)
+         if (thotsecure_preflight_python_version.rc | default(1) == 0)
+         else '0.0.0' }}
+  tags:
+    - always
+    - preflight
+
+# -----------------------------------------------------------------------------
+# 3. Espace disque disponible
+# -----------------------------------------------------------------------------
+# 2 Go minimum : venv + dépendances (fastapi, uvicorn, pydantic) + base SQLite
+# et quarantaine, qui peuvent grossir vite avec les artefacts collectés.
+- name: "Préflight | Déterminer le point de montage des données"
+  ansible.builtin.set_fact:
+    # On mesure /var s'il est monté séparément, sinon la racine.
+    thotsecure_preflight_mount: >-
+      {{ '/var'
+         if (ansible_mounts | selectattr('mount', 'equalto', '/var') | list | length > 0)
+         else '/' }}
+  tags:
+    - always
+    - preflight
+
+- name: "Préflight | Mesurer l'espace disque libre"
+  ansible.builtin.set_fact:
+    thotsecure_preflight_free_bytes: >-
+      {{ (ansible_mounts
+          | selectattr('mount', 'equalto', thotsecure_preflight_mount)
+          | map(attribute='size_available')
+          | first | default(0)) | int }}
+  tags:
+    - always
+    - preflight
+
+- name: "Préflight | Refuser une racine de données trop petite (< 2 Go libres)"
+  ansible.builtin.assert:
+    that:
+      - thotsecure_preflight_free_bytes >= 2147483648
+    fail_msg: >-
+      Espace disque insuffisant : {{ (thotsecure_preflight_free_bytes / 1073741824) | round(2) }} Go
+      libres seulement sur {{ thotsecure_preflight_mount }}, alors qu'Thot Secure exige au moins 2 Go
+      (venv Python + dépendances + base SQLite + quarantaine des artefacts).
+      Libérez de l'espace, ou placez {{ thotsecure_state_dir }} sur un volume dédié.
+    success_msg: >-
+      Espace disque suffisant : {{ (thotsecure_preflight_free_bytes / 1073741824) | round(2) }} Go
+      libres sur {{ thotsecure_preflight_mount }}.
+    quiet: true
+  tags:
+    - always
+    - preflight
+
+# -----------------------------------------------------------------------------
+# 4. Disponibilité du port applicatif
+# -----------------------------------------------------------------------------
+- name: "Préflight | Vérifier si le port applicatif est déjà utilisé"
+  ansible.builtin.wait_for:
+    host: "{{ thotsecure_host }}"
+    port: "{{ thotsecure_port }}"
+    timeout: 1
+    state: started
+  register: thotsecure_preflight_port
+  failed_when: false
+  changed_when: false
+  check_mode: false
+  tags:
+    - always
+    - preflight
+
+- name: "Préflight | Relever l'état du service thotsecure s'il existe déjà"
+  # command : systemctl is-active sort en code 3 pour une unité inactive, ce qui
+  # n'est PAS une erreur ici ; on neutralise donc changed_when et failed_when
+  # pour ne conserver que la valeur de sortie.
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - is-active
+      - thotsecure.service
+  register: thotsecure_preflight_service_raw
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  tags:
+    - always
+    - preflight
+
+- name: "Préflight | Mémoriser l'état du service existant"
+  ansible.builtin.set_fact:
+    thotsecure_preflight_service_state: "{{ thotsecure_preflight_service_raw.stdout | default('') | trim }}"
+  tags:
+    - always
+    - preflight
+
+- name: "Préflight | Refuser un port déjà occupé par un autre service"
+  ansible.builtin.assert:
+    that:
+      # Un échec de wait_for signifie « personne n'écoute » : cas normal au
+      # premier déploiement. Si quelque chose écoute, on n'échoue que lorsque
+      # ce n'est pas déjà notre propre service (relance / mise à jour).
+      - thotsecure_preflight_port is failed or thotsecure_preflight_service_state == 'active'
+    fail_msg: >-
+      Le port {{ thotsecure_port }} est déjà utilisé sur {{ thotsecure_host }} par un
+      autre processus, et le service thotsecure n'est pas actif.
+      Identifiez le processus fautif avec : ss -ltnp | grep ':{{ thotsecure_port }}'
+      puis libérez le port ou changez thotsecure_port.
+    success_msg: "Port {{ thotsecure_port }} disponible ou déjà servi par Thot Secure."
+    quiet: true
+  tags:
+    - always
+    - preflight
+
+# -----------------------------------------------------------------------------
+# 5. SÛRETÉ — refus de la désactivation de DRY_RUN sans autorisation explicite
+# -----------------------------------------------------------------------------
+- name: "SÛRETÉ | Refuser la désactivation de DRY_RUN sans déverrouillage explicite"
+  ansible.builtin.assert:
+    that:
+      # Écrit sous forme « not (A and B) » pour que le message d'échec qui suit
+      # soit directement compréhensible par l'opérateur.
+      - not ((thotsecure_dry_run | bool) == false and (thotsecure_allow_dry_run_disable | bool) == false)
+    fail_msg: |-
+      ============================================================================
+      ARRÊT DE SÛRETÉ — THOT_DRY_RUN=false sans autorisation explicite.
+      ----------------------------------------------------------------------------
+      Vous demandez thotsecure_dry_run=false, ce qui autorise Thot Secure à appliquer
+      des CONTRE-MESURES RÉELLES sur vos cibles (isolation d'hôte, blocage de
+      compte, révocation de session, filtrage réseau).
+
+      Le rôle refuse de le faire sur un simple changement de variable, car une
+      bascule accidentelle (copier/coller d'inventaire, variable héritée d'un
+      pipeline CI, surcharge oubliée) suffirait à déclencher des actions
+      destructrices.
+
+      Procédure à suivre :
+        1. Vérifiez que thotsecure_autonomy vaut toujours "supervised".
+        2. Obtenez une validation humaine écrite et une fenêtre de changement.
+        3. Activez le déverrouillage dans vos variables :
+             thotsecure_allow_dry_run_disable: true
+        4. Relancez le playbook.
+
+      Rappel : THOT_DRY_RUN=true est la valeur par défaut et la seule
+      acceptable pour un premier déploiement, une recette ou un environnement
+      partagé entre plusieurs tenants.
+      ============================================================================
+    success_msg: >-
+      Sûreté OK — dry_run={{ thotsecure_dry_run | bool | lower }},
+      autonomie={{ thotsecure_autonomy }},
+      déverrouillage dry-run={{ thotsecure_allow_dry_run_disable | bool | lower }}.
+    quiet: true
+  tags:
+    - always
+    - preflight
+
+- name: "SÛRETÉ | Refuser la combinaison autonomie 'auto' + DRY_RUN=false"
+  ansible.builtin.assert:
+    that:
+      - not ((thotsecure_autonomy | string) == 'auto' and (thotsecure_dry_run | bool) == false)
+    fail_msg: |-
+      ============================================================================
+      ARRÊT DE SÛRETÉ — combinaison interdite : THOT_AUTONOMY=auto + DRY_RUN=false.
+      ----------------------------------------------------------------------------
+      Cette combinaison signifie « exécuter automatiquement des contre-mesures
+      réelles sans validation humaine ». Aucun déploiement ne doit démarrer dans
+      cet état, même avec thotsecure_allow_dry_run_disable=true.
+
+      Chemin de montée en confiance recommandé :
+        1. autonomy: "supervised" + dry_run: true   -> observation, rien n'est appliqué
+        2. autonomy: "supervised" + dry_run: false  -> action approuvée par un humain
+        3. autonomy: "auto"                         -> plus tard, sur des actions
+                                                       non destructives uniquement
+      ============================================================================
+    quiet: false
+  tags:
+    - always
+    - preflight
+
+- name: "SÛRETÉ | Vérifier que l'autonomie demandée est une valeur connue"
+  ansible.builtin.assert:
+    that:
+      - (thotsecure_autonomy | string) in ['manual', 'supervised', 'auto']
+    fail_msg: >-
+      thotsecure_autonomy='{{ thotsecure_autonomy }}' invalide.
+      Valeurs acceptées : manual | supervised | auto.
+    quiet: true
+  tags:
+    - always
+    - preflight
+
+# -----------------------------------------------------------------------------
+# 6. Cohérence de l'environnement (dev explicitement assumé)
+# -----------------------------------------------------------------------------
+- name: "Préflight | Vérifier que THOT_ENV est une valeur connue"
+  ansible.builtin.assert:
+    that:
+      - (thotsecure_env | string) in ['dev', 'prod']
+    fail_msg: >-
+      thotsecure_env='{{ thotsecure_env }}' invalide. Valeurs acceptées : dev | prod.
+    quiet: true
+  tags:
+    - always
+    - preflight
+
+- name: "Préflight | Exiger une dérogation écrite pour un environnement dev"
+  ansible.builtin.assert:
+    that:
+      - not ((thotsecure_env | string) == 'dev' and (thotsecure_strict_env | bool))
+    fail_msg: |-
+      ============================================================================
+      ARRÊT DE SÛRETÉ — thotsecure_env=dev alors que thotsecure_strict_env=true.
+      ----------------------------------------------------------------------------
+      Un environnement « dev » relâche des contrôles (journalisation verbeuse,
+      valeurs de développement, garde-fous désactivables). Le rôle refuse donc de
+      le déployer tant que la dérogation n'est pas écrite noir sur blanc.
+
+      Si cette machine est réellement un bac à sable jetable :
+          thotsecure_strict_env: false
+      Et conservez thotsecure_dry_run: true : sur un environnement de test, il n'y
+      a jamais de raison d'appliquer de vraies contre-mesures.
+      ============================================================================
+    quiet: true
+  tags:
+    - always
+    - preflight
+
+# -----------------------------------------------------------------------------
+# 7. Cohérence du périmètre (secrets, exposition, TLS, installation)
+# -----------------------------------------------------------------------------
+- name: "Préflight | Exiger une clé de signature OU l'autorisation de la générer"
+  ansible.builtin.assert:
+    that:
+      - (thotsecure_secret_key | default('') | length > 0) or (thotsecure_generate_secret_key | bool)
+    fail_msg: >-
+      Aucun secret disponible : thotsecure_secret_key est vide ET
+      thotsecure_generate_secret_key vaut false.
+      Thot Secure ne peut pas démarrer sans THOT_SECRET_KEY (signature des
+      sessions et des jetons d'API). Deux options :
+        - thotsecure_generate_secret_key: true (défaut) : clé générée sur l'hôte
+          avec « openssl rand -hex 32 », écrite en 0600, jamais affichée ;
+        - ou fournissez thotsecure_secret_key depuis un vault Ansible.
+    success_msg: >-
+      Secret disponible :
+      {{ "généré sur l'hôte" if (thotsecure_secret_key | default('') | length == 0)
+         else "fourni par variable (vault attendu)" }}.
+    quiet: true
+  tags:
+    - always
+    - preflight
+
+- name: "Préflight | Refuser une exposition publique de l'application sans restriction par CIDR"
+  ansible.builtin.assert:
+    that:
+      - not ((thotsecure_bind_public | bool) and (thotsecure_firewall_app_cidrs | length == 0))
+    fail_msg: |-
+      ============================================================================
+      ARRÊT DE SÛRETÉ — exposition directe de l'application sans filtre réseau.
+      ----------------------------------------------------------------------------
+      thotsecure_bind_public=true fait écouter uvicorn sur 0.0.0.0:{{ thotsecure_port }},
+      et thotsecure_firewall_app_cidrs est vide : le port serait joignable depuis
+      n'importe quelle adresse, en contournant Nginx (donc sans TLS, sans
+      limitation de débit et sans en-têtes de sécurité).
+
+      Deux solutions :
+        1. RECOMMANDÉ — laissez thotsecure_bind_public: false : seul Nginx, en
+           local, joint l'application sur 127.0.0.1:{{ thotsecure_port }}.
+        2. Si vous exposez réellement le port en direct, restreignez-le :
+             thotsecure_firewall_app_cidrs:
+               - "192.0.2.0/24"
+      ============================================================================
+    success_msg: >-
+      Exposition réseau cohérente — bind_public={{ thotsecure_bind_public | bool | lower }},
+      CIDR applicatifs autorisés={{ thotsecure_firewall_app_cidrs | length }}.
+    quiet: true
+  tags:
+    - always
+    - preflight
+
+# Le filtre ansible.utils.ipaddr renvoie False pour une entrée invalide : on
+# teste donc explicitement l'identité à False, ce qui évite un faux positif
+# (une valeur False « est définie » du point de vue de Jinja).
+- name: "Préflight | Valider les CIDR autorisés pour SSH"
+  ansible.builtin.assert:
+    that:
+      - (item | ansible.utils.ipaddr('network')) is not sameas false
+    fail_msg: >-
+      Réseau invalide dans thotsecure_firewall_allowed_ssh_cidrs : '{{ item }}'.
+      Attendu : une adresse ou un réseau CIDR exploitable par UFW, par exemple
+      « 192.0.2.0/24 » ou « 2001:db8::/32 ». Une erreur ici peut vous couper
+      l'accès SSH : mieux vaut échouer maintenant qu'après avoir appliqué la règle.
+    quiet: true
+  loop: "{{ thotsecure_firewall_allowed_ssh_cidrs }}"
+  loop_control:
+    label: "{{ item }}"
+  when: thotsecure_firewall_allowed_ssh_cidrs | length > 0
+  tags:
+    - always
+    - preflight
+
+- name: "Préflight | Valider les CIDR autorisés pour l'application"
+  ansible.builtin.assert:
+    that:
+      - (item | ansible.utils.ipaddr('network')) is not sameas false
+    fail_msg: >-
+      Réseau invalide dans thotsecure_firewall_app_cidrs : '{{ item }}'.
+      Attendu : une adresse ou un réseau CIDR, par exemple « 192.0.2.0/24 ».
+    quiet: true
+  loop: "{{ thotsecure_firewall_app_cidrs }}"
+  loop_control:
+    label: "{{ item }}"
+  when: thotsecure_firewall_app_cidrs | length > 0
+  tags:
+    - always
+    - preflight
+
+- name: "Préflight | Exiger un domaine valide lorsque Nginx est géré"
+  ansible.builtin.assert:
+    that:
+      - (thotsecure_domain | default('') | length > 0)
+      - (thotsecure_domain | default('')) is match('^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$')
+    fail_msg: >-
+      thotsecure_manage_nginx=true mais thotsecure_domain='{{ thotsecure_domain | default('') }}'
+      est vide ou invalide. Renseignez le nom DNS réellement pointé vers cet hôte
+      (il sert au certificat TLS, à la redirection HTTPS et aux en-têtes
+      X-Forwarded-*), ou passez thotsecure_manage_nginx: false.
+    success_msg: "Domaine public : {{ thotsecure_domain }}."
+    quiet: true
+  when: thotsecure_manage_nginx | bool
+  tags:
+    - always
+    - preflight
+
+- name: "Préflight | Vérifier la cohérence du mode TLS"
+  ansible.builtin.assert:
+    that:
+      - (thotsecure_tls_mode | string) in ['letsencrypt', 'selfsigned', 'provided', 'none']
+    fail_msg: >-
+      thotsecure_tls_mode='{{ thotsecure_tls_mode }}' invalide.
+      Valeurs acceptées : letsencrypt | selfsigned | provided | none.
+    quiet: true
+  when: thotsecure_manage_nginx | bool
+  tags:
+    - always
+    - preflight
+
+- name: "Préflight | Exiger un contact ACME pour Let's Encrypt"
+  ansible.builtin.assert:
+    that:
+      - (thotsecure_le_email | default('') | length > 0)
+    fail_msg: >-
+      thotsecure_tls_mode=letsencrypt exige thotsecure_le_email.
+      Renseignez une adresse de votre domaine (elle reçoit les alertes
+      d'expiration de certificat), ou passez thotsecure_tls_mode à selfsigned ou
+      provided.
+    success_msg: "Contact ACME : {{ thotsecure_le_email }}."
+    quiet: true
+  when:
+    - thotsecure_manage_nginx | bool
+    - (thotsecure_tls_mode | string) == 'letsencrypt'
+  tags:
+    - always
+    - preflight
+
+- name: "Préflight | Exiger les chemins de certificat en mode 'provided'"
+  ansible.builtin.assert:
+    that:
+      - (thotsecure_tls_cert_path | default('') | length > 0)
+      - (thotsecure_tls_key_path | default('') | length > 0)
+      - (thotsecure_tls_cert_path | default('')) is match('^/')
+      - (thotsecure_tls_key_path | default('')) is match('^/')
+    fail_msg: >-
+      thotsecure_tls_mode=provided exige thotsecure_tls_cert_path ET
+      thotsecure_tls_key_path, en chemins ABSOLUS existant sur l'hôte cible.
+    quiet: true
+  when:
+    - thotsecure_manage_nginx | bool
+    - (thotsecure_tls_mode | string) == 'provided'
+  tags:
+    - always
+    - preflight
+
+- name: "Préflight | Vérifier la cohérence du mode d'installation"
+  ansible.builtin.assert:
+    that:
+      - (thotsecure_install_from | string) in ['pypi', 'wheel', 'local_dir']
+    fail_msg: >-
+      thotsecure_install_from='{{ thotsecure_install_from }}' non supporté.
+      Valeurs acceptées : pypi | wheel | local_dir.
+      Les modes sdist et git ne sont volontairement pas implémentés : construisez
+      un wheel (python -m build) puis utilisez thotsecure_install_from=wheel. Cela
+      évite d'exécuter du code arbitraire de build sur l'hôte de production.
+    quiet: true
+  tags:
+    - always
+    - preflight
+
+- name: "Préflight | Exiger un chemin de wheel quand install_from=wheel"
+  ansible.builtin.assert:
+    that:
+      - (thotsecure_wheel_path | default('') | length > 0)
+    fail_msg: >-
+      thotsecure_install_from=wheel exige thotsecure_wheel_path.
+      Exemple : thotsecure_wheel_path: "/tmp/thotsecure-{{ thotsecure_version }}-py3-none-any.whl"
+    quiet: true
+  when: (thotsecure_install_from | string) == 'wheel'
+  tags:
+    - always
+    - preflight
+
+- name: "Préflight | Exiger un arbre source quand install_from=local_dir"
+  ansible.builtin.assert:
+    that:
+      - (thotsecure_local_dir | default('') | length > 0)
+    fail_msg: >-
+      thotsecure_install_from=local_dir exige thotsecure_local_dir : chemin d'un
+      arbre source contenant pyproject.toml, sur l'hôte cible.
+    quiet: true
+  when: (thotsecure_install_from | string) == 'local_dir'
+  tags:
+    - always
+    - preflight
+
+- name: "Préflight | Exiger un wheelhouse en mode hors ligne"
+  ansible.builtin.assert:
+    that:
+      - (thotsecure_wheelhouse | default('') | length > 0)
+    fail_msg: >-
+      thotsecure_offline=true exige thotsecure_wheelhouse : le répertoire local
+      contenant les wheels d'thotsecure ET de ses dépendances (fastapi, uvicorn,
+      pydantic, pydantic-settings, PyYAML, Jinja2 et leurs dépendances
+      transitives). pip sera appelé avec « --no-index --find-links ».
+    quiet: true
+  when: thotsecure_offline | bool
+  tags:
+    - always
+    - preflight
+
+- name: "Préflight | Exiger un chemin absolu pour le contenu déclaratif"
+  ansible.builtin.assert:
+    that:
+      - thotsecure_content_src is match('^/')
+    fail_msg: >-
+      thotsecure_content_src='{{ thotsecure_content_src }}' doit être un chemin
+      ABSOLU sur la machine cible (le rôle copie ce contenu vers
+      {{ thotsecure_etc_dir }}).
+    quiet: true
+  when: (thotsecure_content_src | default('') | length > 0)
+  tags:
+    - always
+    - preflight
+
+# -----------------------------------------------------------------------------
+# 8. Rappel de sûreté pour l'opérateur
+# -----------------------------------------------------------------------------
+- name: "Préflight | Rappel de sûreté et synthèse du périmètre"
+  ansible.builtin.debug:
+    msg:
+      - "Thot Secure {{ thotsecure_version }} — cible : {{ inventory_hostname }}"
+      - "SÛRETÉ | THOT_DRY_RUN={{ thotsecure_dry_run | bool | lower }} : les contre-mesures sont {{ 'SIMULÉES (aucune action réelle)' if thotsecure_dry_run | bool else 'RÉELLES (actions appliquées sur les cibles)' }}"
+      - "SÛRETÉ | THOT_AUTONOMY={{ thotsecure_autonomy }} (défaut recommandé : supervised)"
+      - "Écoute : {{ thotsecure_host }}:{{ thotsecure_port }} — exposition publique : {{ thotsecure_bind_public | bool | lower }}"
+      - "Reverse-proxy : {{ thotsecure_domain }} (TLS {{ thotsecure_tls_mode }}) — gestion Nginx : {{ thotsecure_manage_nginx | bool | lower }}"
+      - "Pare-feu : {{ thotsecure_manage_firewall | bool | lower }} — SSH restreint à {{ thotsecure_firewall_allowed_ssh_cidrs | length }} plage(s)"
+  tags:
+    - always
+    - preflight

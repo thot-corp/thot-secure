@@ -1,0 +1,43 @@
+name: rate-limit-source
+description: >-
+  Applique une limitation de débit à une source abusive. Préféré au blocage pur lorsque
+  l'abus est ambigu (bourrage d'identifiants, aspirateur de site) : on ralentit sans couper,
+  ce qui limite le risque de bloquer un client légitime ou un partenaire.
+reversible: true
+dry_run_capable: true
+connectors: [ratelimit]
+params:
+  target:
+    type: ip
+    required: true
+    description: Adresse source à limiter.
+  rate:
+    type: string
+    default: "10r/s"
+    description: Débit autorisé (syntaxe du connecteur, ex. « 10r/s » ou « 30r/m »).
+  duration_seconds:
+    type: duration
+    default: 1800
+    min: 60
+    max: 86400
+    description: Durée de la limitation.
+  reason:
+    type: string
+    default: "Thot Secure — limitation de débit"
+    description: Motif de la limitation.
+execute:
+  - connector: ratelimit
+    call: rate_limit
+    with:
+      ip: "${params.target}"
+      rate: "${params.rate}"
+      ttl: "${params.duration_seconds}"
+      note: "${params.reason}"
+rollback:
+  - connector: ratelimit
+    call: remove_rate_limit
+    with:
+      ip: "${params.target}"
+audit:
+  severity: medium
+  notify: [ticketing]

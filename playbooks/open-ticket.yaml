@@ -1,0 +1,46 @@
+name: open-ticket
+description: >-
+  Ouvre un ticket dans l'outil de suivi configuré (local, Jira, GLPI, GitHub…) pour tracer un
+  finding qui exige un travail humain planifié. Le ticket est la contrepartie « lente » de la
+  contre-mesure immédiate : il garantit qu'un problème non urgent ne sera pas oublié.
+reversible: true
+dry_run_capable: true
+connectors: [ticketing]
+params:
+  title:
+    type: string
+    required: true
+    description: Titre du ticket.
+  severity:
+    type: string
+    default: medium
+    choices: [info, low, medium, high, critical]
+    description: Gravité reportée dans le ticket.
+  description:
+    type: string
+    default: ""
+    description: Contexte à transmettre (résumé du finding, preuves).
+  remediation:
+    type: string
+    default: ""
+    description: Remédiation recommandée, reprise de la règle.
+execute:
+  - connector: ticketing
+    call: open_ticket
+    with:
+      title: "${params.title}"
+      severity: "${params.severity}"
+      description: "${params.description}"
+      remediation: "${params.remediation}"
+      tenant_id: "${tenant.id}"
+      finding_id: "${finding.id}"
+      action_id: "${action.id}"
+rollback:
+  - connector: ticketing
+    call: close_ticket
+    with:
+      rollback_token: "${params.rollback_token}"
+      resolution: "ticket annulé (faux positif confirmé)"
+audit:
+  severity: low
+  notify: [ticketing]

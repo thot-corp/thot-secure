@@ -1,0 +1,263 @@
+---
+# =============================================================================
+# tasks/python.yml — environnement virtuel et installation du paquet thotsecure
+# -----------------------------------------------------------------------------
+# Choix d'implémentation :
+#   - On utilise « python -m venv » (stdlib) plutôt que virtualenv : une
+#     dépendance de moins à installer et à patcher sur l'hôte.
+#   - On appelle pip avec le binaire du venv (et non le module
+#     ansible.builtin.pip) : on maîtrise ainsi exactement l'interpréteur visé.
+#   - La ligne de commande est construite en une LISTE stockée par set_fact,
+#     puis passée à « argv » : aucun passage par un shell, donc aucune
+#     possibilité d'injection ni de mauvaise interprétation des guillemets.
+#   - Chaque commande est idempotente : « creates: » pour le venv, et
+#     changed_when fondé sur la sortie réelle de pip pour les installations.
+# =============================================================================
+
+- name: "Python | Créer l'environnement virtuel du service"
+  # command (pas shell) : aucun besoin d'interprétation shell.
+  # creates: rend la tâche idempotente — le venv n'est créé qu'une seule fois.
+  ansible.builtin.command:
+    argv:
+      - "{{ thotsecure_python }}"
+      - "-m"
+      - "venv"
+      - "{{ thotsecure_venv }}"
+    creates: "{{ thotsecure_venv }}/bin/python"
+  tags:
+    - install
+    - python
+
+- name: "Python | Relever la version de Python du venv"
+  ansible.builtin.command:
+    argv:
+      - "{{ thotsecure_venv }}/bin/python"
+      - "-c"
+      - "import sys; print('%d.%d.%d' % sys.version_info[:3])"
+  register: thotsecure_venv_python_version
+  changed_when: false
+  tags:
+    - install
+    - python
+
+- name: "Python | Refuser un venv construit sur une version trop ancienne"
+  ansible.builtin.assert:
+    that:
+      - (thotsecure_venv_python_version.stdout | trim) is version('3.11', '>=')
+    fail_msg: >-
+      Le venv {{ thotsecure_venv }} utilise Python
+      {{ thotsecure_venv_python_version.stdout | trim }}, alors qu'Thot Secure exige
+      3.11 minimum. Supprimez le venv et relancez avec un thotsecure_python correct :
+        rm -rf {{ thotsecure_venv }} && ansible-playbook -i inventory.ini playbook-install.yml --tags python
+    success_msg: "Venv conforme : Python {{ thotsecure_venv_python_version.stdout | trim }}."
+    quiet: true
+  tags:
+    - install
+    - python
+
+# -----------------------------------------------------------------------------
+# Mise à jour des outils d'installation
+# -----------------------------------------------------------------------------
+# En mode hors ligne, pip ne peut pas joindre PyPI : on tente la mise à jour
+# depuis le wheelhouse, sans bloquer si les wheels d'outillage sont absents.
+- name: "Python | Construire la ligne de commande de mise à jour de l'outillage"
+  ansible.builtin.set_fact:
+    # Liste réelle (et non chaîne) : passée telle quelle à « argv ».
+    thotsecure_pip_bootstrap_argv: >-
+      {{ [thotsecure_venv ~ '/bin/python', '-m', 'pip', 'install', '--upgrade']
+         + (['--no-index', '--find-links', thotsecure_wheelhouse] if thotsecure_offline | bool else [])
+         + ['pip', 'setuptools', 'wheel'] }}
+  tags:
+    - install
+    - python
+
+- name: "Python | Mettre à jour pip, setuptools et wheel"
+  ansible.builtin.command:
+    argv: "{{ thotsecure_pip_bootstrap_argv }}"
+  register: thotsecure_pip_bootstrap
+  # pip n'est pas déclaratif : on déduit le changement de sa sortie pour que le
+  # rapport « changed » ait un sens lors des relances.
+  changed_when: "'Successfully installed' in (thotsecure_pip_bootstrap.stdout | default(''))"
+  # Hors ligne, l'absence de wheels d'outillage ne doit pas faire échouer le
+  # playbook : le pip déjà présent dans le venv suffit à installer Thot Secure.
+  failed_when: >-
+    (thotsecure_pip_bootstrap.rc | default(1) != 0) and not (thotsecure_offline | bool)
+  no_log: "{{ thotsecure_pip_no_log | bool }}"
+  tags:
+    - install
+    - python
+
+- name: "Python | Signaler l'absence d'outillage pip dans le wheelhouse hors ligne"
+  ansible.builtin.debug:
+    msg: >-
+      Information : pip/setuptools/wheel n'ont pas pu être mis à jour depuis
+      {{ thotsecure_wheelhouse }}. Ce n'est pas bloquant — le pip présent dans le
+      venv suffit. Ajoutez les wheels pip/setuptools/wheel au wheelhouse si vous
+      souhaitez les mettre à jour hors ligne.
+  when:
+    - thotsecure_offline | bool
+    - thotsecure_pip_bootstrap.rc | default(1) != 0
+  tags:
+    - install
+    - python
+
+# -----------------------------------------------------------------------------
+# Contrôles préalables à l'installation du paquet
+# -----------------------------------------------------------------------------
+- name: "Python | Vérifier que le wheel demandé existe sur l'hôte cible"
+  ansible.builtin.stat:
+    path: "{{ thotsecure_wheel_path }}"
+  register: thotsecure_wheel_stat
+  when: (thotsecure_install_from | string) == 'wheel'
+  tags:
+    - install
+    - python
+
+- name: "Python | Refuser un wheel absent"
+  ansible.builtin.assert:
+    that:
+      - thotsecure_wheel_stat.stat.exists | default(false)
+      - thotsecure_wheel_stat.stat.isreg | default(false)
+    fail_msg: >-
+      thotsecure_install_from=wheel mais le fichier '{{ thotsecure_wheel_path }}' est
+      introuvable sur {{ inventory_hostname }}.
+      Copiez d'abord le wheel sur l'hôte (module ansible.builtin.copy, dépôt
+      interne, ou thotsecure_install_from=pypi), puis relancez.
+    success_msg: "Wheel présent : {{ thotsecure_wheel_path }}."
+    quiet: true
+  when: (thotsecure_install_from | string) == 'wheel'
+  tags:
+    - install
+    - python
+
+- name: "Python | Vérifier que l'arbre source local existe sur l'hôte cible"
+  ansible.builtin.stat:
+    path: "{{ thotsecure_local_dir }}/pyproject.toml"
+  register: thotsecure_local_dir_stat
+  when: (thotsecure_install_from | string) == 'local_dir'
+  tags:
+    - install
+    - python
+
+- name: "Python | Refuser un arbre source local incomplet"
+  ansible.builtin.assert:
+    that:
+      - thotsecure_local_dir_stat.stat.exists | default(false)
+    fail_msg: >-
+      thotsecure_install_from=local_dir mais '{{ thotsecure_local_dir }}/pyproject.toml'
+      est introuvable sur {{ inventory_hostname }}.
+      Copiez l'arbre source complet du dépôt thotsecure sur l'hôte avant de relancer.
+    success_msg: "Arbre source présent : {{ thotsecure_local_dir }}."
+    quiet: true
+  when: (thotsecure_install_from | string) == 'local_dir'
+  tags:
+    - install
+    - python
+
+# -----------------------------------------------------------------------------
+# Installation du paquet thotsecure
+# -----------------------------------------------------------------------------
+- name: "Python | Déterminer la cible d'installation"
+  # La valeur de thotsecure_install_from a déjà été validée par preflight.yml
+  # (pypi | wheel | local_dir) : ce bloc ne peut pas produire de cible vide.
+  ansible.builtin.set_fact:
+    thotsecure_pip_install_target: >-
+      {{ ('thotsecure==' ~ thotsecure_version) if (thotsecure_install_from | string) == 'pypi'
+         else (thotsecure_wheel_path if (thotsecure_install_from | string) == 'wheel'
+               else thotsecure_local_dir) }}
+  tags:
+    - install
+    - python
+
+- name: "Python | Construire la ligne de commande d'installation"
+  ansible.builtin.set_fact:
+    # Liste réelle (et non chaîne) : passée telle quelle à « argv », elle évite
+    # tout passage par un shell et tout problème de guillemets ou d'espaces.
+    # --no-index + --find-links : installation hors ligne depuis le wheelhouse.
+    thotsecure_pip_install_argv: >-
+      {{ [thotsecure_venv ~ '/bin/python', '-m', 'pip', 'install', '--upgrade', thotsecure_pip_install_target]
+         + (['--no-index', '--find-links', thotsecure_wheelhouse] if thotsecure_offline | bool else [])
+         + (thotsecure_pip_extra_args.split() if (thotsecure_pip_extra_args | length > 0) else []) }}
+  tags:
+    - install
+    - python
+
+- name: "Python | Installer le paquet thotsecure ({{ thotsecure_install_from }})"
+  ansible.builtin.command:
+    argv: "{{ thotsecure_pip_install_argv }}"
+  register: thotsecure_pip_install
+  # changed_when sur la sortie réelle de pip, pas sur le code retour : évite un
+  # « changed » systématique à chaque relance du playbook.
+  changed_when: "'Successfully installed' in (thotsecure_pip_install.stdout | default(''))"
+  # no_log conditionnel : à activer si thotsecure_pip_extra_args contient un
+  # identifiant ou un jeton d'index privé (voir defaults/main.yml).
+  no_log: "{{ thotsecure_pip_no_log | bool }}"
+  tags:
+    - install
+    - python
+
+# -----------------------------------------------------------------------------
+# Vérification de l'installation
+# -----------------------------------------------------------------------------
+- name: "Python | Vérifier que la commande console thotsecure est exécutable"
+  ansible.builtin.command:
+    argv:
+      - "{{ thotsecure_venv }}/bin/thotsecure"
+      - "--help"
+  register: thotsecure_cli_help
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  tags:
+    - install
+    - python
+    - verify
+
+- name: "Python | Refuser une installation incomplète du paquet"
+  ansible.builtin.assert:
+    that:
+      - thotsecure_cli_help.rc | default(1) == 0
+    fail_msg: >-
+      Le point d'entrée CLI {{ thotsecure_venv }}/bin/thotsecure est absent ou ne
+      s'exécute pas (code retour {{ thotsecure_cli_help.rc | default('n/a') }},
+      erreur : {{ thotsecure_cli_help.stderr | default('') | trim }}).
+      Causes usuelles :
+        - la version {{ thotsecure_version }} n'existe pas dans l'index interrogé ;
+        - le wheel ou l'arbre fourni ne déclare pas le point d'entrée
+          « thotsecure = thotsecure.cli:main » (voir pyproject.toml) ;
+        - dépendances manquantes en mode hors ligne (wheelhouse incomplet).
+      Diagnostiquez avec : {{ thotsecure_venv }}/bin/python -m pip list
+    success_msg: "Commande console thotsecure opérationnelle."
+    quiet: true
+  tags:
+    - install
+    - python
+    - verify
+
+- name: "Python | Relever la version installée du paquet thotsecure"
+  ansible.builtin.command:
+    argv:
+      - "{{ thotsecure_venv }}/bin/python"
+      - "-m"
+      - "pip"
+      - "show"
+      - "thotsecure"
+  register: thotsecure_pip_show
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  tags:
+    - install
+    - python
+    - verify
+
+- name: "Python | Afficher la version installée"
+  ansible.builtin.debug:
+    msg:
+      - "Version demandée : {{ thotsecure_version }} (source : {{ thotsecure_install_from }})"
+      - "Version installée : {{ thotsecure_pip_show.stdout_lines | default([]) | select('match', '^Version:') | list | first | default('Version: inconnue') }}"
+      - "Interpréteur : {{ thotsecure_venv }}/bin/python ({{ thotsecure_venv_python_version.stdout | trim }})"
+  tags:
+    - install
+    - python
+    - verify

@@ -1,0 +1,91 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+build/
+dist/
+*.egg-info/
+*.egg
+.eggs/
+pip-wheel-metadata/
+
+# --- Environnements virtuels ---
+.venv/
+venv/
+env/
+ENV/
+
+# --- Outils ---
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.tox/
+.nox/
+*.orig
+*.rej
+
+# --- Données locales Thot Secure (JAMAIS de commit : contient des données client) ---
+data/
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+!src/thotsecure/data/
+!src/thotsecure/data/*.json
+logs/
+*.log
+state/
+.thotsecure/
+quarantine/
+
+# --- Secrets et configuration locale ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+!docs/**/*.example.key
+config/targets.yaml
+config/connectors.yaml
+!config/targets.example.yaml
+!config/connectors.example.yaml
+secrets/
+
+# --- Node ---
+node_modules/
+web/dist/
+web/.vite/
+npm-debug.log*
+yarn-error.log*
+.pnpm-store/
+
+# --- Build docs ---
+site/
+.mkdocs-build/
+
+# --- Terraform ---
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+crash.log
+*.tfplan
+
+# --- Ansible ---
+*.retry
+ansible/inventory
+
+# --- OS / éditeurs ---
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.swp
+*~

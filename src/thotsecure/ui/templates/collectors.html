@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Collecteurs{% endblock %}
+{% block content %}
+
+<section class="card">
+  <h2>Collecteurs</h2>
+  <p class="muted">
+    Planification automatique :
+    {% if scheduler_enabled %}<span class="pill pill-ok">activée</span>
+    {% else %}<span class="pill">désactivée</span> (<code>THOT_COLLECTORS_ENABLED=false</code>){% endif %}.
+    L'exécution manuelle reste possible depuis cette page.
+  </p>
+
+  <table class="table">
+    <thead>
+      <tr><th>Collecteur</th><th>Type</th><th>État</th><th>Intervalle</th><th>Dernière exécution</th><th>Exécutions</th><th>Événements</th><th>Findings</th><th>Cibles</th><th></th></tr>
+    </thead>
+    <tbody>
+    {% for collector in collectors %}
+      <tr>
+        <td><code>{{ collector.name }}</code><br><small class="muted">{{ collector.description }}</small></td>
+        <td class="muted">{{ collector.source_type }}</td>
+        <td>
+          {% if not collector.enabled %}
+            <span class="pill pill-warn">refusé</span>
+          {% else %}
+            <span class="pill {{ 'pill-ok' if collector.last_status == 'ok' else ('pill-bad' if collector.last_status == 'error' else '') }}">
+              {{ collector.last_status }}
+            </span>
+          {% endif %}
+          {% if collector.last_error %}<br><small class="muted">{{ collector.last_error }}</small>{% endif %}
+        </td>
+        <td class="muted">{{ collector.interval_seconds }}s</td>
+        <td class="muted">{{ collector.last_run.strftime('%d/%m %H:%M') if collector.last_run else '—' }}</td>
+        <td>{{ collector.runs }}</td>
+        <td>{{ collector.events_emitted }}</td>
+        <td>{{ collector.findings_emitted }}</td>
+        <td class="small muted">
+          {% for target in collector.targets[:4] %}<div>{{ target }}</div>{% endfor %}
+          {% if collector.targets|length > 4 %}<div>+ {{ collector.targets|length - 4 }} autre(s)</div>{% endif %}
+          {% if not collector.targets %}<span>—</span>{% endif %}
+        </td>
+        <td>
+          {% if collector.enabled and 'execute:actions' in principal.capabilities %}
+          <form method="post" action="/ui/collectors/{{ collector.name }}/run" class="inline"
+                data-confirm="Lancer le collecteur {{ collector.name }} maintenant sur les cibles déclarées ?">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button type="submit" class="ghost">Lancer</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="card">
+  <h2>Périmètre déclaré</h2>
+  <p class="hint">
+    Aucun collecteur ne découvre de cible tout seul. Ce périmètre est la seule source de
+    vérité, et il est versionné dans <code>config/targets.yaml</code>.
+  </p>
+  <div class="grid two">
+    <div>
+      <h3>Actifs</h3>
+      <ul>
+        {% for asset in scope.assets %}
+          <li><code>{{ asset.host }}</code> (criticité {{ asset.criticality }})
+            <ul>{% for url in asset.urls %}<li class="muted">{{ url }}</li>{% endfor %}</ul>
+          </li>
+        {% else %}<li class="muted">Aucun actif déclaré.</li>{% endfor %}
+      </ul>
+      <h3>Audit de surface</h3>
+      <p>
+        {% if scope.allow_probe %}
+          <span class="pill pill-ok">opt-in actif</span>
+        {% else %}
+          <span class="pill pill-warn">refusé</span> — ajoutez <code>allow_probe: true</code>.
+        {% endif %}
+      </p>
+    </div>
+    <div>
+      <h3>Périmètre d'action</h3>
+      <ul>
+        <li>Plages possédées : {% for cidr in scope.owned_cidrs %}<code>{{ cidr }}</code> {% else %}<span class="muted">aucune</span>{% endfor %}</li>
+        <li>Cibles protégées : {% for cidr in scope.protected_targets %}<code>{{ cidr }}</code> {% else %}<span class="muted">aucune</span>{% endfor %}</li>
+      </ul>
+      <h3>Sources surveillées</h3>
+      <ul>
+        <li>Journaux : {% for source in scope.log_sources %}<code>{{ source.path }}</code> {% else %}<span class="muted">aucun</span>{% endfor %}</li>
+        <li>Manifestes : {% for manifest in scope.manifests %}<code>{{ manifest }}</code> {% else %}<span class="muted">aucun</span>{% endfor %}</li>
+        <li>Configurations : {% for item in scope.config_files %}<code>{{ item.path }}</code> {% else %}<span class="muted">aucune</span>{% endfor %}</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+{% endblock %}

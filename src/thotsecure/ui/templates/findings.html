@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Findings{% endblock %}
+{% block content %}
+
+<section class="card">
+  <h2>Findings ({{ findings|length }})</h2>
+  <form method="get" action="/ui/findings" class="filters">
+    <label>Statut
+      <select name="status">
+        {% for option in ['', 'open', 'acked', 'closed', 'suppressed'] %}
+          <option value="{{ option }}" {{ 'selected' if filters.status == option else '' }}>
+            {{ option or 'tous' }}
+          </option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Sévérité
+      <select name="severity">
+        {% for option in ['', 'critical', 'high', 'medium', 'low', 'info'] %}
+          <option value="{{ option }}" {{ 'selected' if filters.severity == option else '' }}>
+            {{ option or 'toutes' }}
+          </option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Score min.
+      <input type="number" name="min_risk" min="0" max="100" step="5" value="{{ filters.min_risk }}">
+    </label>
+    <button type="submit">Filtrer</button>
+  </form>
+
+  <table class="table table-findings">
+    <thead>
+      <tr>
+        <th>Risque</th><th>Sévérité</th><th>Titre</th><th>Règle</th>
+        <th>Occurrences</th><th>Dernière</th><th>Statut</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for finding in findings %}
+      <tr>
+        <td>
+          <div class="score" title="{{ risk_band(finding.risk_score) }}">
+            <span style="width: {{ finding.risk_score }}%"></span>
+          </div>
+          <small>{{ '%.1f'|format(finding.risk_score) }}</small>
+        </td>
+        <td><span class="sev sev-{{ finding.severity }}">{{ finding.severity }}</span></td>
+        <td><a href="/ui/findings/{{ finding.finding_id }}">{{ finding.title }}</a></td>
+        <td><code>{{ finding.rule_id }}</code></td>
+        <td>{{ finding.count }}</td>
+        <td class="muted">{{ finding.last_seen.strftime('%d/%m %H:%M') }}</td>
+        <td>
+          <span class="pill {{ 'pill-warn' if finding.status == 'open' else ('pill-ok' if finding.status == 'closed' else '') }}">
+            {{ finding.status }}
+          </span>
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="7" class="muted">
+        Aucun finding. Vérifiez que vos collecteurs sont déclarés et activés
+        (<a href="/ui/collectors">collecteurs</a>).
+      </td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+{% endblock %}

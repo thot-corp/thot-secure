@@ -1,0 +1,232 @@
+# =============================================================================
+# Thot Secure — pile d'observabilité (Prometheus + Grafana + Loki + Promtail)
+# =============================================================================
+# S'ajoute à la pile principale et rejoint le réseau `thotsecure` créé par
+# docker-compose.yml. Démarrage (la pile principale doit tourner) :
+#
+#   docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d
+#
+# ou, si la pile principale est déjà lancée :
+#
+#   docker compose -f docker-compose.observability.yml up -d
+#
+# Accès :
+#   Grafana      http://127.0.0.1:3000   (tableau de bord « Thot Secure — vue d'ensemble »)
+#   Prometheus   http://127.0.0.1:9090   (cibles : job thotsecure -> /metrics)
+#   Loki         http://127.0.0.1:3100   (API, pas d'UI)
+#
+# SECRETS : `GRAFANA_ADMIN_PASSWORD` est OBLIGATOIRE (aucune valeur par défaut
+# en dur). Définissez-la dans le fichier `.env` :
+#
+#   GRAFANA_ADMIN_PASSWORD=<mot de passe fort>
+#
+# Tous les ports de la pile sont liés à 127.0.0.1 : la supervision ne doit pas
+# être exposée publiquement sans reverse-proxy authentifié.
+# =============================================================================
+
+name: thotsecure
+
+services:
+  # ---------------------------------------------------------------------------
+  # Prometheus — scrape des métriques Thot Secure et évaluation des alertes.
+  # ---------------------------------------------------------------------------
+  prometheus:
+    image: prom/prometheus:v2.51.2
+    init: true
+    restart: unless-stopped
+    user: "65534:65534"
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=15d"
+      - "--web.enable-lifecycle"
+      - "--web.listen-address=0.0.0.0:9090"
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./deploy/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus-data:/prometheus
+    networks:
+      - thotsecure
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
+    cpus: "1.0"
+    mem_limit: 1g
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:9090/-/healthy"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+  # ---------------------------------------------------------------------------
+  # Grafana — tableau de bord provisionné en as-code.
+  # ---------------------------------------------------------------------------
+  grafana:
+    image: grafana/grafana:10.4.2
+    init: true
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: "${GRAFANA_ADMIN_USER:-admin}"
+      # Obligatoire : ne jamais laisser un mot de passe par défaut en place.
+      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD est obligatoire. Voir l'en-tete de docker-compose.observability.yml.}"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_USERS_ALLOW_ORG_CREATE: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_AUTH_BASIC_ENABLED: "true"
+      GF_SECURITY_COOKIE_SECURE: "false"
+      GF_SECURITY_COOKIE_SAMESITE: "strict"
+      GF_SECURITY_DISABLE_GRAVATAR: "true"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+      GF_SNAPSHOTS_EXTERNAL_ENABLED: "false"
+      GF_LOG_LEVEL: "warn"
+      GF_PATHS_PROVISIONING: "/etc/grafana/provisioning"
+    volumes:
+      - ./deploy/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./deploy/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./deploy/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    networks:
+      - thotsecure
+    read_only: false
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    cpus: "1.0"
+    mem_limit: 512m
+    depends_on:
+      prometheus:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:3000/api/health | grep -q '\"database\":\"ok\"'"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # Loki — agrégation des journaux (THOT_LOG_FORMAT=json).
+  # ---------------------------------------------------------------------------
+  loki:
+    image: grafana/loki:2.9.8
+    init: true
+    restart: unless-stopped
+    user: "10001:10001"
+    command: ["-config.file=/etc/loki/loki-config.yml"]
+    ports:
+      - "127.0.0.1:3100:3100"
+    volumes:
+      - ./deploy/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - loki-data:/loki
+    networks:
+      - thotsecure
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
+    cpus: "1.0"
+    mem_limit: 768m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:3100/ready | grep -q ready"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # Promtail — collecte des journaux de conteneurs et envoi vers Loki.
+  #
+  # NOTE DE SÛRETÉ : Promtail a besoin du socket Docker pour découvrir les
+  # conteneurs (montage en LECTURE SEULE, jamais d'écriture, pas de `privileged`).
+  # Le socket Docker est équivalent à un accès root sur l'hôte. Si cette surface
+  # n'est pas acceptable, supprimez ce service et poussez les journaux depuis
+  # l'application elle-même (collecteur `log_tail` d'Thot Secure) ou via le pilote
+  # de journalisation `loki` de Docker.
+  # ---------------------------------------------------------------------------
+  promtail:
+    image: grafana/promtail:2.9.8
+    init: true
+    restart: unless-stopped
+    command: ["-config.file=/etc/promtail/promtail-config.yml"]
+    volumes:
+      - ./deploy/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
+      # Lecture seule : découverte des conteneurs et de leurs journaux.
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - promtail-positions:/positions
+    networks:
+      - thotsecure
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
+    cpus: "0.5"
+    mem_limit: 256m
+    depends_on:
+      loki:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  prometheus-data:
+    driver: local
+    labels:
+      org.opencontainers.image.title: "Thot Secure — donnees Prometheus"
+  grafana-data:
+    driver: local
+    labels:
+      org.opencontainers.image.title: "Thot Secure — donnees Grafana"
+  loki-data:
+    driver: local
+    labels:
+      org.opencontainers.image.title: "Thot Secure — donnees Loki"
+  promtail-positions:
+    driver: local
+    labels:
+      org.opencontainers.image.title: "Thot Secure — positions Promtail"
+
+networks:
+  # Réseau créé par docker-compose.yml (nom fixe) : la pile d'observabilité s'y
+  # rattache pour résoudre `thotsecure:8080` de façon déterministe.
+  thotsecure:
+    name: thotsecure
+    external: true

@@ -1,0 +1,255 @@
+# =============================================================================
+#  Thot Secure (nom technique du paquet : « thotsecure ») — unité systemd durcie
+#  Fichier : scripts/thotsecure.service      Licence : Apache-2.0
+# -----------------------------------------------------------------------------
+#  INSTALLATION
+#      sudo install -o root -g root -m 0644 scripts/thotsecure.service \
+#           /etc/systemd/system/thotsecure.service
+#      sudo systemctl daemon-reload
+#      sudo systemctl enable --now thotsecure
+#      sudo systemctl status thotsecure
+#      sudo journalctl -u thotsecure -f
+#
+#  (scripts/install.sh effectue exactement ces étapes lorsqu'il trouve ce
+#  fichier à côté de lui ; scripts/uninstall.sh sait le retirer.)
+#
+#  PRÉREQUIS SUR L'HÔTE — créés par scripts/install.sh :
+#      compte système   : thotsecure (jamais root, shell /usr/sbin/nologin)
+#      environnement    : /etc/thotsecure/thotsecure.env    (0600 root:thotsecure)
+#      données          : /var/lib/thotsecure            (0750 thotsecure:thotsecure)
+#      code + venv      : /opt/thotsecure/venv           (lecture seule)
+#
+#  SÛRETÉ — invariant du projet : Thot Secure est STRICTEMENT DÉFENSIF.
+#      * THOT_DRY_RUN=true et THOT_AUTONOMY=supervised sont les valeurs
+#        par défaut du fichier d'environnement. Cette unité ne les modifie pas
+#        et ne doit JAMAIS les inverser : le passage au mode réel est une
+#        décision humaine, écrite et datée, prise dans thotsecure.env.
+#      * L'unité n'accorde aucune capacité noyau (CapabilityBoundingSet vide),
+#        n'ouvre aucun privilège nouveau et ne peut écrire que dans
+#        /var/lib/thotsecure (ProtectSystem=strict + ReadWritePaths).
+#
+#  VÉRIFICATION APRÈS DÉPLOIEMENT
+#      sudo systemd-analyze security thotsecure     # note d'exposition (0-10)
+#      sudo scripts/hardening-check.sh              # contrôles de l'hôte
+#      sudo -u thotsecure thotsecure doctor           # diagnostic applicatif
+# =============================================================================
+
+[Unit]
+# Description lisible par un humain : elle apparaît dans « systemctl status »
+# et dans les alertes de supervision. Elle doit rester explicite pour qu'un
+# astreinte sache en trois secondes ce qui tourne.
+Description=Thot Secure (thotsecure) — SOAR/CSPM défensif (API /api/v1 et console)
+
+# Documentation : pointe vers le dépôt et la documentation d'exploitation.
+# Aucune ressource réseau n'est récupérée : c'est purement déclaratif.
+Documentation=https://github.com/thotsecure/thot-secure
+Documentation=https://github.com/thotsecure/thot-secure/blob/main/docs/operations/deployment.md
+Documentation=man:systemd.service(5)
+
+# Ordre de démarrage : le service écoute sur le réseau, on attend donc que la
+# pile réseau soit réellement configurée (adresses posées, routes présentes).
+# « network-online.target » seul n'ordonne rien : il faut le vouloir (Wants)
+# et l'attendre (After), sinon le service démarre trop tôt dans un conteneur
+# ou après un redémarrage de switch.
+Wants=network-online.target
+After=network-online.target
+
+# Aucun alias ici : le renommage global (thotsecure → thotsecure) est terminé, et
+# un alias pointant sur l'unité elle-même n'aurait aucun effet. Si un hôte
+# mettait encore à jour une ancienne unité thotsecure.service, retirez-la avec
+# scripts/uninstall.sh plutôt que de maintenir deux noms en parallèle.
+
+[Service]
+# Type=simple : le processus lancé par ExecStart reste au premier plan et
+# constitue le service (uvicorn ne « forke » pas). C'est le mode attendu par
+# Restart= et par le suivi des journaux : systemd suit le bon PID.
+Type=simple
+
+# Utilisateur et groupe DÉDIÉS et non privilégiés. Jamais root : si le service
+# est compromis, l'attaquant hérite de droits minimaux (il ne peut pas écrire
+# hors de /var/lib/thotsecure ni modifier le code dans /opt/thotsecure).
+User=thotsecure
+Group=thotsecure
+
+# Répertoire de travail : /var/lib/thotsecure contient la base SQLite, le journal
+# d'audit chaîné et le sous-répertoire quarantine/. La base par défaut est
+# sqlite:////var/lib/thotsecure/thotsecure.db — donc un chemin RELATIF se résout ici.
+WorkingDirectory=/var/lib/thotsecure
+
+# Fichier d'environnement du service : secrets (THOT_SECRET_KEY, clé d'amorçage)
+# et réglages THOT_*. Il est en 0600 root:thotsecure, lu par systemd AVANT
+# l'abandon des privilèges, et n'apparaît donc jamais dans l'environnement d'un
+# utilisateur non privilégié. Ne le versionnez JAMAIS dans Git.
+# Format : une ligne « CLE=valeur » par variable, sans guillemets, sans « export ».
+EnvironmentFile=/etc/thotsecure/thotsecure.env
+
+# Commande de démarrage. L'ENTRYPOINT est uvicorn dans le venv applicatif :
+#   * thotsecure.main:app  : application ASGI (API /api/v1, console /, /healthz, /metrics) ;
+#   * --host 0.0.0.0     : écoute sur toutes les interfaces. Utilisez cette valeur
+#                          lorsque le service est DERRIÈRE un reverse-proxy TLS
+#                          (nginx, Caddy, Traefik) ou dans un conteneur, et que
+#                          l'accès est restreint par pare-feu/réseau. Le port
+#                          ne doit JAMAIS être exposé « en clair » sur Internet :
+#                          les clés API circulent dans un en-tête HTTP ;
+#   * --port 8080        : port non privilégié (aucune capability CAP_NET_BIND_SERVICE) ;
+#   * --proxy-headers    : fait confiance aux en-têtes X-Forwarded-* du proxy
+#                          (journalisation de la vraie IP client) ;
+#   * --forwarded-allow-ips 127.0.0.1 : n'accepte ces en-têtes QUE du proxy local.
+#                          Élargissez à l'IP du proxy si celui-ci est distant,
+#                          jamais à « * ».
+# Alternatives (une seule ExecStart active à la fois) :
+#   - écoute strictement locale, sans reverse-proxy :
+#       ExecStart=/opt/thotsecure/venv/bin/uvicorn thotsecure.main:app --host 127.0.0.1 --port 8080
+#   - mode développement avec rechargement (JAMAIS en production) :
+#       ExecStart=/opt/thotsecure/venv/bin/uvicorn thotsecure.main:app --host 127.0.0.1 --port 8080 --reload
+ExecStart=/opt/thotsecure/venv/bin/uvicorn thotsecure.main:app --host 0.0.0.0 --port 8080 --proxy-headers --forwarded-allow-ips 127.0.0.1
+
+# Redémarrage automatique en cas d'échec uniquement : un arrêt volontaire
+# (« systemctl stop ») reste un arrêt. « always » masquerait une boucle de
+# plantage et « on-abnormal » redémarrerait après un arrêt propre.
+Restart=on-failure
+
+# Délai entre deux tentatives : 5 s évite d'inonder journald et le CPU tout en
+# revenant vite en service. systemd applique en plus un backoff automatique
+# (StartLimitBurst/StartLimitIntervalSec) si les échecs s'enchaînent.
+RestartSec=5
+
+# Arrêt : SIGTERM (défaut) laisse uvicorn fermer proprement les connexions,
+# puis SIGKILL après le délai. 20 s suffisent : l'API est sans état long.
+KillSignal=SIGTERM
+TimeoutStopSec=20s
+
+# Masque de création de fichiers : les fichiers créés par le service (base,
+# journaux, quarantaine) sont privés par défaut (0066 retiré). Défense en
+# profondeur : une erreur de configuration ne crée pas de fichier lisible par tous.
+UMask=0077
+
+# -----------------------------------------------------------------------------
+#  Durcissement du bac à sable systemd (défense en profondeur, sans privilège)
+# -----------------------------------------------------------------------------
+# Aucun nouveau privilège : setuid/setgid, file capabilities et UID 0 sont
+# définitivement inaccessibles au service (et à ses enfants).
+NoNewPrivileges=true
+
+# Le système de fichiers entier est en LECTURE SEULE, sauf exceptions listées
+# dans ReadWritePaths. Le service ne peut donc pas modifier son propre code,
+# ni /etc, ni les unités systemd : une compromission ne survit pas au redémarrage.
+ProtectSystem=strict
+
+# /home, /root et /run/user sont invisibles : aucun secret d'utilisateur n'est
+# atteignable depuis le service.
+ProtectHome=true
+
+# /tmp et /var/tmp privés au service (montés en tmpfs, non partagés) : empêche
+# l'empoisonnement de fichiers temporaires et les attaques par lien symbolique.
+PrivateTmp=true
+
+# Aucun accès aux périphériques (/dev) hormis les pseudo-terminaux : le service
+# n'a aucune raison de lire un disque brut ou un périphérique USB.
+PrivateDevices=true
+
+# /proc/sys en lecture seule, /proc/sysrq-trigger, /sys et les modules noyau
+# inaccessibles : impossible de désactiver un garde-fou noyau (ASLR, iptables,
+# protection des liens) depuis le service.
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+
+# /sys/fs/cgroup non modifiable : le service ne peut pas s'échapper de son
+# groupe de contrôle ni manipuler ceux des autres.
+ProtectControlGroups=true
+
+# Horloge et nom d'hôte protégés : anticipe la falsification d'horodatage, qui
+# ruinerait la valeur probante du journal d'audit chaîné.
+ProtectClock=true
+ProtectHostname=true
+
+# Vue restreinte de /proc : seuls les processus du service sont listés, les
+# autres PID n'existent pas (limite l'espionnage et l'injection de signaux).
+ProtectProc=invisible
+ProcSubset=pid
+
+# Familles d'adresses autorisées : uniquement IPv4, IPv6 et sockets UNIX.
+# Pas de AF_NETLINK (inspection/manipulation réseau), pas de AF_PACKET (capture
+# brute) : hors périmètre d'un SOAR défensif, et deux surfaces d'attaque en moins.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+# Interdiction de créer des espaces de noms (user, mount, net, pid…) : ferme la
+# voie classique d'élévation de privilèges par clone/unshare.
+RestrictNamespaces=true
+
+# Personnalité (domaines d'exécution, binaires 32 bits) figée : empêche de
+# contourner les filtres d'appels système en changeant de personnalité.
+LockPersonality=true
+
+# Pas de mémoire exécutable en écriture : bloque l'exécution de code injecté.
+# CPython ne compile pas de code machine à la volée ; si un connecteur futur
+# embarquait un moteur JIT (ou une dépendance le faisant), cette directive
+# devrait être retirée — jamais contournée autrement.
+MemoryDenyWriteExecute=true
+
+# Realtime et setuid/setgid refusés : pas de priorité temps réel (déni de
+# service local) ni de changement d'identité par bit setuid.
+RestrictRealtime=true
+RestrictSUIDSGID=true
+
+# Aucune capability noyau et aucun ensemble de capabilities : le service n'a
+# besoin de rien (port 8080 = non privilégié, pas de montage, pas de réseau
+# bas niveau). Ceinture et bretelles avec NoNewPrivileges.
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+# IPC (mémoire partagée SysV/POSIX, sémaphores) supprimés à l'arrêt : pas de
+# fuite de données résiduelles entre deux exécutions du service.
+RemoveIPC=true
+
+# Trousseau de clés (keyrings) privé : les secrets du service ne sont pas
+# visibles depuis une session utilisateur voisine.
+KeyringMode=private
+
+# Filtre d'appels système : seuls ceux d'un service système ordinaire sont
+# admis (lecture/écriture de fichiers, sockets, threads). Le motif est fourni
+# par systemd ; les appels exotiques (ptrace, perf, bpf, kexec) sont refusés.
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+
+# Journalisation : la sortie standard et l'erreur vont dans le journal systemd
+# (THOT_LOG_FORMAT=json produit une ligne JSON par événement). THOT_LOG_LEVEL
+# contrôle la verbosité. Ne journalisez JAMAIS de secret : voir
+# scripts/hardening-check.sh, contrôle HOST-07.
+SyslogIdentifier=thotsecure
+StandardOutput=journal
+StandardError=journal
+
+# -----------------------------------------------------------------------------
+#  Écritures autorisées (ProtectSystem=strict les rend nécessaires)
+# -----------------------------------------------------------------------------
+# Seul /var/lib/thotsecure est inscriptible : base SQLite, journaux d'audit
+# chaînés, quarantaine d'artefacts (sous-répertoire quarantine/).
+ReadWritePaths=/var/lib/thotsecure
+
+# Si vous activez une journalisation FICHIER dans /var/log/thotsecure (redirection
+# de la sortie, unité complémentaire ou collecteur écrivant un journal), ajoutez ici :
+#     ReadWritePaths=/var/log/thotsecure
+# Sinon le service ne pourrait pas y écrire — c'est voulu par défaut.
+#
+# Alternative moderne : remplacez WorkingDirectory + ReadWritePaths par
+#     StateDirectory=thotsecure
+# qui crée /var/lib/thotsecure (0750, propriétaire du service) et l'ajoute
+# automatiquement aux chemins inscriptibles.
+
+# Refus par défaut de tout trafic sortant, si vous voulez un service purement
+# local (à activer seulement après avoir listé vos besoins réels : le bus NATS
+# THOT_NATS_URL, les webhooks de notification, le SIEM). Le désactiver sans
+# liste explicite casserait les connecteurs configurés.
+#IPAddressDeny=any
+#IPAddressAllow=127.0.0.1/32
+
+# Limites de ressources : garde-fou anti-emballement (une boucle de détection
+# sanguinaire consommerait sinon tout l'hôte). Ajustez selon votre volumétrie.
+MemoryMax=2G
+TasksMax=512
+
+[Install]
+# Démarrage automatique au boot, une fois « systemctl enable » exécuté.
+WantedBy=multi-user.target

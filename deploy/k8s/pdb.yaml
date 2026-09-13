@@ -1,0 +1,38 @@
+# =============================================================================
+# Thot Secure — PodDisruptionBudget
+# =============================================================================
+# Objectif : garantir qu'une maintenance de nœud (drain) ne supprime pas
+# simultanément toute la capacité de détection/riposte.
+#
+# `maxUnavailable: 1` plutôt que `minAvailable: 1` :
+#   * avec un seul réplica (cas par défaut, voir hpa.yaml), `minAvailable: 1`
+#     rendrait tout drain impossible (le nœud resterait bloqué) ;
+#   * `maxUnavailable: 1` autorise une interruption volontaire à la fois, tout en
+#     plafonnant le risque dès que plusieurs réplicas existent.
+#
+# Vérification : `kubectl -n thotsecure get pdb` doit afficher
+# `ALLOWED DISRUPTIONS` cohérent avec le nombre de réplicas.
+# =============================================================================
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: thotsecure
+  namespace: thotsecure
+  labels:
+    app.kubernetes.io/name: thotsecure
+    app.kubernetes.io/instance: thotsecure
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/component: availability
+    app.kubernetes.io/part-of: thotsecure
+    app.kubernetes.io/managed-by: kubectl
+  annotations:
+    thotsecure.io/description: "Plafonne les interruptions volontaires a 1 replica."
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: thotsecure
+      app.kubernetes.io/instance: thotsecure
+  # `AlwaysAllow` par défaut : ce PDB n'empêche pas l'éviction des pods en
+  # échec. Les interruptions volontaires (drain) restent, elles, encadrées.
+  unhealthyPodEvictionPolicy: IfHealthyBudget

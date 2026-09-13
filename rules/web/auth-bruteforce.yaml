@@ -1,0 +1,38 @@
+id: AO-WEB-005
+title: Énumération d'authentification (bourrage d'identifiants)
+description: >-
+  Détecte un volume anormal d'échecs d'authentification provenant d'une même source. C'est le
+  signal le plus fiable d'une attaque par force brute ou par bourrage d'identifiants
+  (credential stuffing).
+status: stable
+severity: high
+confidence: 0.7
+enabled: true
+tags: [web, owasp:a07, mitre:T1110, bruteforce]
+source_types: [log_tail, syslog, webhook]
+kinds: [http.request, log.line, syslog]
+match:
+  all:
+    - field: labels.status
+      op: in
+      value: [401, 403]
+  threshold:
+    count: 20
+    window_seconds: 300
+    group_by: [labels.src_ip]
+dedup:
+  key: [labels.src_ip]
+  ttl_seconds: 3600
+risk:
+  base: 45
+false_positives:
+  - Application mobile mal configurée qui rejoue des identifiants expirés en boucle.
+  - Utilisateur ayant changé de mot de passe sur un client de messagerie.
+  - Sonde de supervision mal authentifiée (à exclure via une exception de bruit ciblée).
+remediation: >-
+  Vérifier l'absence de compte compromis (rechercher un succès après la série d'échecs),
+  activer la limitation de débit et la double authentification, puis limiter ou bloquer la
+  source. Un passage soudain de 401 à 200 sur la même source est un signal de compromission.
+references:
+  - https://owasp.org/Top10/A07_2021-Identification_and_Authentication_Failures/
+  - https://attack.mitre.org/techniques/T1110/

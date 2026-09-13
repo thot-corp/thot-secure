@@ -1,0 +1,53 @@
+name: patch-dependency
+description: >-
+  Corrige une dépendance vulnérable : ouvre une demande de mise à jour (ticket + appel au
+  connecteur CI) vers la version corrigée. **Aucune fusion automatique** : la mise à jour
+  passe par la revue de code normale, car une mise à jour de dépendance peut casser la
+  production — et une contre-mesure qui casse la production est un échec de sécurité.
+reversible: true
+dry_run_capable: true
+connectors: [ci, ticketing]
+params:
+  target:
+    type: package
+    required: true
+    description: Nom du paquet concerné (ex. « jinja2 » ou « lodash »).
+  version:
+    type: string
+    default: ""
+    description: Version corrigée visée (issue de l'avis de sécurité).
+  cve:
+    type: string
+    default: ""
+    description: Identifiant de la vulnérabilité, pour la traçabilité.
+  manifest:
+    type: string
+    default: ""
+    description: Manifeste concerné (requirements.txt, package.json…).
+execute:
+  - connector: ticketing
+    call: open_ticket
+    with:
+      title: "Mise à jour de dépendance : ${params.target} → ${params.version}"
+      severity: high
+      tenant_id: "${tenant.id}"
+      finding_id: "${finding.id}"
+      action_id: "${action.id}"
+      description: "Vulnérabilité ${params.cve} dans ${params.target} (manifeste : ${params.manifest})."
+      remediation: "Mettre à jour vers ${params.version}, relancer les tests, puis vérifier l'absence de régression fonctionnelle."
+  - connector: ci
+    call: patch_dependency
+    with:
+      package: "${params.target}"
+      version: "${params.version}"
+      manifest: "${params.manifest}"
+rollback:
+  - connector: ticketing
+    call: close_ticket
+    optional: true
+    with:
+      rollback_token: "${params.rollback_token}"
+      resolution: "demande de mise à jour annulée"
+audit:
+  severity: high
+  notify: [ticketing]

@@ -1,0 +1,17 @@
+version: 1
+id: notify-only-certificate
+priority: 110
+description: >-
+  Certificat proche de l'expiration : la remédiation dépend de votre chaîne de renouvellement
+  (ACME automatisé ou procédure manuelle). Thot Secure alerte avec le délai restant et propose
+  un ticket ; l'action technique reste de votre côté.
+when:
+  finding.tags_any: [tls, disponibilite]
+then:
+  decision: notify_only
+  playbook: open-ticket
+  params:
+    title: "Certificat TLS à renouveler — ${finding.title}"
+    severity: high
+    description: "${finding.remediation}"
+    remediation: "Renouveler le certificat, vérifier la chaîne intermédiaire et automatiser la supervision de l'expiration."

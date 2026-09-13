@@ -1,0 +1,42 @@
+id: AO-WEB-001
+title: Tentative d'injection SQL dans une requête HTTP
+description: >-
+  Détecte les motifs classiques d'injection SQL dans l'URL ou les paramètres : unions
+  injectées, tautologies (or 1=1), temporisations (sleep, benchmark) et commentaires SQL.
+  Un test d'injection réussi permet de lire ou de modifier la base de données applicative.
+status: stable
+severity: high
+confidence: 0.8
+enabled: true
+tags: [web, owasp:a03, mitre:T1190, exploit-attempt]
+source_types: [log_tail, web_probe, webhook, syslog]
+kinds: [http.request, http.response, log.line]
+match:
+  any:
+    - field: labels.path
+      op: regex
+      value: "(?i)(union[\\s/*]+select|or\\s+1\\s*=\\s*1|'\\s*or\\s*'|sleep\\s*\\(\\s*\\d+|benchmark\\s*\\(|waitfor\\s+delay|information_schema|into\\s+outfile|load_file\\s*\\()"
+    - field: labels.message
+      op: regex
+      value: "(?i)(union[\\s/*]+select|or\\s+1\\s*=\\s*1|sleep\\s*\\(\\s*\\d+\\)|information_schema)"
+  threshold:
+    count: 3
+    window_seconds: 120
+    group_by: [labels.src_ip]
+dedup:
+  key: [labels.src_ip]
+  ttl_seconds: 1800
+risk:
+  base: 55
+  asset_criticality: 1.0
+false_positives:
+  - Champ de recherche libre contenant le mot « union » suivi de « select » dans un texte légitime.
+  - Documentation technique affichant des exemples de requêtes SQL dans une URL.
+  - Outil de test d'intrusion autorisé et déclaré (à placer dans les exceptions de bruit).
+remediation: >-
+  Vérifier l'application visée (journaux applicatifs, paramètres réellement exécutés), corriger
+  la requête côté code (requêtes paramétrées), puis bloquer l'adresse source 1 h au WAF. Un
+  test d'injection répété indique une phase de reconnaissance ou d'exploitation active.
+references:
+  - https://owasp.org/Top10/A03_2021-Injection/
+  - https://attack.mitre.org/techniques/T1190/

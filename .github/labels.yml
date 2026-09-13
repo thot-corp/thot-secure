@@ -1,0 +1,118 @@
+# =============================================================================
+#  Étiquettes du dépôt — source de vérité unique.
+#  Repository labels — single source of truth.
+# -----------------------------------------------------------------------------
+#  Appliqué par .github/workflows/sync-labels.yml (EndBug/label-sync@v2).
+#  Toute étiquette référencée ailleurs dans le dépôt DOIT être déclarée ici :
+#  une étiquette absente est silencieusement ignorée par GitHub, par Dependabot
+#  et par les modèles d'issue.
+#
+#  Pièges de format, vérifiés par l'action :
+#    * `color` : 6 chiffres hexadécimaux, SANS « # » (ex. "D73A4A").
+#    * `description` : 100 caractères maximum.
+#    * `name` : tel qu'il apparaît dans l'interface, la casse est significative
+#      ("good first issue" et non "Good First Issue").
+#    * `aliases` : noms à renommer vers ce nom (facultatif). Utilisé ici pour
+#      résorber les variantes historiques sans casser les issues déjà ouvertes.
+#
+#  Taxonomie : `type/*` (nature du travail), `area/*` (composant touché),
+#  `severity/*` (impact si le problème est réel), puis les étiquettes de
+#  processus sans préfixe.
+# =============================================================================
+
+# --- Détection (règles) ------------------------------------------------------
+# Étiquette attendue par .github/ISSUE_TEMPLATE/rule_proposal.yml et
+# false_positive.yml : le travail sur les règles est le cœur du produit.
+- name: "rules"
+  color: "5319E7"
+  description: "Règles de détection : proposition, correction, faux positif."
+
+# --- Nature du travail (type/*) ---------------------------------------------
+- name: "type/bug"
+  color: "D73A4A"
+  description: "Défaut reproductible dans le comportement livré."
+- name: "type/feature"
+  color: "0E8A16"
+  description: "Nouvelle fonctionnalité ou amélioration demandée."
+- name: "type/docs"
+  color: "0075CA"
+  description: "Documentation : contenu, structure, liens, build MkDocs."
+- name: "type/security"
+  color: "B60205"
+  description: "Vulnérabilité ou durcissement de sécurité du projet lui-même."
+- name: "type/rule"
+  color: "6F42C1"
+  description: "Ajout ou modification d'une règle de détection dans rules/."
+
+# --- Composant touché (area/*) ----------------------------------------------
+- name: "area/collectors"
+  color: "1D76DB"
+  description: "Collecteurs : acquisition et normalisation des sources."
+- name: "area/detection"
+  color: "1D76DB"
+  description: "Moteur de détection, scoring et bibliothèque de règles."
+- name: "area/decision"
+  color: "1D76DB"
+  description: "Moteur de décision, politiques et playbooks."
+- name: "area/actions"
+  color: "1D76DB"
+  description: "Connecteurs et contre-mesures réversibles (aucune offensive)."
+- name: "area/api"
+  color: "1D76DB"
+  description: "API REST /api/v1 et CLI thotsecure."
+- name: "area/ui"
+  color: "1D76DB"
+  description: "Interface : console Jinja2 embarquée et tableau de bord web."
+- name: "area/deploy"
+  color: "1D76DB"
+  description: "Déploiement : Docker, Compose, Kubernetes, Helm, Ansible, CI."
+- name: "area/sdks"
+  color: "1D76DB"
+  description: "SDK Python, TypeScript et Go, et leurs exemples."
+- name: "area/tests"
+  color: "1D76DB"
+  description: "Tests, fixtures et données de test — jamais de télémétrie réelle."
+
+# --- Sévérité (severity/*) ---------------------------------------------------
+# Sévérité = impact si le problème est réel, pas la difficulté à le détecter.
+- name: "severity/critical"
+  color: "8B0000"
+  description: "Impact critique : perte de données, contournement d'audit, fuite."
+- name: "severity/high"
+  color: "D93F0B"
+  description: "Impact élevé : fonction majeure inutilisable ou risquée."
+- name: "severity/medium"
+  color: "E99695"
+  description: "Impact modéré : gêne réelle, contournement possible."
+- name: "severity/low"
+  color: "FBCA04"
+  description: "Impact faible : confort, message, documentation."
+
+# --- Processus ---------------------------------------------------------------
+- name: "good first issue"
+  color: "7057FF"
+  description: "Cadré, documenté et sans dépendance : idéal pour une première contribution."
+  aliases:
+    - "good-first-issue"
+    - "beginner"
+- name: "help wanted"
+  color: "008672"
+  description: "Un mainteneur ne peut pas le traiter seul : contribution bienvenue."
+- name: "needs-triage"
+  color: "FBCA04"
+  description: "Pas encore examiné par un mainteneur."
+- name: "blocked"
+  color: "000000"
+  description: "En attente d'une décision, d'un prérequis ou d'un tiers."
+- name: "duplicate"
+  color: "CFD3D7"
+  description: "Déjà signalé ailleurs : suivi dans le ticket d'origine."
+- name: "wontfix"
+  color: "FFFFFF"
+  description: "Ne sera pas traité : hors périmètre ou contraire aux invariants."
+- name: "funding"
+  color: "FEF2C0"
+  description: "Hébergement, certificats, audits — jamais un droit de priorité."
+- name: "false-positive"
+  color: "E4E669"
+  description: "Règle déclenchée sur une activité légitime : bruit à corriger."

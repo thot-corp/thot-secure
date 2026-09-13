@@ -1,0 +1,119 @@
+# =============================================================================
+# Thot Secure — configuration non sensible
+# =============================================================================
+# AUCUN SECRET ICI. `THOT_SECRET_KEY` et `THOT_BOOTSTRAP_API_KEY` vivent
+# exclusivement dans le Secret `thotsecure-secrets` (voir secret.example.yaml).
+#
+# Contenu monté :
+#   * /etc/thotsecure/rules      : bibliothèque de détection YAML (lecture seule)
+#   * /etc/thotsecure/policies   : politiques de décision (lecture seule)
+#   * /etc/thotsecure/playbooks  : playbooks action + rollback (lecture seule)
+#   * /etc/thotsecure/targets.yaml : périmètre déclaré par tenant (lecture seule)
+#
+# La bibliothèque livrée est embarquée dans l'image ; ce ConfigMap permet de la
+# compléter ou de la remplacer sans reconstruire l'image. Il contient un fichier
+# marqueur pour que les montages ne créent jamais de répertoire vide.
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: thotsecure-config
+  namespace: thotsecure
+  labels:
+    app.kubernetes.io/name: thotsecure
+    app.kubernetes.io/instance: thotsecure
+    app.kubernetes.io/component: configuration
+    app.kubernetes.io/part-of: thotsecure
+    app.kubernetes.io/managed-by: kubectl
+data:
+  # ---------------------------------------------------------------------------
+  # Configuration applicative NON sensible (les secrets sont dans le Secret).
+  # Ces valeurs sont injectées via `envFrom: configMapRef` dans le Deployment.
+  # ---------------------------------------------------------------------------
+  THOT_ENV: "prod"
+  THOT_HOST: "0.0.0.0"
+  THOT_PORT: "8080"
+  # SQLite (stdlib) sur volume persistant : aucun SGBD externe n'est requis.
+  THOT_DB_URL: "sqlite:////var/lib/thotsecure/thotsecure.db"
+  THOT_RULES_DIR: "/etc/thotsecure/rules"
+  THOT_POLICIES_DIR: "/etc/thotsecure/policies"
+  THOT_PLAYBOOKS_DIR: "/etc/thotsecure/playbooks"
+  THOT_TARGETS_FILE: "/etc/thotsecure/targets.yaml"
+  THOT_RETENTION_DAYS: "30"
+  THOT_LOG_LEVEL: "INFO"
+  THOT_LOG_FORMAT: "json"
+  THOT_RATE_LIMIT_PER_MIN: "600"
+  # TLS terminé par l'Ingress (ou le reverse-proxy) : pas de HTTPS direct ici.
+  THOT_TLS_ENABLED: "false"
+  # Mode Rego désactivé : aucun binaire OPA n'est embarqué dans l'image.
+  THOT_OPA_BIN: ""
+  # Bus d'événements : `memory` pour un pod unique, `nats` pour un déploiement
+  # distribué (voir la section NATS commentée dans deployment.yaml).
+  THOT_BUS: "memory"
+  THOT_NATS_URL: "nats://nats.thotsecure.svc.cluster.local:4222"
+
+  # ===========================================================================
+  # GARDE-FOUS DE SÛRETÉ — NE PAS MODIFIER SANS PROCÉDURE DE VALIDATION
+  # ===========================================================================
+  # THOT_DRY_RUN=true : toutes les actions sont simulées. Le passage à
+  #   `false` autorise des contre-mesures RÉELLES (blocage d'IP, révocation de
+  #   session, isolation d'hôte). Procédure obligatoire en 4 étapes :
+  #   deploy/README.md -> « Désactiver dry_run ».
+  THOT_DRY_RUN: "true"
+  # THOT_AUTONOMY=supervised : toute action critique exige une approbation
+  #   humaine (`require_approval`). `auto` doit rester une exception locale à un
+  #   tenant, avec `autonomy_allowlist` renseignée.
+  THOT_AUTONOMY: "supervised"
+  # ===========================================================================
+
+  # ---------------------------------------------------------------------------
+  # Périmètre déclaré (opt-in). AUCUNE CIBLE N'EST ACTIVE PAR DÉFAUT.
+  # Seules les cibles réellement POSSÉDÉES par le tenant doivent être listées.
+  # Les adresses ci-dessous sont des adresses de documentation (RFC 5737 /
+  # RFC 3849) : remplacez-les par votre périmètre, ou videz la section.
+  # ---------------------------------------------------------------------------
+  targets.yaml: |
+    # Périmètre déclaré par tenant. Thot Secure n'audite QUE ces cibles.
+    # Un `probe` sur une cible non déclarée est refusé.
+    version: 1
+    tenants: {}
+    # Exemple (à décommenter et adapter, adresses de documentation RFC 5737) :
+    # tenants:
+    #   demo:
+    #     allowed:
+    #       - host: "app.example.com"
+    #         ports: [443]
+    #         note: "Front web possede par le tenant"
+    #       - cidr: "192.0.2.0/24"
+    #         note: "Plage applicative interne (documentation)"
+    #     protected:
+    #       # Infrastructure propre : jamais actionnable automatiquement.
+    #       - cidr: "198.51.100.0/24"
+    #         note: "Supervision et bastion internes"
+
+  # ---------------------------------------------------------------------------
+  # Règles de détection supplémentaires (facultatif).
+  # Le fichier marqueur évite un montage de répertoire vide ; ajoutez vos
+  # règles sous forme de fichiers YAML dans des ConfigMaps distincts si vous
+  # préférez les versionner séparément.
+  # ---------------------------------------------------------------------------
+  rules/README.txt: |
+    Bibliotheque de regles additionnelle (lecture seule).
+    La bibliotheque livree est embarquee dans l'image (/etc/thotsecure/rules).
+    Deposez ici des fichiers YAML de regles conformes au contrat v0.1.0 :
+    id, title, severity, confidence, enabled, tags, source_types, kinds,
+    match { all, any, not, threshold }, dedup, risk, false_positives,
+    remediation, references.
+    Validez avant application : POST /api/v1/rules/validate puis
+    POST /api/v1/rules/reload.
+
+  policies/README.txt: |
+    Politiques de decision additionnelles (lecture seule).
+    Format : version, id, priority, when, then, rollback.
+    La priorite la plus grande est evaluee en premier. Sans politique
+    correspondante, la decision est `notify_only`.
+
+  playbooks/README.txt: |
+    Playbooks additionnels (lecture seule).
+    Chaque playbook DOIT declarer un bloc `rollback` : toute action
+    d'Thot Secure est reversible.

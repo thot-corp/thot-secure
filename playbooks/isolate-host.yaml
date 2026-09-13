@@ -1,0 +1,54 @@
+name: isolate-host
+description: >-
+  Isole un hôte du réseau (règle de segmentation ou ACL) tout en conservant l'accès
+  d'administration, afin de stopper une propagation sans perdre la capacité d'investigation.
+  C'est l'action la plus perturbante de la bibliothèque : elle exige une approbation humaine
+  et une cible déclarée.
+reversible: true
+dry_run_capable: true
+connectors: [network]
+params:
+  target:
+    type: host
+    required: true
+    description: Hôte à isoler (doit appartenir au périmètre déclaré du tenant).
+  duration_seconds:
+    type: duration
+    default: 3600
+    min: 60
+    max: 86400
+    description: Durée de l'isolement (toujours finie, réévaluée par un humain).
+  keep_management_access:
+    type: boolean
+    default: true
+    description: Conserver l'accès d'administration (SSH/console de gestion) pour l'analyse.
+  reason:
+    type: string
+    default: "Thot Secure — isolement pour investigation"
+    description: Motif de l'isolement.
+execute:
+  - connector: network
+    call: isolate_host
+    with:
+      host: "${params.target}"
+      keep_management_access: "${params.keep_management_access}"
+      note: "${params.reason}"
+  - connector: ticketing
+    call: open_ticket
+    optional: true
+    with:
+      title: "Hôte isolé : ${params.target}"
+      severity: critical
+      tenant_id: "${tenant.id}"
+      finding_id: "${finding.id}"
+      action_id: "${action.id}"
+      description: "${params.reason}"
+      remediation: "${finding.remediation}"
+rollback:
+  - connector: network
+    call: unisolate_host
+    with:
+      host: "${params.target}"
+audit:
+  severity: critical
+  notify: [ticketing]

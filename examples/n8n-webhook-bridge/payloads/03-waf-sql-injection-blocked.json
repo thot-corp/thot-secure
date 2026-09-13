@@ -1,0 +1,36 @@
+{
+  "event_id": "21b8e0fe-c812-47c1-8d83-d68a17c870ed",
+  "schema_version": "1",
+  "tenant_id": "acme",
+  "ts": "2026-02-14T10:07:19.615Z",
+  "kind": "http.request",
+  "source": {
+    "type": "waf",
+    "name": "prod-edge-waf",
+    "host": "shop.acme.fr"
+  },
+  "severity_hint": "high",
+  "labels": {
+    "src_ip": "203.0.113.77",
+    "method": "GET",
+    "path": "/product",
+    "query": "id=1%27%20OR%20%271%27%3D%271",
+    "host": "shop.acme.fr",
+    "protocol": "HTTP/1.1",
+    "user_agent": "curl/8.5.0",
+    "waf_rule_id": "942100",
+    "waf_rule_message": "SQL Injection Attack Detected via libinjection",
+    "waf_action": "blocked",
+    "waf_engine": "modsecurity-crs-4.0"
+  },
+  "payload": {
+    "message": "Requête bloquée par le WAF (règle CRS 942100) : motif d'injection SQL dans le paramètre de requête « id ».",
+    "status": 403,
+    "bytes": 512,
+    "matched_parameter": "id",
+    "anomaly_score": 25,
+    "request_id": "req-8f21eda9",
+    "blocked_before_origin": true
+  },
+  "raw_ref": null
+}

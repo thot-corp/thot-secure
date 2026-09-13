@@ -1,0 +1,89 @@
+# Synchronise the repository labels with .github/labels.yml.
+#
+# Why this workflow exists: the label taxonomy is referenced from four different
+# places — issue templates, .github/dependabot.yml, .github/labeler.yml and
+# .github/workflows/stale.yml — and a label that does not exist is *silently*
+# ignored by GitHub. A typo therefore degrades quietly: the rule proposal arrives
+# without `type/rule`, and nobody notices until triage is already a mess. Declaring
+# the taxonomy in version control and applying it from the same file removes that
+# class of drift entirely.
+#
+# About the action — `EndBug/label-sync@v2`:
+#   * `config-file` (required) — path to the YAML (or JSON) declaration. Each entry
+#     takes `name`, `color` (6 hex digits, no leading `#`), `description`
+#     (100 characters maximum) and the optional `aliases`, a list of previous
+#     names to rename to this one. Aliases are kept in labels.yml so that a
+#     rename does not recreate the old label as a stray duplicate.
+#   * `dry-run` — when true, the action logs exactly what it would create,
+#     update or delete and changes nothing. It is wired to a `workflow_dispatch`
+#     input defaulting to **true**, so the safe path is the one you get by
+#     accident. Pushing a change to `.github/labels.yml` applies it for real,
+#     because that change already went through review in a pull request.
+#   * `delete-other-labels` — when true, any label absent from the config file is
+#     deleted. Deliberately left **false**: deletion is destructive and not
+#     reversible (a deleted label is removed from every issue that carried it),
+#     and dependabot.yml still asks for labels — `dependencies`, `area/packaging`,
+#     `area/ci`, `security`, `area/sdk` — that this taxonomy does not define. With
+#     deletion enabled, the first sync would quietly strip them. A maintainer
+#     decides when that cleanup happens; a scheduled job should not.
+#   * `prune` / `count` are not used here. The taxonomy is small enough (one API
+#     call per label, well under the rate limit) that the defaults are fine.
+#
+# Permissions: `contents: read` to check the repository out, `issues: write`
+# because labels live under the Issues API. Nothing else — in particular no
+# `pull-requests: write` and no `contents: write`.
+
+name: Sync labels
+
+on:
+  # A merged change to the taxonomy applies itself. The paths filter means an
+  # edit to this workflow alone does not trigger a sync.
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/labels.yml"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Log the changes without applying them"
+        required: true
+        # Safe by default: a manual run reports before it mutates.
+        default: true
+        type: boolean
+
+concurrency:
+  # One sync at a time. Never cancelled: two concurrent runs reconciling the same
+  # set of labels race, and the loser's view of the world is stale.
+  group: sync-labels-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    name: Sync labels
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Apply .github/labels.yml
+        uses: EndBug/label-sync@v2
+        with:
+          config-file: .github/labels.yml
+          # `dry-run` is an action input, so it is read as a string: the boolean
+          # input arrives as "true"/"false" and the action parses it. On a push
+          # event there is no input at all, so the expression falls back to false
+          # and the already-reviewed change is applied for real.
+          dry-run: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || false }}
+          # Never delete labels that are missing from the taxonomy — see the
+          # header. Flip to true only as a deliberate, one-off cleanup.
+          delete-other-labels: false

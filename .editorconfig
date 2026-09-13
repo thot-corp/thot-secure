@@ -1,0 +1,53 @@
+# Configuration d'éditeur commune (https://editorconfig.org).
+# Objectif : qu'un contributeur n'introduise pas, sans le vouloir, des tabulations ou des
+# espaces en fin de ligne dans un fichier qui n'en contenait pas. Les règles de forme ne
+# doivent jamais apparaître dans une revue de code de sécurité.
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+max_line_length = 100
+
+# --- Python ---------------------------------------------------------------------------
+[*.{py,pyi}]
+indent_size = 4
+
+# --- Configuration, données, documentation --------------------------------------------
+[*.{yml,yaml,json,toml,cfg,ini,tf,tfvars,rego}]
+indent_size = 2
+
+[*.md]
+indent_size = 2
+# Les tableaux Markdown et les blocs de code peuvent contenir des espaces significatifs.
+trim_trailing_whitespace = false
+
+[*.{sh,bash}]
+indent_size = 2
+# Les scripts shell utilisent l'indentation à 2 espaces (lisibilité des `case`).
+
+# --- Front-end ------------------------------------------------------------------------
+[*.{ts,tsx,js,jsx,mjs,cjs,css,scss,html}]
+indent_size = 2
+
+# --- Go (gofmt impose des tabulations) ------------------------------------------------
+[*.go]
+indent_style = tab
+indent_size = 4
+
+# --- PowerShell -----------------------------------------------------------------------
+[*.{ps1,psm1,psd1}]
+end_of_line = crlf
+indent_size = 4
+
+# --- Makefile et Dockerfile (tabulations obligatoires) --------------------------------
+[Makefile]
+indent_style = tab
+
+[Dockerfile]
+indent_size = 4

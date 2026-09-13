@@ -1,0 +1,34 @@
+name: notify-webhook
+description: >-
+  Envoie une notification à un canal configuré (webhook Slack/Teams/Mattermost, passerelle
+  maison). Une action de notification est un envoi compensable : le rollback émet un message
+  de correction, ce qui évite qu'une alerte erronée reste sans démenti dans le canal.
+reversible: true
+dry_run_capable: true
+connectors: [notify]
+params:
+  message:
+    type: string
+    required: true
+    description: "Message à envoyer (gardez-le court : il part dans un canal opérationnel)."
+  severity:
+    type: string
+    default: medium
+    choices: [info, low, medium, high, critical]
+    description: Niveau de gravité affiché dans la notification.
+execute:
+  - connector: notify
+    call: notify
+    with:
+      message: "${params.message}"
+      severity: "${params.severity}"
+      tenant_id: "${tenant.id}"
+      finding_id: "${finding.id}"
+rollback:
+  - connector: notify
+    call: notify
+    with:
+      message: "Correction : la notification précédente (« ${params.message} ») a été annulée par Thot Secure."
+      severity: info
+audit:
+  severity: low

@@ -1,0 +1,23 @@
+name: restore-artifact
+description: Restaure un fichier précédemment mis en quarantaine (levée d'un faux positif).
+reversible: true
+dry_run_capable: true
+connectors: [artifact]
+params:
+  target:
+    type: path
+    required: true
+    description: Chemin d'origine du fichier à restaurer.
+execute:
+  - connector: artifact
+    call: restore_file
+    with:
+      path: "${params.target}"
+rollback:
+  - connector: artifact
+    call: quarantine_file
+    with:
+      path: "${params.target}"
+      reason: "réapplication de la quarantaine après annulation"
+audit:
+  severity: medium

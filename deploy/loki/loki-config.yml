@@ -1,0 +1,72 @@
+# =============================================================================
+# Thot Secure — configuration Loki (mono-binaire, stockage local)
+# =============================================================================
+# Rétention courte et ressources bornées : cette pile est destinée à un
+# déploiement de supervision local, pas à un cluster de production.
+# =============================================================================
+
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+  grpc_listen_port: 9096
+  log_level: warn
+  # Bornes de lisibilité : Loki n'est joignable que depuis le réseau Docker.
+  grpc_server_max_concurrent_streams: 100
+
+limits_config:
+  # Rétention des journaux : 14 jours (aligné sur la rétention Prometheus).
+  retention_period: 336h
+  ingestion_rate_mb: 8
+  ingestion_burst_size_mb: 16
+  max_streams_per_user: 5000
+  max_entries_limit_per_query: 5000
+  reject_old_samples: true
+  reject_old_samples_max_age: 168h
+  allow_structured_metadata: false
+
+compactor:
+  working_directory: /loki/compactor
+  retention_enabled: true
+  delete_request_store: filesystem
+  compaction_interval: 10m
+  # Marque les index anciens pour suppression (aligné sur retention_period).
+  retention_delete_delay: 2h
+
+common:
+  path_prefix: /loki
+  # `replication_factor: 1` : instance unique, pas de haute disponibilité.
+  replication_factor: 1
+  instance_addr: 127.0.0.1
+  ring:
+    kvstore:
+      store: inmemory
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+
+schema_config:
+  configs:
+    - from: 2024-01-01
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+ruler:
+  storage:
+    type: local
+    local:
+      directory: /loki/rules
+  rule_path: /loki/rules-temp
+  alertmanager_url: http://127.0.0.1:9093
+  enable_api: false
+  ring:
+    kvstore:
+      store: inmemory
+
+analytics:
+  reporting_enabled: false

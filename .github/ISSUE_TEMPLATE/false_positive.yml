@@ -1,0 +1,144 @@
+name: False positive report
+description: A shipped detection rule fired on legitimate activity. This is a bug — please report it.
+title: "[False positive]: "
+labels:
+  - "rules"
+  - "type/false-positive"
+  - "needs-triage"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A rule that fires on legitimate traffic is worse than a missing rule: it
+        trains responders to ignore alerts, and it burns the credibility of every
+        other finding. We treat false positives as defects, and reports like this
+        one are how the rule library gets better.
+
+        **Redact before you paste.** Replace real hostnames, IP addresses,
+        usernames, tokens and paths with placeholders. The shape of the event is
+        what matters, not the customer's data. If you need to include a real IP
+        range, use documentation ranges such as `203.0.113.0/24` or `198.51.100.0/24`.
+
+        If what fired is not a false positive but a genuine security
+        **vulnerability** — for example a finding produced by the wrong tenant, or
+        an action triggered when it should not have been — use the private channel
+        in [SECURITY.md](https://github.com/thotsecure/thot-secure/blob/main/SECURITY.md)
+        instead.
+
+  - type: input
+    id: rule-id
+    attributes:
+      label: Rule ID
+      description: The `rule_id` shown on the finding, exactly as it appears.
+      placeholder: "AO-WEB-001"
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Thot Secure version
+      description: The output of `GET /version`, or the image tag or commit SHA.
+      placeholder: "0.1.0"
+    validations:
+      required: true
+
+  - type: textarea
+    id: legitimate-activity
+    attributes:
+      label: What legitimate activity triggered it?
+      description: |
+        Describe what was actually happening when the rule fired. The more
+        precisely you can characterise it — "our own uptime monitor requests
+        `/health?verbose=1` every 30 s" rather than "normal traffic" — the narrower
+        and safer the fix will be.
+    validations:
+      required: true
+
+  - type: textarea
+    id: event
+    attributes:
+      label: The triggering event
+      description: |
+        The canonical `Event` JSON ([contract §3.1](https://github.com/thotsecure/thot-secure/blob/main/docs/architecture/api-contract.md)),
+        **redacted**. This is what a maintainer will turn into a negative test.
+      render: json
+      value: |
+        {
+          "event_id": "00000000-0000-4000-8000-000000000000",
+          "schema_version": "1",
+          "tenant_id": "example",
+          "ts": "2026-01-01T00:00:00.000Z",
+          "kind": "http.request",
+          "source": { "type": "web_probe", "name": "example-edge", "host": "example.invalid" },
+          "severity_hint": "info",
+          "labels": { "src_ip": "203.0.113.9", "path": "/redacted", "method": "GET" },
+          "payload": {},
+          "raw_ref": null
+        }
+    validations:
+      required: true
+
+  - type: dropdown
+    id: frequency
+    attributes:
+      label: How often does this happen?
+      description: Frequency decides how the fix is made. A rule that fires thousands of times a day needs a filter or a threshold; a one-off needs a targeted exclusion.
+      options:
+        - "Constantly — every request / every run (the rule is unusable)."
+        - "Frequently — many times per hour."
+        - "Occasionally — a few times per day or per week."
+        - "Rarely — a one-off, but I want it recorded so the rule improves."
+        - "Only during a specific activity (see below)."
+    validations:
+      required: true
+
+  - type: textarea
+    id: severity-impact
+    attributes:
+      label: Impact of the noise
+      description: |
+        Did it drown a real finding, page someone at night, or create a large
+        number of duplicate findings? Volume figures are useful evidence for
+        prioritising the fix.
+    validations:
+      required: false
+
+  - type: textarea
+    id: proposed-refinement
+    attributes:
+      label: Suggested refinement
+      description: |
+        If you have an idea for narrowing the rule — an extra `not:` condition, a
+        tighter regex, a `threshold`, a `dedup` key change, a `source_types`
+        restriction, or a rule exception — describe it here. You do not need to
+        write YAML, but if you can, it saves a round trip.
+    validations:
+      required: false
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment context
+      description: |
+        Anything that explains why this pattern is legitimate **for you**:
+        industry, technology stack, the tool that produces the traffic, whether a
+        localisation or an internal convention is involved. This is how a fix
+        stays narrow instead of disabling the rule for everyone.
+      placeholder: "Healthcare SaaS, .NET stack, our own WAF in front, requests from our monitoring subnet 10.20.0.0/16."
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmations
+      options:
+        - label: I confirm this was **legitimate activity**, not an actual attack that I believe should have been detected.
+          required: true
+        - label: I have **redacted** all secrets, tokens, API keys, real hostnames and customer data, and used documentation IP ranges where an address was needed.
+          required: true
+        - label: I have searched existing issues for the same rule ID and this is not already reported.
+          required: true
+        - label: I am willing to test a proposed refinement against my environment and report back.
+          required: false

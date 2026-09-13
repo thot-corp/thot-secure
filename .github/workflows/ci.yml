@@ -1,0 +1,403 @@
+# CI — lint, test, build.
+#
+# Design constraints:
+#   * Runs on a **public** repository with **no secrets configured**. Nothing here
+#     needs a token beyond the automatic GITHUB_TOKEN, and nothing publishes.
+#     Signing, SBOM generation and release publishing live in sbom-sign.yml and
+#     release.yml.
+#   * Least privilege: `contents: read` at workflow level, and no job asks for
+#     more than it uses.
+#   * Safe environment values are exported workflow-wide. CI must exercise
+#     Thot Secure in its shipping defaults — DRY_RUN=true, supervised autonomy — so
+#     that a regression appearing only in the safe configuration is caught here
+#     rather than in someone's production.
+#   * Pip and npm caches are set up with guarded `actions/cache` steps rather than
+#     the `cache:` shorthand of setup-python/setup-node. The shorthand hard-fails
+#     when the dependency manifest is absent, which would make this workflow
+#     unusable before pyproject.toml and web/package-lock.json are committed.
+#   * `hashFiles()` guards mark components that do not exist yet. Each one is
+#     named after the path it waits for, so an incomplete checkout shows up as a
+#     skipped step with a notice, never as a failure that hides a real regression.
+#     Once every directory in the interface contract exists, the guards can be
+#     removed and the steps become unconditional.
+
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - "release/**"
+  pull_request:
+  workflow_dispatch:
+
+# Cancel superseded runs on the same ref: a force-push must not leave three stale
+# runs consuming runners.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  PYTHONUNBUFFERED: "1"
+  PYTHONDONTWRITEBYTECODE: "1"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  # Shipping defaults. A test that needs something else must opt in explicitly
+  # inside the test, so that a green run here means something.
+  THOT_ENV: dev
+  THOT_DRY_RUN: "true"
+  THOT_AUTONOMY: supervised
+  THOT_LOG_LEVEL: INFO
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Lint, formatting and static analysis. Runs once rather than per interpreter,
+  # because the result does not depend on the Python version.
+  # ---------------------------------------------------------------------------
+  lint:
+    name: Lint and types
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install lint tooling
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install ruff mypy pyyaml
+
+      - name: ruff check
+        run: ruff check --output-format=github .
+
+      - name: ruff format --check
+        run: ruff format --check --diff .
+
+      - name: mypy (non-blocking)
+        # Informational while type coverage improves: a red mypy must never stop a
+        # security fix, but the annotations still appear in the log and the job
+        # summary. See CONTRIBUTING.md, "Linting and types".
+        continue-on-error: true
+        shell: bash
+        run: |
+          if [ -f pyproject.toml ] || [ -f mypy.ini ] || [ -f setup.cfg ]; then
+            mypy src
+          else
+            echo "::notice::No mypy configuration yet — skipping."
+          fi
+
+      - name: Validate YAML files
+        run: |
+          python - <<'PY'
+          import pathlib
+          import sys
+          import yaml
+
+          failures = []
+          for root in ("rules", "policies", "playbooks", "deploy", ".github"):
+              base = pathlib.Path(root)
+              if not base.exists():
+                  continue
+              paths = sorted(base.rglob("*.yml")) + sorted(base.rglob("*.yaml"))
+              for path in paths:
+                  try:
+                      list(yaml.safe_load_all(path.read_text(encoding="utf-8")))
+                  except Exception as exc:
+                      failures.append(f"{path}: {exc}")
+
+          if failures:
+              print("Invalid YAML:", file=sys.stderr)
+              for failure in failures:
+                  print(f"  - {failure}", file=sys.stderr)
+              sys.exit(1)
+          print("All YAML files parse.")
+          PY
+
+  # ---------------------------------------------------------------------------
+  # Test matrix. 3.11 is the floor and 3.13 the newest supported interpreter.
+  # ---------------------------------------------------------------------------
+  test:
+    name: Test (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version:
+          - "3.11"
+          - "3.12"
+          - "3.13"
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Cache pip
+        if: hashFiles('pyproject.toml') != '' || hashFiles('requirements.txt') != '' || hashFiles('requirements-dev.txt') != ''
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('pyproject.toml', 'requirements*.txt') }}
+          restore-keys: |
+            pip-${{ runner.os }}-${{ matrix.python-version }}-
+
+      - name: Install package and test tooling
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install coverage pytest
+          if [ -f pyproject.toml ]; then
+            python -m pip install -e ".[dev]"
+          elif [ -f setup.py ] || [ -f setup.cfg ]; then
+            python -m pip install -e .
+          else
+            echo "::notice::No Python packaging metadata yet — running from the source tree."
+          fi
+
+      - name: Show interpreter
+        run: python -VV
+
+      # --- Tests -------------------------------------------------------------
+      # The official command, from the interface contract §11. The suite must run
+      # on the standard library alone: no service, no network, no browser.
+      - name: unittest discover
+        if: hashFiles('tests/**') != ''
+        run: python -m unittest discover -s tests -t . -v
+
+      - name: pytest (compatibility)
+        if: hashFiles('tests/**') != ''
+        run: pytest -q --maxfail=1
+
+      # --- Coverage ----------------------------------------------------------
+      - name: Coverage (unittest)
+        if: hashFiles('tests/**') != ''
+        continue-on-error: true
+        run: |
+          python -m coverage run --branch --source=src/thotsecure -m unittest discover -s tests -t .
+          python -m coverage report --show-missing
+          python -m coverage xml -o coverage-${{ matrix.python-version }}.xml
+          python -m coverage html -d coverage-html-${{ matrix.python-version }}
+
+      - name: Upload coverage artifacts
+        if: always() && hashFiles('tests/**') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-python-${{ matrix.python-version }}
+          path: |
+            coverage-${{ matrix.python-version }}.xml
+            coverage-html-${{ matrix.python-version }}/
+          if-no-files-found: warn
+          retention-days: 14
+
+      # --- Declarative content ----------------------------------------------
+      # A rule or a policy that does not validate is a broken release. Both
+      # commands exit 0 on success, 1 on error and 2 on usage error (contract §8),
+      # so they are safe to gate on.
+      - name: Validate detection rules
+        if: hashFiles('rules/**') != ''
+        run: thotsecure rules validate --path rules
+
+      - name: Validate policies
+        if: hashFiles('policies/**') != ''
+        run: thotsecure policies validate
+
+      # --- Smoke test --------------------------------------------------------
+      - name: Bootstrap a throwaway instance and run doctor
+        if: hashFiles('src/thotsecure/**') != ''
+        env:
+          # Ephemeral values, scoped to this job. Not secrets, and not reused.
+          THOT_DB_URL: sqlite:///./data/ci-thotsecure.db
+          THOT_SECRET_KEY: ci-ephemeral-key-not-a-secret-0000000000000000
+          THOT_BOOTSTRAP_API_KEY: ao_ci_ephemeral_change_me
+        run: |
+          thotsecure init-db
+          thotsecure doctor
+
+      - name: Assert safe defaults still hold
+        if: hashFiles('src/thotsecure/**') != ''
+        run: |
+          python - <<'PY'
+          import os
+
+          dry_run = os.environ.get("THOT_DRY_RUN", "true").lower()
+          autonomy = os.environ.get("THOT_AUTONOMY", "supervised").lower()
+          assert dry_run == "true", f"DRY_RUN must be true in CI, got {dry_run!r}"
+          assert autonomy in {"manual", "supervised"}, (
+              f"CI must not enable autonomous action, got {autonomy!r}"
+          )
+          print("Safe defaults confirmed: dry_run=true, autonomy=supervised")
+          PY
+
+  # ---------------------------------------------------------------------------
+  # Web dashboard. Optional by design: the embedded Jinja2 console in
+  # src/thotsecure/ui/ must keep working with no Node toolchain at all.
+  # ---------------------------------------------------------------------------
+  web:
+    name: Web dashboard
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: No web workspace yet
+        if: hashFiles('web/package.json') == ''
+        run: echo "::notice::web/package.json does not exist yet — nothing to build."
+
+      - name: Set up Node.js
+        if: hashFiles('web/package.json') != ''
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Cache npm
+        if: hashFiles('web/package-lock.json') != ''
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}
+          restore-keys: |
+            npm-${{ runner.os }}-
+
+      - name: Install dependencies
+        if: hashFiles('web/package.json') != ''
+        shell: bash
+        working-directory: web
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            echo "::warning::web/package-lock.json is absent — falling back to npm install. Commit the lockfile to get reproducible, cached installs, and then this job can be made blocking."
+            npm install --no-audit --no-fund
+          fi
+
+      - name: typecheck
+        # Tolerated while the lockfile is absent. Remove `continue-on-error` once
+        # web/package-lock.json is committed and the build is reproducible.
+        if: hashFiles('web/package.json') != ''
+        continue-on-error: true
+        working-directory: web
+        run: npm run typecheck --if-present
+
+      - name: build
+        if: hashFiles('web/package.json') != ''
+        continue-on-error: true
+        working-directory: web
+        run: npm run build --if-present
+
+      - name: Upload build output
+        if: always() && hashFiles('web/dist/**') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # Container image. Build only: no push, and no registry credentials configured.
+  # Publishing happens in release.yml, on a tag.
+  # ---------------------------------------------------------------------------
+  docker:
+    name: Container image
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image (root Dockerfile), no push
+        if: hashFiles('Dockerfile') != ''
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          load: true
+          tags: thotsecure:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build image (deploy/Dockerfile), no push
+        if: hashFiles('Dockerfile') == '' && hashFiles('deploy/Dockerfile') != ''
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./deploy/Dockerfile
+          push: false
+          load: true
+          tags: thotsecure:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: No Dockerfile yet
+        if: hashFiles('Dockerfile') == '' && hashFiles('deploy/Dockerfile') == ''
+        run: echo "::notice::No Dockerfile found — skipping the image build."
+
+      - name: Inspect the built image
+        if: hashFiles('Dockerfile') != '' || hashFiles('deploy/Dockerfile') != ''
+        run: docker image inspect thotsecure:ci --format '{{ .Id }} size={{ .Size }}'
+
+      - name: Validate Compose configuration
+        if: hashFiles('docker-compose.yml', 'docker-compose.yaml', 'compose.yml', 'compose.yaml', 'deploy/docker-compose.yml', 'deploy/docker-compose.yaml', 'deploy/compose.yml', 'deploy/compose.yaml') != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          file=""
+          for candidate in docker-compose.yml docker-compose.yaml compose.yml compose.yaml \
+                           deploy/docker-compose.yml deploy/docker-compose.yaml \
+                           deploy/compose.yml deploy/compose.yaml; do
+            if [ -f "$candidate" ]; then
+              file="$candidate"
+              break
+            fi
+          done
+          if [ -z "$file" ]; then
+            echo "::notice::No Compose file found — nothing to validate."
+            exit 0
+          fi
+          echo "Validating $file"
+          docker compose -f "$file" config --quiet
+          echo "Compose configuration is valid."
+
+      - name: No Compose file yet
+        if: hashFiles('docker-compose.yml', 'docker-compose.yaml', 'compose.yml', 'compose.yaml', 'deploy/docker-compose.yml', 'deploy/docker-compose.yaml', 'deploy/compose.yml', 'deploy/compose.yaml') == ''
+        run: echo "::notice::No Compose file found — skipping validation."
+
+  # ---------------------------------------------------------------------------
+  # Markdown lint. Documentation is part of the product for a project whose rules
+  # are read as often as they are run.
+  # ---------------------------------------------------------------------------
+  markdownlint:
+    name: Markdown lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: markdownlint
+        # Advisory rather than blocking for now: the configuration in
+        # .markdownlint.yaml is still being calibrated against the existing
+        # documentation. Remove `continue-on-error` once the tree is clean, and
+        # the job becomes a hard gate like ruff.
+        continue-on-error: true
+        run: |
+          npx --yes markdownlint-cli@0.43.0 \
+            --config .markdownlint.yaml \
+            --ignore "node_modules,web/node_modules,.venv,CHANGELOG.md" \
+            "**/*.md"

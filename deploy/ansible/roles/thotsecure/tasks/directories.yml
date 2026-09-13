@@ -1,0 +1,153 @@
+---
+# =============================================================================
+# tasks/directories.yml — arborescence et permissions explicites
+# -----------------------------------------------------------------------------
+# Chaque chemin reçoit un mode NOMMÉ, jamais hérité de l'umask de l'opérateur.
+#
+# Règle de conception :
+#   - /etc/thotsecure      -> root:thotsecure 0750 : l'opérateur écrit, l'app lit.
+#     La configuration déclarative est en LECTURE SEULE pour le service : une
+#     compromission de l'API ne permet pas de réécrire les règles, politiques ou
+#     playbooks qui encadrent ses propres actions.
+#   - /var/lib/thotsecure  -> thotsecure:thotsecure 0750 : données clients (base
+#     SQLite + quarantaine), jamais lisibles par les autres comptes de l'hôte.
+#   - /opt/thotsecure      -> root:root 0755 : code et venv, non modifiables par
+#     le compte de service (sinon une compromission permettrait de persister).
+# =============================================================================
+
+- name: "Répertoires | Créer la configuration /etc/thotsecure (root:thotsecure 0750)"
+  ansible.builtin.file:
+    path: "{{ thotsecure_etc_dir }}"
+    state: directory
+    owner: root
+    group: "{{ thotsecure_group }}"
+    mode: "0750"
+  tags:
+    - install
+    - directories
+
+- name: "Répertoires | Créer les sous-répertoires déclaratifs (rules, policies, playbooks)"
+  ansible.builtin.file:
+    # Un seul appel pour les trois répertoires : même propriétaire, même mode.
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: "{{ thotsecure_group }}"
+    mode: "0750"
+  loop:
+    - "{{ thotsecure_rules_dir }}"
+    - "{{ thotsecure_policies_dir }}"
+    - "{{ thotsecure_playbooks_dir }}"
+  loop_control:
+    label: "{{ item }}"
+  tags:
+    - install
+    - directories
+
+- name: "Répertoires | Créer le répertoire de données (thotsecure:thotsecure 0750)"
+  ansible.builtin.file:
+    path: "{{ thotsecure_state_dir }}"
+    state: directory
+    owner: "{{ thotsecure_user }}"
+    group: "{{ thotsecure_group }}"
+    mode: "0750"
+  tags:
+    - install
+    - directories
+
+- name: "Répertoires | Créer le répertoire de journaux (thotsecure:thotsecure 0750)"
+  ansible.builtin.file:
+    path: "{{ thotsecure_log_dir }}"
+    state: directory
+    owner: "{{ thotsecure_user }}"
+    group: "{{ thotsecure_group }}"
+    mode: "0750"
+  tags:
+    - install
+    - directories
+
+- name: "Répertoires | Créer le répertoire d'exécution /run/thotsecure (thotsecure:thotsecure 0750)"
+  ansible.builtin.file:
+    path: "{{ thotsecure_run_dir }}"
+    state: directory
+    owner: "{{ thotsecure_user }}"
+    group: "{{ thotsecure_group }}"
+    mode: "0750"
+  tags:
+    - install
+    - directories
+
+- name: "Répertoires | Créer le répertoire d'installation /opt/thotsecure (root:root 0755)"
+  ansible.builtin.file:
+    path: "{{ thotsecure_install_dir }}"
+    state: directory
+    owner: root
+    group: root
+    # 0755 : lecture/traversée nécessaires pour que le compte de service puisse
+    # exécuter {{ thotsecure_venv }}/bin/uvicorn, sans droit d'écriture.
+    mode: "0755"
+  tags:
+    - install
+    - directories
+
+- name: "Répertoires | Créer le répertoire du wheelhouse hors ligne, si nécessaire"
+  ansible.builtin.file:
+    path: "{{ thotsecure_wheelhouse }}"
+    state: directory
+    owner: root
+    group: "{{ thotsecure_group }}"
+    mode: "0750"
+  when: thotsecure_offline | bool
+  tags:
+    - install
+    - directories
+    - python
+
+- name: "Répertoires | Créer le répertoire de sauvegarde, si activé"
+  ansible.builtin.file:
+    path: "{{ thotsecure_backup_dir }}"
+    state: directory
+    owner: root
+    group: "{{ thotsecure_group }}"
+    # 0750 : les archives contiennent la base SQLite et donc des données clients.
+    mode: "0750"
+  when: thotsecure_backup_enabled | bool
+  tags:
+    - configure
+    - directories
+    - backup
+
+- name: "Répertoires | Vérifier que la configuration est bien en lecture seule pour le service"
+  # On relève les permissions réellement appliquées : si un opérateur a
+  # « chmod -R 777 » la veille, on veut le voir avant de démarrer le service.
+  # command : stat n'a pas d'équivalent module pour un contrôle de contrôle.
+  ansible.builtin.command:
+    argv:
+      - stat
+      - "-c"
+      - "%a %U:%G"
+      - "{{ thotsecure_etc_dir }}"
+  register: thotsecure_etc_dir_stat
+  changed_when: false
+  check_mode: false
+  tags:
+    - install
+    - directories
+
+- name: "Répertoires | Refuser une configuration accessible en écriture au-delà du groupe"
+  ansible.builtin.assert:
+    that:
+      - (thotsecure_etc_dir_stat.stdout | default('')).split(' ')[0] in ['750', '0750']
+    fail_msg: >-
+      {{ thotsecure_etc_dir }} a les permissions
+      '{{ thotsecure_etc_dir_stat.stdout | default('inconnues') }}' au lieu de
+      '750 root:{{ thotsecure_group }}'.
+      Ce répertoire contient les règles, politiques, playbooks et cibles :
+      il ne doit être accessible qu'à root et au groupe du service.
+      Corrigez : chown -R root:{{ thotsecure_group }} {{ thotsecure_etc_dir }} &&
+                chmod -R 0750 {{ thotsecure_etc_dir }}
+    success_msg: "Permissions de {{ thotsecure_etc_dir }} conformes : {{ thotsecure_etc_dir_stat.stdout }}."
+    quiet: true
+  tags:
+    - install
+    - directories

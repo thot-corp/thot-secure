@@ -1,0 +1,43 @@
+name: revoke-session
+description: >-
+  Révoque les sessions actives d'un compte compromis. **Action intrinsèquement
+  irréversible** : une session révoquée ne se « dé-révoque » pas. Thot Secure refuse donc
+  l'automatisation de ce playbook : il exige toujours une approbation humaine explicite, quel
+  que soit le mode d'autonomie du tenant.
+reversible: false
+dry_run_capable: true
+connectors: [iam]
+params:
+  target:
+    type: string
+    required: true
+    description: Identifiant du compte dont les sessions doivent être révoquées.
+  reason:
+    type: string
+    default: "Thot Secure — révocation de sessions suspectes"
+    description: Motif de la révocation (compromission suspectée, départ, incident).
+execute:
+  - connector: iam
+    call: revoke_session
+    with:
+      user: "${params.target}"
+      note: "${params.reason}"
+  - connector: notify
+    call: notify
+    optional: true
+    with:
+      message: "Sessions révoquées pour ${params.target} (${params.reason}) — vérifier l'origine de la compromission avant réactivation."
+  - connector: ticketing
+    call: open_ticket
+    optional: true
+    with:
+      title: "Révocation de sessions : ${params.target}"
+      severity: high
+      tenant_id: "${tenant.id}"
+      finding_id: "${finding.id}"
+      action_id: "${action.id}"
+      description: "${params.reason}"
+      remediation: "Vérifier les journaux d'accès du compte, réinitialiser le mot de passe, contrôler les règles de transfert et les jetons d'API."
+audit:
+  severity: high
+  notify: [ticketing]

@@ -1,0 +1,96 @@
+# Hooks pre-commit (https://pre-commit.com) — installation : pre-commit install
+#
+# Ces hooks rejouent en local, en quelques secondes, ce que la CI vérifie : ils évitent un
+# aller-retour de Pull Request pour une virgule ou un secret committé par erreur.
+#
+# Volontairement absents :
+#   * aucune analyse de sécurité agressive (le projet est défensif, y compris dans son outillage) ;
+#   * aucun hook qui modifie le code sans le dire (tous sont lisibles et réversibles).
+
+default_language_version:
+  python: python3.11
+
+repos:
+  # --- Hygiène de base ---------------------------------------------------------------
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: ^(docs/|content/).*\.md$   # les tableaux Markdown utilisent des espaces
+      - id: end-of-file-fixer
+      - id: check-yaml
+        args: [--allow-multiple-documents, --unsafe]
+        exclude: ^deploy/helm/.*/templates/  # les templates Helm contiennent des {{ }}
+      - id: check-json
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=1024]
+      - id: check-case-conflict
+      - id: check-executables-have-shebangs
+      - id: check-shebang-scripts-are-executable
+      - id: detect-private-key
+      - id: forbid-submodules
+      - id: mixed-line-ending
+        args: [--fix=lf]
+
+  # --- Secrets : le hook qui compte le plus dans un projet de sécurité ----------------
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks
+
+  # --- Python : lint et format (mêmes règles que la CI) ------------------------------
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.4
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+      - id: ruff-format
+
+  # --- YAML et Markdown --------------------------------------------------------------
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.35.1
+    hooks:
+      - id: yamllint
+        args: [-c, .yamllint]
+
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.43.0
+    hooks:
+      - id: markdownlint
+        args: [--config, .markdownlint.json]
+
+  # --- Cohérence des fichiers de contenu du produit ----------------------------------
+  # Ces hooks locaux vérifient ce que la CI vérifie aussi : une règle de détection ou un
+  # playbook invalide est une protection absente, pas une simple erreur de format.
+  - repo: local
+    hooks:
+      - id: thotsecure-rules
+        name: Valider la bibliothèque de règles de détection
+        entry: python -m thotsecure.cli rules validate
+        language: system
+        files: ^rules/.*\.ya?ml$
+        pass_filenames: false
+
+      - id: thotsecure-policies
+        name: Valider les politiques de décision
+        entry: python -m thotsecure.cli policies validate
+        language: system
+        files: ^policies/.*\.ya?ml$
+        pass_filenames: false
+
+      - id: thotsecure-tests
+        name: Suite de tests (unittest, sans réseau)
+        entry: python -m unittest discover -s tests -t .
+        language: system
+        files: ^(src|tests|rules|policies|playbooks)/.*$
+        pass_filenames: false
+        stages: [pre-push]
+
+      - id: no-offensive-capability
+        name: Interdire toute capacité offensive
+        entry: python scripts/check-no-offensive-capability.py
+        language: system
+        pass_filenames: false
+        always_run: true

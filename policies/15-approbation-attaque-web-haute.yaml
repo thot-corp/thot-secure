@@ -1,0 +1,22 @@
+version: 1
+id: approval-high-web-attack
+priority: 190
+description: >-
+  Attaque web de gravité haute (injection, traversée de chemin, XSS) : le blocage de la source
+  est la bonne réponse, mais il modifie le filtrage en production. Validation humaine
+  systématique, avec la cible, la durée et le motif affichés à l'approbateur.
+when:
+  finding.severity: [high, critical]
+  finding.risk_score: { gte: 60 }
+  finding.tags_any: [exploit-attempt, exposure]
+then:
+  decision: require_approval
+  playbook: block-source-ip
+  params:
+    target: labels.src_ip
+    duration_seconds: 3600
+    reason: "Thot Secure — attaque web de gravité haute (blocage temporaire proposé)"
+  cooldown_seconds: 600
+rollback:
+  playbook: unblock-source-ip
+  auto_after_seconds: 3600

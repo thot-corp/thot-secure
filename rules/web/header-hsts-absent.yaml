@@ -1,0 +1,32 @@
+id: AO-WEB-050
+title: En-tête HSTS absent
+description: >-
+  Le site n'impose pas HTTPS aux navigateurs via Strict-Transport-Security : la première
+  requête (ou une requête après expiration du cache) peut être interceptée et rétrogradée en
+  clair par un attaquant en position d'homme du milieu.
+status: stable
+severity: medium
+confidence: 0.95
+enabled: true
+tags: [web, hardening, owasp:a05, cis:2.4]
+source_types: [web_probe]
+kinds: [http.response]
+match:
+  all:
+    - field: labels.check
+      op: eq
+      value: missing_hsts
+dedup:
+  key: [labels.host]
+  ttl_seconds: 604800
+risk:
+  base: 30
+false_positives:
+  - Site interne accessible uniquement en HTTP par conception (mais alors il ne devrait pas
+    être déclaré comme actif web auditable).
+remediation: >-
+  Ajouter l'en-tête `Strict-Transport-Security: max-age=31536000; includeSubDomains` sur toutes
+  les réponses HTTPS, après avoir vérifié que l'ensemble des sous-domaines sont bien servis en
+  HTTPS. Commencer par une durée courte (300 s) pour éviter de bloquer un sous-domaine oublié.
+references:
+  - https://owasp.org/www-project-secure-headers/

@@ -1,0 +1,34 @@
+id: AO-TLS-001
+title: Certificat TLS proche de l'expiration ou expiré
+description: >-
+  Le certificat d'un actif déclaré expire bientôt, ou l'est déjà. Un certificat expiré coupe
+  l'accès légitime (panne de service) et pousse les utilisateurs à accepter des exceptions de
+  sécurité — ce qui détruit la valeur de TLS.
+status: stable
+severity: high
+confidence: 0.99
+enabled: true
+tags: [tls, disponibilite, cis:2.4, hardening]
+source_types: [tls_cert]
+kinds: [tls.cert]
+match:
+  any:
+    - field: labels.check
+      op: eq
+      value: cert_expired
+    - field: labels.check
+      op: eq
+      value: cert_expiring_soon
+dedup:
+  key: [labels.host]
+  ttl_seconds: 86400
+risk:
+  base: 45
+false_positives:
+  - "Certificat de test sur un environnement de recette déclaré : créez une exception datée."
+remediation: >-
+  Renouveler le certificat (idéalement automatiser avec ACME/certbot et une supervision de
+  l'expiration en amont), puis vérifier que la chaîne intermédiaire est bien servie. Un
+  certificat déjà expiré est à traiter en priorité : la disponibilité est déjà dégradée.
+references:
+  - https://datatracker.ietf.org/doc/html/rfc8446

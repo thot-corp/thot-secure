@@ -1,0 +1,83 @@
+# =============================================================================
+# Thot Secure — HorizontalPodAutoscaler
+# =============================================================================
+# ATTENTION — LISEZ CECI AVANT D'ACTIVER LA MISE À L'ÉCHELLE
+#
+# Par défaut, `minReplicas` et `maxReplicas` valent tous deux 1 : l'autoscaler
+# est donc actif mais ne peut rien changer. C'est délibéré.
+#
+# Raison : la persistance Thot Secure v0.1.0 est SQLite (module `sqlite3` de la
+# stdlib) sur un volume ReadWriteOnce. Deux réplicas écrivant le même fichier
+# Python/sqlite3 produisent des verrous (`database is locked`) et peuvent
+# corrompre la chaîne d'audit. Le Deployment utilise en outre la stratégie
+# `Recreate`.
+#
+# Procédure d'activation (dans cet ordre) :
+#   1. migrer vers un backend partagé (PostgreSQL/TimescaleDB — DDL fourni par
+#      le projet) et pointer THOT_DB_URL dessus ;
+#   2. activer le bus distribué (THOT_BUS=nats + NATS) pour que les
+#      réplicas partagent réellement les événements ;
+#   3. passer le Deployment en stratégie `RollingUpdate` et augmenter
+#      `replicas` (deploy/k8s/deployment.yaml) ;
+#   4. seulement alors, relever `maxReplicas` ci-dessous.
+#
+# Sans les étapes 1 à 3, augmenter `maxReplicas` dégrade la fiabilité au lieu de
+# l'améliorer.
+# =============================================================================
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: thotsecure
+  namespace: thotsecure
+  labels:
+    app.kubernetes.io/name: thotsecure
+    app.kubernetes.io/instance: thotsecure
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/component: autoscaling
+    app.kubernetes.io/part-of: thotsecure
+    app.kubernetes.io/managed-by: kubectl
+  annotations:
+    thotsecure.io/description: >-
+      Autoscaling volontairement bride a 1 replica (persistance SQLite).
+      Voir l'en-tete du manifeste pour la procedure d'activation.
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: thotsecure
+  # Bride volontaire : voir l'en-tête. Relever `maxReplicas` uniquement après
+  # migration vers un backend de données partagé.
+  minReplicas: 1
+  maxReplicas: 1
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          # 70 % de la requête CPU (100m) : marge confortable pour absorber un
+          # pic d'ingestion avant de passer à l'échelle.
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+  behavior:
+    scaleUp:
+      # Montée prudente : une ingestion brutale ne doit pas créer une tempête
+      # de démarrages (chaque démarrage recharge règles et politiques).
+      stabilizationWindowSeconds: 120
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 60
+    scaleDown:
+      # Descente très lente : un SOAR qui réduit trop vite perd sa capacité de
+      # traitement quand l'attaque dure.
+      stabilizationWindowSeconds: 600
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 120

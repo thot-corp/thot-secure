@@ -1,0 +1,146 @@
+# Documentation — build the MkDocs site and publish it to GitHub Pages.
+#
+# The documentation is not an appendix to this project: rules, policies and the
+# API contract are read as often as they are run, and `docs/` is written in
+# French because that is the language the people who deploy Thot Secure read. So the
+# site is built on every change and published at https://thotsecure.github.io/thotsecure/
+# (redirected to https://thotsecure.dev once the rename lands).
+#
+# Design constraints:
+#   * `mkdocs build --strict` turns every MkDocs warning — a missing navigation
+#     entry, a broken relative link, a duplicate anchor, an omitted file — into a
+#     build failure. mkdocs.yml currently declares `validation:` levels as `warn`,
+#     so `--strict` is what actually enforces them. A dead link in the runbook
+#     that someone is following during an incident is a defect, not a nitpick,
+#     and it is far cheaper to catch here than in production.
+#   * Least privilege, and Pages is the only writer here. The workflow is
+#     `contents: read` and nothing else. `pages: write` + `id-token: write` are
+#     granted to the *deploy job only*, never workflow-wide: the build job runs
+#     `pip install` and third-party MkDocs plugins, so it must not hold a token
+#     that can publish a site. `id-token: write` is required because
+#     actions/deploy-pages exchanges a GitHub OIDC token for a short-lived Pages
+#     deployment credential — that is why no long-lived secret is stored.
+#   * The deploy job is guarded with `if: github.event_name != 'pull_request'`,
+#     so a pull request from a fork still *verifies* that the docs build, but can
+#     never publish. This is the whole reason the PR trigger is safe to keep.
+#   * `cancel-in-progress: false` on the Pages concurrency group. Cancelling a
+#     half-finished Pages deployment can leave the environment reporting a
+#     deployment that never completed, so superseded runs queue instead of being
+#     killed. (For build-only jobs the opposite is true; see the other workflows.)
+
+name: Docs
+
+on:
+  push:
+    branches:
+      - main
+    # Only rebuild when something that can change the rendered site changed.
+    # Editing a Python module or a workflow does not alter `site/`, and a docs
+    # deployment per unrelated commit is noise in the Pages environment history.
+    paths:
+      - "docs/**"
+      - "mkdocs.yml"
+      - ".markdownlint.json"
+      - ".github/workflows/docs.yml"
+  pull_request:
+    paths:
+      - "docs/**"
+      - "mkdocs.yml"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: pages-${{ github.ref }}
+  # Required semantics for Pages: a deployment in progress is never cancelled.
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Build. Runs for pull requests too, so a broken link is reported on the PR
+  # rather than discovered on main after the merge.
+  # ---------------------------------------------------------------------------
+  build:
+    name: Build MkDocs site
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cache pip
+        # Guarded with hashFiles() like ci.yml, because the shorthand `cache:`
+        # option of setup-python hard-fails when the referenced manifest is
+        # absent. The key is derived from the documents themselves: a docs-only
+        # change does not invalidate the installed theme, and a theme bump
+        # (requirements-docs.txt) does.
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-docs-${{ runner.os }}-${{ hashFiles('requirements-docs.txt', 'mkdocs.yml') }}
+          restore-keys: |
+            pip-docs-${{ runner.os }}-
+
+      - name: Install MkDocs Material
+        # Pinned to a major version so a theme release cannot silently change the
+        # rendered site, while still receiving patch fixes. The repository has no
+        # requirements-docs.txt yet; when one is added, install from it instead so
+        # the local build and CI agree exactly.
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "mkdocs-material==9.*"
+
+      - name: Show tool versions
+        run: mkdocs --version
+
+      - name: Build the site (--strict)
+        # Warnings become errors on purpose — see the header. `site_dir` is left
+        # at the mkdocs.yml default (`site`), which is the path uploaded below.
+        run: mkdocs build --strict
+
+      - name: Configure GitHub Pages
+        # Reads the Pages configuration of the repository (base URL, enablement)
+        # and exposes it to later steps. Fails early and clearly if Pages has not
+        # been switched to "GitHub Actions" as the source, which is the usual
+        # reason a docs deployment is red.
+        uses: actions/configure-pages@v5
+
+      - name: Upload the Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+
+  # ---------------------------------------------------------------------------
+  # Deploy. Push to main and manual dispatch only: never on a pull request.
+  # ---------------------------------------------------------------------------
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    # The guard that makes the PR trigger safe: a fork pull request builds the
+    # docs but can never publish them.
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      # Exactly what deploying a Pages artifact requires, and nothing else.
+      # `id-token: write` lets the action mint a short-lived OIDC credential
+      # instead of using a stored secret.
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Report the published URL
+        run: echo "::notice::Documentation published at ${{ steps.deployment.outputs.page_url }}"

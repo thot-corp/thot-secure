@@ -1,0 +1,71 @@
+# Path-based auto-labelling — apply .github/labeler.yml to every pull request.
+#
+# Why `pull_request_target` and not `pull_request`: this repository is public and
+# contributions are expected from forks. A run triggered by `pull_request` on a
+# fork receives a read-only GITHUB_TOKEN, so the action cannot add labels and the
+# workflow fails with a 403 on exactly the contributions it exists to triage.
+#
+# Why that is safe here, and the reasoning has to be stated because
+# `pull_request_target` is a well-known footgun:
+#   * the action does NOT check out the pull request. There is no `checkout` step
+#     at all, so the contributor's code, config and scripts are never fetched and
+#     never executed on the runner;
+#   * `actions/labeler` reads the list of changed file paths through the API and
+#     matches them against .github/labeler.yml — a file from the *base* branch;
+#   * no secrets are referenced and no artefact from the PR is used. The only
+#     token involved is the automatic GITHUB_TOKEN, scoped to what is declared
+#     below.
+# If a future change ever adds a checkout of `github.event.pull_request.head.sha`
+# here, that reasoning collapses and the trigger must be reconsidered.
+#
+# Least privilege: `contents: read` at workflow level for the base repository, and
+# `pull-requests: write` only on the job, because writing labels on a pull request
+# is the single thing this workflow does. `issues: write` is NOT granted —
+# `pull_request_target` labels are written through the pull requests API, so it
+# would be unnecessary privilege.
+
+name: Labeler
+
+on:
+  pull_request_target:
+    # `opened` for the first pass, `synchronize` so the labels follow a push that
+    # adds or removes files, `reopened` because a reopened PR is back in triage.
+    # `edited` and `labeled` are deliberately absent: neither changes the file list.
+    types:
+      - opened
+      - synchronize
+      - reopened
+  workflow_dispatch:
+
+concurrency:
+  # Per pull request. Cancelling is right here: only the newest run reflects the
+  # current file list, and a superseded run would be overwriting labels with a
+  # stale view. `github.event.pull_request.number` is empty on workflow_dispatch,
+  # so the ref is used as a fallback to keep the group unique.
+  group: labeler-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  label:
+    name: Apply path labels
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Apply labels
+        uses: actions/labeler@v5
+        with:
+          # `sync-labels: ''` — the v5 way of disabling the default. The action
+          # would otherwise remove every label it manages as soon as the matching
+          # files disappear from the diff, and it would also strip a label a human
+          # added by hand. An empty string turns that off and keeps the config, and
+          # the contributors' labels, intact.
+          sync-labels: ''
+          # `dot: true` is required for the `.github/**` glob in labeler.yml to
+          # match: dot-directories are skipped by the glob engine otherwise.
+          dot: true

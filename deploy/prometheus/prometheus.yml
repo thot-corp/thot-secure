@@ -1,0 +1,78 @@
+# =============================================================================
+# Thot Secure — configuration Prometheus (pile d'observabilité)
+# =============================================================================
+# Métriques réellement exposées par Thot Secure sur GET /metrics (texte Prometheus) :
+#   thotsecure_events_ingested_total{counter}          compteur d'événements ingérés
+#   thotsecure_findings_total{counter,severity}        findings créés par sévérité
+#   thotsecure_actions_total{counter,status,playbook}  actions par statut et playbook
+#   thotsecure_rule_eval_seconds{counter,quantile}     latence d'évaluation des règles
+#   thotsecure_pipeline_lag_seconds{counter}           retard du pipeline (ingestion -> décision)
+#   thotsecure_audit_records_total{counter}            enregistrements du journal chaîné
+#
+# Les libellés `{counter}` correspondent au nom du compteur applicatif : ils
+# varient d'une version à l'autre, les règles d'alerte restent donc agrégées
+# par `sum()` sans filtrer sur ce libellé.
+# =============================================================================
+
+global:
+  scrape_interval: 15s
+  scrape_timeout: 10s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: thotsecure
+    environment: local
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+alerting:
+  alertmanagers:
+    # Thot Secure n'embarque pas d'Alertmanager. Décommentez ce bloc après avoir
+    # ajouté un service `alertmanager` à la pile d'observabilité.
+    - static_configs:
+        - targets: []
+      # - targets: ["alertmanager:9093"]
+
+scrape_configs:
+  # --- Application Thot Secure --------------------------------------------------
+  - job_name: thotsecure
+    metrics_path: /metrics
+    scheme: http
+    static_configs:
+      - targets: ["thotsecure:8080"]
+        labels:
+          service: thotsecure
+          component: app
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        regex: "(.+):\\d+"
+        replacement: "$1"
+
+  # --- Sonde de disponibilité (métriques dérivées du healthcheck) -----------
+  # ATTENTION : ce job cible un exportateur `blackbox` qui n'est PAS déclaré
+  # dans docker-compose.observability.yml. Tant qu'aucun service `blackbox`
+  # n'est ajouté, ce job apparaîtra DOWN dans Prometheus (cible `blackbox:9115`
+  # non résolue) sans que cela signifie qu'Thot Secure est indisponible : la
+  # disponibilité réelle est couverte par `up{job="thotsecure"}` et par
+  # `thotsecure_ready` (alerte ThotSecureNotReady). Commentez le bloc entier si vous
+  # ne comptez pas déployer blackbox-exporter.
+  - job_name: thotsecure-health
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+      target: ["http://thotsecure:8080/healthz"]
+    static_configs:
+      - targets: ["blackbox:9115"]
+    relabel_configs:
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox:9115
+
+  # --- Auto-surveillance -----------------------------------------------------
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+        labels:
+          service: prometheus

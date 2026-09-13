@@ -1,0 +1,24 @@
+version: 1
+id: auto-block-critical-web-attack
+priority: 200
+description: >-
+  Attaque web critique (injection de commande, fichier de configuration exposé) : le blocage
+  automatique de la source est justifié et réversible. La cible reste soumise aux garde-fous
+  du moteur (cible protégée, périmètre déclaré, plafond horaire, cooldown).
+when:
+  finding.severity: [critical]
+  finding.risk_score: { gte: 80 }
+  finding.tags_any: [exploit-attempt, exposure]
+  tenant.mode: [auto, supervised]
+then:
+  decision: auto
+  playbook: block-source-ip
+  params:
+    target: labels.src_ip
+    duration_seconds: 3600
+    reason: "Thot Secure — attaque critique détectée (blocage automatique réversible)"
+  cooldown_seconds: 600
+  max_actions_per_hour: 10
+rollback:
+  playbook: unblock-source-ip
+  auto_after_seconds: 3600

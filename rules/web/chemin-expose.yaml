@@ -1,0 +1,39 @@
+id: AO-WEB-007
+title: Fichier de configuration exposé publiquement
+description: >-
+  Détecte l'exposition publique de fichiers qui ne devraient jamais être servis : dépôt Git,
+  fichiers d'environnement, métadonnées de versionnage, pages d'état ou de diagnostic. Ces
+  fichiers livrent des secrets ou l'intégralité du code source.
+status: stable
+severity: critical
+confidence: 0.9
+enabled: true
+tags: [web, owasp:a05, mitre:T1552.001, exposure, hardening]
+source_types: [web_probe]
+kinds: [http.response]
+match:
+  all:
+    - field: labels.check
+      op: eq
+      value: exposed_path
+    - field: labels.status
+      op: eq
+      value: 200
+dedup:
+  key: [labels.host, labels.path]
+  ttl_seconds: 86400
+risk:
+  base: 75
+false_positives:
+  - >-
+    Page personnalisée renvoyant 200 pour toutes les URL : la règle exige une signature de
+    contenu (« signature_match » non vide dans la preuve). Vérifiez toujours la preuve avant
+    de conclure.
+remediation: >-
+  Retirer immédiatement le fichier du répertoire servi (bloquer le chemin au niveau du serveur
+  web), puis considérer les secrets qu'il contenait comme compromis : rotation des clés et des
+  mots de passe concernés. Pour un dépôt Git exposé, considérer l'historique complet comme
+  divulgué.
+references:
+  - https://owasp.org/Top10/A05_2021-Security_Misconfiguration/
+  - https://attack.mitre.org/techniques/T1552/001/

@@ -1,0 +1,214 @@
+# =============================================================================
+#  Thot Secure — configuration de la documentation (MkDocs + Material for MkDocs)
+# -----------------------------------------------------------------------------
+#  * Documentation rédigée en français ; identifiants techniques en anglais.
+#  * Source normative du produit : docs/architecture/api-contract.md (gelé).
+#  * Pas de plugin non maintenu : uniquement `search`, `tags`, `minify`.
+#
+#  Note d'exploitation (site hors-ligne / air-gap) : les diagrammes Mermaid sont
+#  rendus par un script chargé par le navigateur (voir extra_javascript). Pour un
+#  site totalement air-gap, hébergez mermaid.min.js à côté du site et remplacez
+#  l'URL ci-dessous par le chemin local (ex. javascripts/vendor/mermaid.min.js).
+# =============================================================================
+
+site_name: Thot Secure
+site_description: >-
+  Thot Secure — SOAR/CSPM 100 % défensif : collecte, détection, scoring, décision et
+  contre-mesure réversible. Aucune capacité offensive, aucune action irréversible.
+site_author: Contributeurs Thot Secure
+
+# Dépôt affiché dans l'en-tête (bouton « star », lien « Modifier cette page »).
+# À ajuster si le dépôt officiel est publié sous une autre organisation.
+repo_url: https://github.com/thotsecure/thot-secure
+repo_name: thotsecure/thot-secure
+edit_uri: edit/main/docs/
+
+# Mention de pied de page (licence + positionnement défensif).
+# Le lien discret « Soutenir le projet » (vers support.md) est ajouté en pied de
+# page par docs/javascripts/extra.js : il reprend le lien déjà généré par la
+# navigation, ce qui le rend indépendant de la version du thème et du niveau de
+# profondeur de la page. Il n'apparaît jamais en en-tête.
+copyright: >-
+  Thot Secure est distribué sous licence
+  <a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" rel="noopener">Apache-2.0</a>
+  — 100 % défensif : aucune capacité offensive, aucune action irréversible.
+
+theme:
+  name: material
+  language: fr
+  # Polices locales : pas de requête vers Google Fonts (installation hors-ligne).
+  font: false
+  features:
+    - navigation.tabs          # navigation par onglets (sections de premier niveau)
+    - navigation.tabs.sticky   # onglets toujours visibles au défilement
+    - navigation.sections      # sections dépliées dans la barre latérale
+    - navigation.indexes       # page d'index de section (index.md)
+    - navigation.instant       # navigation instantanée sans rechargement
+    - navigation.tracking      # ancre mise à jour dans l'URL
+    - navigation.top           # bouton « retour en haut »
+    - navigation.footer        # liens précédent / suivant
+    - toc.follow               # la table des matières suit le défilement
+    - search.suggest           # suggestions de recherche
+    - search.highlight         # surlignage des termes recherchés
+    - search.share             # partage d'un lien de recherche
+    - content.code.copy        # bouton « copier » sur les blocs de code
+    - content.code.select      # bouton « sélectionner »
+    - content.code.annotate    # annotations dans les blocs de code
+    - content.tabs.link        # onglets de contenu synchronisés
+    - content.tooltips         # infobulles sur les abréviations et liens
+    - announce.dismiss         # la bannière d'annonce peut être fermée
+  palette:
+    # Clair par défaut, sombre si le système le demande — commutable à la main.
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Passer en thème sombre
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Passer en thème clair
+  icon:
+    repo: fontawesome/brands/github
+    edit: material/pencil
+    view: material/eye
+
+plugins:
+  - search:
+      lang:
+        - fr
+        - en
+      separator: '[\s\u200b\-,:!=\[\]()"/]+|(?!\b)(?=[A-Z][a-z])|\.(?!\d)|&[lg]t;'
+  - tags:
+      tags_file: tags.md
+  - minify:
+      minify_html: true
+      minify_css: true
+      # `minify_js` désactivé : jsmin (utilisé par le plugin) n'est pas fiable sur
+      # du JavaScript moderne. Les scripts du site sont déjà compacts.
+      minify_js: false
+      htmlmin_opts:
+        remove_comments: true
+
+markdown_extensions:
+  # --- Blocs et mises en forme -------------------------------------------------
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+      title: Sur cette page
+  # --- PyMdown Extensions ------------------------------------------------------
+  - pymdownx.betterem
+  - pymdownx.caret
+  - pymdownx.mark
+  - pymdownx.tilde
+  - pymdownx.keys
+  - pymdownx.smartsymbols
+  - pymdownx.magiclink
+  - pymdownx.details
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.superfences:
+      custom_fences:
+        # Diagrammes Mermaid dans les blocs ```mermaid
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+# Contrôle qualité de la documentation : les liens cassés et les ancres erronées
+# sont signalés au build (niveaux volontairement en `warn`, jamais bloquants ici).
+validation:
+  omitted_files: warn
+  absolute_links: warn
+  unrecognized_links: warn
+  anchors: warn
+
+extra:
+  # Retire la mention « Made with Material for MkDocs » du pied de page.
+  generator: false
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/thotsecure/thot-secure
+      name: Dépôt GitHub (code, règles, issues)
+    - icon: fontawesome/solid/heart
+      link: https://github.com/thotsecure/thot-secure/blob/main/docs/support.md
+      name: Soutenir le projet (hébergement, certificats, audits)
+  # Bannière d'annonce renvoyant vers la feuille de route : elle est injectée par
+  # docs/javascripts/extra.js, qui réutilise le lien « Feuille de route » déjà
+  # présent dans la navigation (indépendant de la version du thème). Le texte de
+  # la bannière est défini dans ce script, sous la clé `ANNOUNCEMENT`.
+  # Elle est refermable et n'est jamais un appel au don.
+
+extra_css:
+  - stylesheets/extra.css
+
+extra_javascript:
+  # Mermaid (rendu des diagrammes côté navigateur). Voir la note d'air-gap en tête
+  # de fichier : hébergez ce fichier localement pour un site hors-ligne.
+  - https://unpkg.com/mermaid@10/dist/mermaid.min.js
+  - javascripts/extra.js
+
+nav:
+  - Accueil: index.md
+  - Démarrage:
+      - Démarrage rapide (5 minutes): quickstart.md
+      - Installation: installation.md
+      - Configuration: configuration.md
+      - Questions fréquentes: faq.md
+  - Architecture:
+      - Vue d'ensemble: architecture/overview.md
+      - Contrat d'interface (gelé): architecture/api-contract.md
+      - Modèle de données: architecture/data-model.md
+      - Modèle de menaces (STRIDE): architecture/threat-model.md
+      - Décisions d'architecture (ADR):
+          - ADR 0001 — Journaliser les décisions d'architecture: adr/0001-record-architecture-decisions.md
+          - ADR 0002 — Python + FastAPI et SQLite pour le MVP: adr/0002-python-fastapi-et-sqlite-pour-le-mvp.md
+          - ADR 0003 — Dry-run par défaut et approbation humaine: adr/0003-dry-run-par-defaut-et-approbation-humaine.md
+          - ADR 0004 — Journal d'audit chaîné par hash plutôt que blockchain: adr/0004-audit-log-chaine-par-hash-plutot-que-blockchain.md
+          - ADR 0005 — Bus d'événements enfichable (memory, sqlite, nats): adr/0005-bus-pluggable-memory-sqlite-nats.md
+          - ADR 0006 — Zéro capacité offensive comme invariant: adr/0006-zero-capacite-offensive-comme-invariant.md
+  - Détection:
+      - Écrire une règle: detection/rules.md
+      - Compatibilité Sigma-lite: detection/sigma.md
+  - Décision:
+      - Politiques (policy-as-code): decision/policies.md
+  - Réponse (SOAR):
+      - Playbooks et connecteurs: actions/playbooks.md
+  - API et CLI:
+      - Utiliser l'API REST: api/usage.md
+      - Référence CLI: cli.md
+  - Exploitation:
+      - Déploiement: operations/deployment.md
+      - Runbook d'incident: operations/runbook.md
+  - Conformité:
+      - RGPD: compliance/rgpd.md
+      - SOC 2 / ISO 27001: compliance/soc2-iso27001.md
+  - Projet:
+      - Feuille de route: roadmap.md
+      - Journal des modifications: changelog.md
+      - Gouvernance: governance.md
+      - Contribuer: contributing.md
+      - Glossaire: glossary.md
+      - Soutenir le projet: support.md
+      - Étiquettes des pages: tags.md

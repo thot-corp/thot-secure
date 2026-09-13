@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Introuvable{% endblock %}
+{% block content %}
+<section class="card">
+  <h2>Ressource introuvable</h2>
+  <p>{{ message }}</p>
+  <p class="hint">
+    Pour un tenant donné, une ressource d'un autre tenant est volontairement indistinguable
+    d'une ressource inexistante : l'API ne révèle jamais l'existence d'une donnée hors de votre
+    périmètre.
+  </p>
+  <a class="button" href="/ui/dashboard">Retour au tableau de bord</a>
+</section>
+{% endblock %}

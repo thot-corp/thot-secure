@@ -1,0 +1,36 @@
+{
+  "event_id": "54e4cd03-52f0-47fa-b043-669dc046a285",
+  "schema_version": "1",
+  "tenant_id": "acme",
+  "ts": "2026-02-14T10:12:03.240Z",
+  "kind": "config.audit",
+  "source": {
+    "type": "cspm",
+    "name": "cloud-posture-scanner",
+    "host": "cloud-collector-01"
+  },
+  "severity_hint": "high",
+  "labels": {
+    "provider": "aws",
+    "account_id": "123456789012",
+    "region": "eu-west-3",
+    "resource_type": "aws_s3_bucket",
+    "resource_id": "acme-prod-backups",
+    "check_id": "CSPM-S3-001",
+    "control": "s3_bucket_public_access",
+    "status": "fail",
+    "compliance": "iso27001:a.8.24",
+    "detected_by": "third-party-cspm"
+  },
+  "payload": {
+    "message": "Le bucket S3 « acme-prod-backups » autorise la lecture publique (ACL public-read) : les objets sont énumérables sans authentification.",
+    "previous_status": "pass",
+    "current_status": "fail",
+    "first_seen": "2026-02-14T10:12:03Z",
+    "storage_class": "STANDARD",
+    "object_count": 18422,
+    "remediation": "Retirer l'ACL public-read, activer « Block Public Access » au niveau du compte, inventorier et purger les objets sensibles exposés, puis vérifier l'accès réel.",
+    "evidence_uri": "s3://acme-prod-backups/"
+  },
+  "raw_ref": null
+}

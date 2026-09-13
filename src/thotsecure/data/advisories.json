@@ -1,0 +1,222 @@
+{
+  "_README": [
+    "Instantané hors ligne d'avis de sécurité utilisés par le collecteur dependency_scan.",
+    "Aucune requête réseau n'est effectuée : un outil de sécurité qui interroge un service",
+    "tiers à chaque exécution crée une dépendance d'approvisionnement et révèle son parc.",
+    "",
+    "Ce jeu de départ est VOLONTAIREMENT RESTREINT : il couvre des vulnérabilités publiques",
+    "notoires, utiles pour valider la chaîne de détection de bout en bout. Il ne remplace pas",
+    "une source faisant autorité. Procédure de mise à jour : voir",
+    "docs/operations/runbook.md (import OSV/NVD) et scripts/update-advisories.sh.",
+    "",
+    "Format : affected utilise un opérateur unique (<, <=, >, >=, ==) et une version cible.",
+    "La comparaison est faite par thotsecure.collectors.dependency_scan.compare_versions."
+  ],
+  "version": "2026.02.1",
+  "reviewed_at": "2026-02-01",
+  "sources": [
+    "https://osv.dev",
+    "https://nvd.nist.gov",
+    "https://github.com/advisories"
+  ],
+  "advisories": [
+    {
+      "cve": "CVE-2021-44228",
+      "package": "log4j-core",
+      "ecosystem": "maven",
+      "affected": "<2.17.1",
+      "fixed_version": "2.17.1",
+      "cvss": 10.0,
+      "severity": "critical",
+      "summary": "Log4Shell : exécution de code à distance via une chaîne JNDI contrôlée par l'attaquant.",
+      "references": ["https://nvd.nist.gov/vuln/detail/CVE-2021-44228"]
+    },
+    {
+      "cve": "CVE-2022-22965",
+      "package": "org.springframework:spring-core",
+      "ecosystem": "maven",
+      "affected": "<5.3.18",
+      "fixed_version": "5.3.18",
+      "cvss": 9.8,
+      "severity": "critical",
+      "summary": "Spring4Shell : liaison de données permettant l'écriture de fichiers et l'exécution de code.",
+      "references": ["https://nvd.nist.gov/vuln/detail/CVE-2022-22965"]
+    },
+    {
+      "cve": "CVE-2020-14343",
+      "package": "pyyaml",
+      "ecosystem": "pypi",
+      "affected": "<5.4",
+      "fixed_version": "5.4",
+      "cvss": 9.8,
+      "severity": "critical",
+      "summary": "PyYAML : désérialisation arbitraire via full_load, permettant l'exécution de code.",
+      "references": ["https://nvd.nist.gov/vuln/detail/CVE-2020-14343"]
+    },
+    {
+      "cve": "CVE-2023-45857",
+      "package": "axios",
+      "ecosystem": "npm",
+      "affected": "<1.6.0",
+      "fixed_version": "1.6.0",
+      "cvss": 6.5,
+      "severity": "medium",
+      "summary": "axios : fuite du jeton XSRF vers un domaine tiers via une redirection.",
+      "references": ["https://nvd.nist.gov/vuln/detail/CVE-2023-45857"]
+    },
+    {
+      "cve": "CVE-2021-23337",
+      "package": "lodash",
+      "ecosystem": "npm",
+      "affected": "<4.17.21",
+      "fixed_version": "4.17.21",
+      "cvss": 7.2,
+      "severity": "high",
+      "summary": "lodash : injection de commande via la fonction template.",
+      "references": ["https://nvd.nist.gov/vuln/detail/CVE-2021-23337"]
+    },
+    {
+      "cve": "CVE-2020-8203",
+      "package": "lodash",
+      "ecosystem": "npm",
+      "affected": "<4.17.19",
+      "fixed_version": "4.17.19",
+      "cvss": 7.4,
+      "severity": "high",
+      "summary": "lodash : pollution de prototype via zipObjectDeep.",
+      "references": ["https://nvd.nist.gov/vuln/detail/CVE-2020-8203"]
+    },
+    {
+      "cve": "CVE-2024-34064",
+      "package": "jinja2",
+      "ecosystem": "pypi",
+      "affected": "<3.1.4",
+      "fixed_version": "3.1.4",
+      "cvss": 5.4,
+      "severity": "medium",
+      "summary": "Jinja2 : un attribut contrôlé par l'attaquant peut échapper au filtrage XML.",
+      "references": ["https://nvd.nist.gov/vuln/detail/CVE-2024-34064"]
+    },
+    {
+      "cve": "CVE-2024-35195",
+      "package": "requests",
+      "ecosystem": "pypi",
+      "affected": "<2.32.0",
+      "fixed_version": "2.32.0",
+      "cvss": 5.6,
+      "severity": "medium",
+      "summary": "requests : la vérification du certificat peut être ignorée après une première requête en échec.",
+      "references": ["https://nvd.nist.gov/vuln/detail/CVE-2024-35195"]
+    },
+    {
+      "cve": "CVE-2024-37891",
+      "package": "urllib3",
+      "ecosystem": "pypi",
+      "affected": "<2.2.2",
+      "fixed_version": "2.2.2",
+      "cvss": 4.4,
+      "severity": "medium",
+      "summary": "urllib3 : l'en-tête Proxy-Authorization peut fuiter vers la cible en cas de redirection.",
+      "references": ["https://nvd.nist.gov/vuln/detail/CVE-2024-37891"]
+    },
+    {
+      "cve": "CVE-2024-27351",
+      "package": "django",
+      "ecosystem": "pypi",
+      "affected": "<4.2.11",
+      "fixed_version": "4.2.11",
+      "cvss": 7.5,
+      "severity": "high",
+      "summary": "Django : déni de service par expression régulière dans Truncator (ReDoS).",
+      "references": ["https://nvd.nist.gov/vuln/detail/CVE-2024-27351"]
+    },
+    {
+      "cve": "CVE-2024-24762",
+      "package": "python-multipart",
+      "ecosystem": "pypi",
+      "affected": "<0.0.7",
+      "fixed_version": "0.0.7",
+      "cvss": 7.5,
+      "severity": "high",
+      "summary": "python-multipart : déni de service par expression régulière sur l'en-tête Content-Type.",
+      "references": ["https://nvd.nist.gov/vuln/detail/CVE-2024-24762"]
+    },
+    {
+      "cve": "CVE-2024-26130",
+      "package": "cryptography",
+      "ecosystem": "pypi",
+      "affected": "<42.0.4",
+      "fixed_version": "42.0.4",
+      "cvss": 7.5,
+      "severity": "high",
+      "summary": "cryptography : déréférencement de pointeur nul lors de la création d'une clé PKCS#12.",
+      "references": ["https://nvd.nist.gov/vuln/detail/CVE-2024-26130"]
+    },
+    {
+      "cve": "CVE-2024-29041",
+      "package": "express",
+      "ecosystem": "npm",
+      "affected": "<4.19.2",
+      "fixed_version": "4.19.2",
+      "cvss": 6.1,
+      "severity": "medium",
+      "summary": "Express : redirection ouverte via un paramètre d'URL mal encodé.",
+      "references": ["https://nvd.nist.gov/vuln/detail/CVE-2024-29041"]
+    },
+    {
+      "cve": "CVE-2022-32149",
+      "package": "golang.org/x/text",
+      "ecosystem": "go",
+      "affected": "<0.3.8",
+      "fixed_version": "0.3.8",
+      "cvss": 7.5,
+      "severity": "high",
+      "summary": "golang.org/x/text : déni de service lors de l'analyse d'un identifiant BCP 47 malformé.",
+      "references": ["https://nvd.nist.gov/vuln/detail/CVE-2022-32149"]
+    },
+    {
+      "cve": "CVE-2022-23521",
+      "package": "git",
+      "ecosystem": "generic",
+      "affected": "<2.39.1",
+      "fixed_version": "2.39.1",
+      "cvss": 9.8,
+      "severity": "critical",
+      "summary": "git : écriture hors limites lors de l'analyse d'un fichier .gitattributes forgé.",
+      "references": ["https://nvd.nist.gov/vuln/detail/CVE-2022-23521"]
+    },
+    {
+      "cve": "CVE-2023-30861",
+      "package": "flask",
+      "ecosystem": "pypi",
+      "affected": "<2.3.2",
+      "fixed_version": "2.3.2",
+      "cvss": 7.5,
+      "severity": "high",
+      "summary": "Flask : fuite du cookie de session vers un cache partagé.",
+      "references": ["https://nvd.nist.gov/vuln/detail/CVE-2023-30861"]
+    },
+    {
+      "cve": "CVE-2024-22195",
+      "package": "jinja2",
+      "ecosystem": "pypi",
+      "affected": "<3.1.3",
+      "fixed_version": "3.1.3",
+      "cvss": 5.4,
+      "severity": "medium",
+      "summary": "Jinja2 : injection d'attributs via le filtre xmlattr.",
+      "references": ["https://nvd.nist.gov/vuln/detail/CVE-2024-22195"]
+    },
+    {
+      "cve": "CVE-2021-42771",
+      "package": "babel",
+      "ecosystem": "pypi",
+      "affected": "<2.9.1",
+      "fixed_version": "2.9.1",
+      "cvss": 7.8,
+      "severity": "high",
+      "summary": "Babel : chargement de locale arbitraire depuis le répertoire courant.",
+      "references": ["https://nvd.nist.gov/vuln/detail/CVE-2021-42771"]
+    }
+  ]
+}

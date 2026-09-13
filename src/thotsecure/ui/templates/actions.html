@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Actions{% endblock %}
+{% block content %}
+
+<section class="card">
+  <h2>Actions ({{ actions|length }})</h2>
+  <form method="get" action="/ui/actions" class="filters">
+    <label>Statut
+      <select name="status">
+        {% for option in ['', 'planned', 'pending_approval', 'approved', 'executing', 'succeeded', 'failed', 'rejected', 'rolled_back', 'expired'] %}
+          <option value="{{ option }}" {{ 'selected' if filter_status == option else '' }}>{{ option or 'tous' }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button type="submit">Filtrer</button>
+  </form>
+
+  <p class="hint">
+    Cycle de vie : <code>planned</code> → <code>pending_approval</code> →
+    <code>approved</code> → <code>executing</code> → <code>succeeded</code> /
+    <code>failed</code> → <code>rolled_back</code>. Une action non approuvée peut seulement
+    être <em>simulée</em>.
+  </p>
+
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Action</th><th>Playbook</th><th>Cible</th><th>Statut</th>
+        <th>Mode</th><th>Simulation</th><th>Demandée</th><th>Rollback</th><th>Opérations</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for action in actions %}
+      <tr id="{{ action.action_id }}">
+        <td><a href="/ui/findings/{{ action.finding_id }}"><code>{{ action.action_id }}</code></a></td>
+        <td><code>{{ action.playbook }}</code></td>
+        <td><code>{{ action.target }}</code></td>
+        <td><span class="pill {{ 'pill-warn' if action.status in ['pending_approval', 'failed'] else ('pill-ok' if action.status in ['succeeded', 'approved'] else '') }}">{{ action.status }}</span></td>
+        <td>{{ action.mode }}</td>
+        <td>{{ 'oui' if action.dry_run else 'NON' }}</td>
+        <td class="muted">{{ action.requested_at.strftime('%d/%m %H:%M') }}<br><small>{{ action.requested_by }}</small></td>
+        <td>
+          {% if action.rollback.available and action.rollback.token %}
+            <span class="pill pill-ok">disponible</span>
+            {% if action.rollback.expires_at %}<br><small class="muted">expire dans {{ humanize((action.rollback.expires_at - now_dt).total_seconds() if now_dt else 0) }}</small>{% endif %}
+          {% elif action.status == 'rolled_back' %}
+            <span class="muted">appliqué</span>
+          {% else %}
+            <span class="muted">—</span>
+          {% endif %}
+        </td>
+        <td class="ops">
+          {% if 'execute:actions' in principal.capabilities %}
+            {% if action.status in ['planned', 'pending_approval'] %}
+              <form method="post" action="/ui/actions/{{ action.action_id }}/approve" class="inline"
+                    data-confirm="Approuver l'action {{ action.playbook }} sur {{ action.target }} ?">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <input type="hidden" name="comment" value="approuvée depuis la console">
+                <button type="submit" class="ghost">Approuver</button>
+              </form>
+              <form method="post" action="/ui/actions/{{ action.action_id }}/reject" class="inline"
+                    data-confirm="Rejeter cette action ?">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <input type="hidden" name="comment" value="rejetée depuis la console">
+                <button type="submit" class="ghost danger">Rejeter</button>
+              </form>
+            {% endif %}
+            {% if action.status == 'approved' or (action.status == 'planned' and action.dry_run) %}
+              <form method="post" action="/ui/actions/{{ action.action_id }}/execute" class="inline"
+                    data-confirm="{{ 'Exécuter en SIMULATION' if action.dry_run else 'EXÉCUTER RÉELLEMENT' }} l'action {{ action.playbook }} sur {{ action.target }} ?">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <button type="submit">Exécuter</button>
+              </form>
+            {% endif %}
+            {% if action.status == 'succeeded' and action.rollback.available %}
+              <form method="post" action="/ui/actions/{{ action.action_id }}/rollback" class="inline"
+                    data-confirm="Annuler cette action et restaurer l'état précédent ?">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <input type="hidden" name="comment" value="annulation depuis la console">
+                <button type="submit" class="ghost">Annuler</button>
+              </form>
+            {% endif %}
+          {% else %}
+            <span class="muted">capacité <code>execute:actions</code> requise</span>
+          {% endif %}
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="9" class="muted">Aucune action.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+{% endblock %}

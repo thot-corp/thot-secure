@@ -1,0 +1,20 @@
+version: 1
+id: approval-supply-chain-update
+priority: 160
+description: >-
+  Vulnérabilité de dépendance : la correction passe par une demande de mise à jour, jamais par
+  une modification automatique du code. Le ticket est ouvert et la mise à jour proposée ; un
+  humain valide la version avant toute revue de code.
+when:
+  finding.tags_any: [supply-chain, vulnerabilite]
+then:
+  decision: require_approval
+  playbook: patch-dependency
+  params:
+    target: labels.package
+    version: labels.fixed_version
+    cve: labels.cve
+    manifest: labels.manifest
+  cooldown_seconds: 3600
+rollback:
+  playbook: close-ticket

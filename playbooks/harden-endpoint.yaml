@@ -1,0 +1,50 @@
+name: harden-endpoint
+description: >-
+  Applique un profil de durcissement à un actif déclaré (en-têtes de sécurité, désactivation
+  d'options dangereuses, restriction des protocoles). Le playbook propose un profil ; le
+  retour en arrière réapplique le profil « rollback » défini dans votre connecteur.
+reversible: true
+dry_run_capable: true
+connectors: [harden]
+params:
+  target:
+    type: host
+    required: true
+    description: Hôte ou service à durcir (doit être déclaré dans le périmètre).
+  profile:
+    type: string
+    default: baseline
+    choices: [baseline, strict, web, rollback]
+    description: Profil de durcissement à appliquer.
+  reason:
+    type: string
+    default: "Thot Secure — application d'un profil de durcissement"
+    description: Motif (finding de configuration, audit de conformité).
+execute:
+  - connector: harden
+    call: harden_endpoint
+    with:
+      host: "${params.target}"
+      profile: "${params.profile}"
+      note: "${params.reason}"
+  - connector: ticketing
+    call: open_ticket
+    optional: true
+    with:
+      title: "Durcissement appliqué : ${params.target} (${params.profile})"
+      severity: medium
+      tenant_id: "${tenant.id}"
+      finding_id: "${finding.id}"
+      action_id: "${action.id}"
+      description: "${params.reason}"
+      remediation: "Vérifier l'absence de régression fonctionnelle, puis versionner la configuration dans votre infrastructure-as-code."
+rollback:
+  - connector: harden
+    call: harden_endpoint
+    with:
+      host: "${params.target}"
+      profile: rollback
+      note: "retour au profil précédent (rollback Thot Secure)"
+audit:
+  severity: medium
+  notify: [ticketing]

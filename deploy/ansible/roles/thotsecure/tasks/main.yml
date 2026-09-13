@@ -1,0 +1,118 @@
+---
+# =============================================================================
+# Thot Secure — orchestration du rôle
+# -----------------------------------------------------------------------------
+# Ordre volontaire et non négociable :
+#   preflight  -> on refuse les configurations dangereuses AVANT toute écriture
+#   user/dirs  -> socle de permissions
+#   packages   -> prérequis OS
+#   python     -> venv + paquet thotsecure
+#   secrets    -> matériel cryptographique (0600, no_log)
+#   config     -> fichier d'environnement + cibles + contenu déclaratif
+#   systemd    -> unit durcie, activation
+#   nginx      -> reverse-proxy TLS
+#   firewall   -> exposition réseau
+#   hardening  -> sshd + sysctl
+#   backup     -> timer de sauvegarde (optionnel)
+#   verify     -> healthz + doctor + assertion finale
+#
+# Tags disponibles : install, configure, nginx, firewall, verify
+#   (plus : preflight, user, directories, packages, python, secrets, config,
+#    systemd, hardening, backup — utilisables avec --tags)
+#
+# Utilisation ciblée :
+#   ansible-playbook ... --tags verify
+#   ansible-playbook ... --skip-tags nginx,firewall
+# =============================================================================
+
+# --- Vérifications préalables -------------------------------------------------
+# Toujours exécuté (tag "always") : aucune écriture ne doit avoir lieu sur une
+# combinaison de variables dangereuse, même avec --tags nginx.
+- name: "Préflight | Vérifier l'hôte et les variables avant toute modification"
+  ansible.builtin.include_tasks: preflight.yml
+  tags:
+    - always
+    - preflight
+
+# --- Socle système ------------------------------------------------------------
+- name: "Utilisateur | Créer le compte système dédié"
+  ansible.builtin.include_tasks: user.yml
+  tags:
+    - install
+    - user
+
+- name: "Répertoires | Créer l'arborescence avec permissions explicites"
+  ansible.builtin.include_tasks: directories.yml
+  tags:
+    - install
+    - directories
+
+- name: "Paquets | Installer les prérequis système"
+  ansible.builtin.include_tasks: packages.yml
+  tags:
+    - install
+    - packages
+
+- name: "Python | Créer le venv et installer le paquet thotsecure"
+  ansible.builtin.include_tasks: python.yml
+  tags:
+    - install
+    - python
+
+# --- Configuration et secrets -------------------------------------------------
+- name: "Secrets | Matérialiser la clé de signature de l'hôte"
+  ansible.builtin.include_tasks: secrets.yml
+  tags:
+    - configure
+    - secrets
+
+- name: "Configuration | Déployer l'environnement et le contenu déclaratif"
+  ansible.builtin.include_tasks: config.yml
+  tags:
+    - configure
+    - config
+
+# --- Service ------------------------------------------------------------------
+- name: "systemd | Déployer et activer l'unit durcie"
+  ansible.builtin.include_tasks: systemd.yml
+  when: thotsecure_manage_systemd | bool
+  tags:
+    - install
+    - configure
+    - systemd
+
+# --- Exposition réseau --------------------------------------------------------
+- name: "Nginx | Déployer le reverse-proxy TLS"
+  ansible.builtin.include_tasks: nginx.yml
+  when: thotsecure_manage_nginx | bool
+  tags:
+    - configure
+    - nginx
+
+- name: "Pare-feu | Restreindre l'exposition réseau"
+  ansible.builtin.include_tasks: firewall.yml
+  when: thotsecure_manage_firewall | bool
+  tags:
+    - configure
+    - firewall
+
+# --- Durcissement -------------------------------------------------------------
+- name: "Durcissement | sshd, sysctl et permissions"
+  ansible.builtin.include_tasks: hardening.yml
+  tags:
+    - configure
+    - hardening
+
+# --- Sauvegarde (optionnel) ---------------------------------------------------
+- name: "Sauvegarde | Installer le timer systemd"
+  ansible.builtin.include_tasks: backup.yml
+  when: thotsecure_backup_enabled | bool
+  tags:
+    - configure
+    - backup
+
+# --- Vérifications post-installation -----------------------------------------
+- name: "Vérification | Contrôler le service et les sondes de santé"
+  ansible.builtin.include_tasks: verify.yml
+  tags:
+    - verify

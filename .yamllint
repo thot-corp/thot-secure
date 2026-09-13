@@ -1,0 +1,48 @@
+# Configuration yamllint — tolérante sur la forme, stricte sur les erreurs de structure.
+# Les fichiers YAML de ce dépôt sont lus par des humains (règles, politiques, playbooks,
+# manifestes) : l'objectif est d'attraper les vraies fautes (indentation, doublons de clés,
+# tabulations) sans imposer un style qui découragerait les contributions.
+extends: default
+
+rules:
+  # Les tableaux de règles et de politiques contiennent des expressions régulières longues.
+  line-length:
+    max: 200
+    level: warning
+
+  # Indentation à 2 espaces, cohérente avec .editorconfig.
+  indentation:
+    spaces: 2
+    indent-sequences: consistent
+    level: error
+
+  # Les commentaires et les documents multiples (---) sont fréquents ici.
+  comments:
+    min-spaces-from-content: 1
+  comments-indentation: disable
+  document-start: disable
+
+  # Les valeurs vides et les clés dupliquées sont de vraies erreurs : on les garde en erreur.
+  empty-values: disable
+  key-duplicates: enable
+
+  # Les workflows GitHub Actions utilisent « on: » qui est un booléen en YAML 1.1.
+  truthy:
+    allowed-values: ['true', 'false', 'on', 'off', 'yes', 'no']
+    check-keys: false
+
+  # Les blocs repliés (>) sont utilisés pour les descriptions longues en français.
+  braces:
+    min-spaces-inside: 0
+    max-spaces-inside: 1
+  brackets:
+    min-spaces-inside: 0
+    max-spaces-inside: 0
+
+ignore: |
+  .venv/
+  data/
+  node_modules/
+  web/dist/
+  site/
+  docs/**/exemples/

@@ -1,0 +1,154 @@
+/* =============================================================================
+   Thot Secure — styles complémentaires de la documentation
+   -----------------------------------------------------------------------------
+   Volontairement léger : on n'habille que ce que le thème ne couvre pas.
+     1. Bannière d'annonce (feuille de route) et lien de pied de page « Soutenir ».
+     2. Encart « dry-run » : bloc de sûreté visible mais non criard (`.thotsecure-dryrun`).
+     3. Bouton de copie de secours si le thème n'expose pas `content.code.copy`.
+     4. Lisibilité : tableaux larges, diagrammes Mermaid, blocs de code.
+   Aucune police, aucune ressource externe : le site reste utilisable hors-ligne.
+   ============================================================================= */
+
+/* --- 1. Bannière d'annonce -------------------------------------------------- */
+
+.thotsecure-banner {
+  background-color: var(--md-primary-fg-color);
+  color: var(--md-primary-bg-color);
+  font-size: 0.7rem;
+  line-height: 1.4;
+}
+
+.thotsecure-banner__inner {
+  align-items: center;
+  display: flex;
+  gap: 0.6rem;
+  justify-content: center;
+  margin: 0 auto;
+  max-width: 61rem;
+  padding: 0.45rem 0.8rem;
+  text-align: center;
+}
+
+.thotsecure-banner a {
+  color: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.thotsecure-banner__dismiss {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  opacity: 0.75;
+  padding: 0 0.2rem;
+}
+
+.thotsecure-banner__dismiss:hover {
+  opacity: 1;
+}
+
+/* --- Lien de pied de page « Soutenir le projet » ---------------------------- */
+
+.thotsecure-support {
+  display: block;
+  font-size: 0.6rem;
+  margin-top: 0.2rem;
+  opacity: 0.8;
+}
+
+.thotsecure-support a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+/* --- 2. Encart « dry-run » --------------------------------------------------
+   Usage en Markdown (extension md_in_html activée) :
+
+   <div class="thotsecure-dryrun" markdown>
+   **Mode dry-run actif** — aucune action réelle n'est exécutée ...
+   </div>
+   --------------------------------------------------------------------------- */
+
+.thotsecure-dryrun {
+  border-left: 0.2rem solid var(--md-primary-fg-color);
+  border-radius: 0.1rem;
+  font-size: 0.75rem;
+  margin: 1em 0;
+  padding: 0.5rem 0.8rem;
+  background-color: var(--md-code-bg-color);
+}
+
+.thotsecure-dryrun::before {
+  content: "DRY-RUN";
+  display: inline-block;
+  background-color: var(--md-primary-fg-color);
+  color: var(--md-primary-bg-color);
+  border-radius: 0.15rem;
+  font-size: 0.55rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  margin-right: 0.5rem;
+  padding: 0.1rem 0.35rem;
+  vertical-align: 0.05rem;
+}
+
+/* --- 3. Copie de code (repli) ---------------------------------------------- */
+
+.thotsecure-copy {
+  background-color: var(--md-default-fg-color--lightest);
+  border: 0;
+  border-radius: 0.15rem;
+  color: var(--md-default-fg-color);
+  cursor: pointer;
+  font-size: 0.6rem;
+  opacity: 0.7;
+  padding: 0.15rem 0.4rem;
+  position: absolute;
+  right: 0.4rem;
+  top: 0.4rem;
+}
+
+.thotsecure-copy:hover {
+  opacity: 1;
+}
+
+/* --- 4. Lisibilité --------------------------------------------------------- */
+
+/* Tableaux larges (matrices STRIDE, correspondances de contrôles) : défilement
+   horizontal plutôt que compression illisible. */
+.md-typeset__table {
+  max-width: 100%;
+}
+
+.md-typeset table:not([class]) {
+  font-size: 0.68rem;
+}
+
+/* Diagrammes Mermaid : jamais de débordement sur petit écran. */
+.md-typeset .mermaid {
+  overflow-x: auto;
+  text-align: center;
+}
+
+/* Les identifiants techniques (tenant_id, THOT_DRY_RUN) restent lisibles
+   sans casser la ligne du texte. */
+.md-typeset code {
+  word-break: normal;
+}
+
+/* Note de version et métadonnées de bas de page : discrètes. */
+.md-typeset hr + p em {
+  color: var(--md-default-fg-color--light);
+  font-size: 0.7rem;
+}
+
+/* Impression : on garde le contenu, on retire la navigation. */
+@media print {
+  .thotsecure-banner,
+  .thotsecure-copy {
+    display: none;
+  }
+}

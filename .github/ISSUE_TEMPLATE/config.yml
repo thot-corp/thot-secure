@@ -1,0 +1,63 @@
+# Issue template chooser configuration.
+# https://docs.github.com/communities/using-templates-to-encourage-useful-issues-and-pull-requests/configuring-issue-templates-for-your-repository
+#
+# `blank_issues_enabled: false` is deliberate. Every Thot Secure issue should arrive
+# with the context needed to act on it, and a blank issue is the most common way
+# a security report ends up in public by accident. There is a form for every
+# legitimate need, including a "security contact" form whose only purpose is to
+# redirect a reporter to the private channel without disclosing anything.
+blank_issues_enabled: false
+
+contact_links:
+  - name: 🔒 Report a security vulnerability (private)
+    url: https://github.com/thotsecure/thot-secure/security/advisories/new
+    about: >-
+      Never disclose a vulnerability in a public issue. Use a private GitHub
+      Security Advisory; alternatively email security@thotsecure.dev. Read
+      SECURITY.md for scope, response timelines and the PGP key.
+
+  - name: 🛡️ Security policy (read before reporting)
+    url: https://github.com/thotsecure/thot-secure/blob/main/SECURITY.md
+    about: >-
+      Supported versions, in-scope and out-of-scope reports, safe harbour, the
+      CVE request process, the credit policy, and the private reporting channels.
+
+  - name: 💬 Questions and ideas (Discussions)
+    url: https://github.com/thotsecure/thot-secure/discussions
+    about: >-
+      Ask about deployment, configuration, hardening your own instance, or how to
+      interpret a finding. Not for vulnerability reports and not for defect
+      tracking — those have their own forms.
+
+  - name: 📚 Documentation
+    url: https://thotsecure.dev/docs
+    about: >-
+      Installation, the configuration reference for every THOT_* variable,
+      deployment guides, the rule-writing guide and the API reference.
+
+  - name: 🤝 Contributing guide
+    url: https://github.com/thotsecure/thot-secure/blob/main/CONTRIBUTING.md
+    about: >-
+      Development setup, the DCO sign-off requirement, Conventional Commits,
+      pull request requirements, and the procedure for adding a detection rule.
+
+  - name: 🗺️ Roadmap
+    url: https://github.com/thotsecure/thot-secure/blob/main/ROADMAP.md
+    about: >-
+      What is planned for v0.2, v0.3 and v1.0, with acceptance criteria for each
+      item. Check here before requesting a feature.
+
+  - name: 🏛️ Governance
+    url: https://github.com/thotsecure/thot-secure/blob/main/GOVERNANCE.md
+    about: >-
+      How decisions are made: lazy consensus, votes, nominations, conflict
+      resolution, and the constitutional invariants — including the rule that the
+      project has no offensive capability.
+
+  - name: ❤️ Support the project
+    url: https://thotsecure.dev/support
+    about: >-
+      Voluntary donations with no counterpart, plus non-financial ways to help.
+      Verify the donation addresses from the repository: they are also in
+      .github/FUNDING.yml. Thot Secure will never ask for a private key or a seed
+      phrase.

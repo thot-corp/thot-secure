@@ -1,0 +1,152 @@
+# CODEOWNERS — Thot Secure
+#
+# Path ownership for automatic review requests on pull requests.
+# Syntax: <pattern> <owner>...   ('*' is a glob, '!' negates, last match wins)
+#
+# Owners are GitHub *teams*, never individuals, so that a person can join or
+# leave a role without rewriting path rules: @thotsecure/core, @thotsecure/detection,
+# @thotsecure/actions, @thotsecure/docs, @thotsecure/security.
+#
+# Rules of thumb used below:
+#   * the default owner is @thotsecure/core, so every new file has a reviewer;
+#   * security-sensitive paths (auth, tenancy, audit, crypto, CI credentials,
+#     signing) always pull in @thotsecure/security, which is a blocking review;
+#   * paths are listed from broad to specific, because the last matching
+#     pattern wins;
+#   * ROADMAP.md and MAINTAINERS.md list the areas each team covers.
+
+# ---------------------------------------------------------------------------
+# Default: anything not matched below belongs to the core team.
+# ---------------------------------------------------------------------------
+*                                       @thotsecure/core
+
+# ---------------------------------------------------------------------------
+# Governance, legal and repository-level policy
+# (changing these changes the project's guarantees, not just its code)
+# ---------------------------------------------------------------------------
+/LICENSE                                @thotsecure/core @thotsecure/security
+/NOTICE                                 @thotsecure/core @thotsecure/security
+/GOVERNANCE.md                          @thotsecure/core @thotsecure/security
+/MAINTAINERS.md                         @thotsecure/core
+/SECURITY.md                            @thotsecure/security
+/CODE_OF_CONDUCT.md                     @thotsecure/core @thotsecure/security
+/CONTRIBUTING.md                        @thotsecure/docs @thotsecure/core
+/CITATION.cff                           @thotsecure/docs
+/CHANGELOG.md                           @thotsecure/core
+/ROADMAP.md                             @thotsecure/core
+/CODEOWNERS                             @thotsecure/core @thotsecure/security
+/README.md                              @thotsecure/docs
+/pyproject.toml                         @thotsecure/core
+/Makefile                               @thotsecure/core
+/mkdocs.yml                             @thotsecure/docs
+/.editorconfig                          @thotsecure/core
+/.gitattributes                         @thotsecure/core
+/.gitignore                             @thotsecure/core
+/.pre-commit-config.yaml                @thotsecure/core
+/.yamllint                              @thotsecure/core
+
+# ---------------------------------------------------------------------------
+# Application package — src/thotsecure/ (see api-contract.md §2)
+# ---------------------------------------------------------------------------
+/src/thotsecure/core/                     @thotsecure/core
+/src/thotsecure/storage/                  @thotsecure/core
+/src/thotsecure/bus/                      @thotsecure/core
+/src/thotsecure/reports/                  @thotsecure/core
+/src/thotsecure/sdk/                      @thotsecure/core
+/src/thotsecure/cli.py                    @thotsecure/core
+
+# Audit chain and tenant isolation: an invariant, and the most security-critical
+# code in the repository (api-contract.md §10).
+/src/thotsecure/audit/                    @thotsecure/security
+/src/thotsecure/tenancy/                  @thotsecure/security @thotsecure/core
+
+# API surface: authentication, RBAC and capability checks live here.
+/src/thotsecure/api/                      @thotsecure/core @thotsecure/security
+
+# Detection pipeline and the telemetry it consumes.
+/src/thotsecure/detection/                @thotsecure/detection
+/src/thotsecure/scoring/                  @thotsecure/detection
+/src/thotsecure/collectors/               @thotsecure/detection @thotsecure/security
+
+# Decision, execution and rollback.
+/src/thotsecure/decision/                 @thotsecure/actions @thotsecure/security
+/src/thotsecure/actions/                  @thotsecure/actions @thotsecure/security
+
+# Embedded console (Jinja2 + JS, no Node build) — XSS surface.
+/src/thotsecure/ui/                       @thotsecure/docs @thotsecure/security
+
+# ---------------------------------------------------------------------------
+# Declarative content shipped with the product
+# ---------------------------------------------------------------------------
+/rules/                                 @thotsecure/detection
+/policies/                              @thotsecure/actions
+/playbooks/                             @thotsecure/actions
+/policies/rego/                         @thotsecure/actions
+
+# ---------------------------------------------------------------------------
+# Client SDKs and the optional dashboard
+# ---------------------------------------------------------------------------
+/sdks/python/                           @thotsecure/core
+/sdks/typescript/                       @thotsecure/core @thotsecure/docs
+/sdks/go/                               @thotsecure/core
+/web/                                   @thotsecure/docs @thotsecure/core
+
+# ---------------------------------------------------------------------------
+# Deployment — insecure defaults here are a product vulnerability.
+# ---------------------------------------------------------------------------
+/deploy/                                @thotsecure/core @thotsecure/security
+/deploy/helm/                           @thotsecure/core @thotsecure/security
+/deploy/terraform/                      @thotsecure/core @thotsecure/security
+/deploy/k8s/                            @thotsecure/core @thotsecure/security
+/Dockerfile                             @thotsecure/core @thotsecure/security
+/docker-compose.yml                     @thotsecure/core @thotsecure/security
+/docker-compose.yaml                    @thotsecure/core @thotsecure/security
+
+# ---------------------------------------------------------------------------
+# Tests — owned by the area the test covers.
+# ---------------------------------------------------------------------------
+/tests/                                 @thotsecure/core
+/tests/test_rules_engine.py             @thotsecure/detection
+/tests/test_risk_scoring.py             @thotsecure/detection
+/tests/test_collectors.py               @thotsecure/detection
+/tests/test_decision.py                 @thotsecure/actions
+/tests/test_actions_rollback.py         @thotsecure/actions
+/tests/test_audit_chain.py              @thotsecure/security
+/tests/test_storage.py                  @thotsecure/security @thotsecure/core
+/tests/test_api.py                      @thotsecure/core @thotsecure/security
+/tests/fixtures/rules/                  @thotsecure/detection
+
+# ---------------------------------------------------------------------------
+# Documentation and editorial artefacts
+# ---------------------------------------------------------------------------
+/docs/                                  @thotsecure/docs
+/docs/architecture/api-contract.md      @thotsecure/core @thotsecure/security
+/content/                               @thotsecure/docs
+
+# ---------------------------------------------------------------------------
+# GitHub automation. A workflow change can leak secrets or push to a protected
+# branch, so workflow and template changes require a security review.
+# ---------------------------------------------------------------------------
+/.github/                               @thotsecure/core
+/.github/workflows/                     @thotsecure/core @thotsecure/security
+/.github/workflows/release.yml          @thotsecure/core @thotsecure/security
+/.github/workflows/sbom-sign.yml        @thotsecure/security @thotsecure/core
+/.github/workflows/codeql.yml           @thotsecure/security
+/.github/workflows/scorecard.yml        @thotsecure/security
+/.github/workflows/sync-labels.yml      @thotsecure/core
+/.github/actions/                       @thotsecure/core @thotsecure/security
+/.github/FUNDING.yml                    @thotsecure/core
+/.github/dependabot.yml                 @thotsecure/security @thotsecure/core
+/.github/labeler.yml                    @thotsecure/core
+/.github/labels.yml                     @thotsecure/core
+/.github/CODEOWNERS                     @thotsecure/core @thotsecure/security
+/.github/PULL_REQUEST_TEMPLATE.md       @thotsecure/docs
+/.github/ISSUE_TEMPLATE/                @thotsecure/docs @thotsecure/core
+/.github/ISSUE_TEMPLATE/security_contact.yml @thotsecure/security
+
+# ---------------------------------------------------------------------------
+# Catch-all for security-relevant file types anywhere in the tree.
+# ---------------------------------------------------------------------------
+*.key                                   @thotsecure/security
+*.pem                                   @thotsecure/security
+*.tf                                    @thotsecure/security @thotsecure/core

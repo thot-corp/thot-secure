@@ -1,0 +1,167 @@
+name: Feature request
+description: Propose a capability for Thot Secure — defensive features only.
+title: "[Feature]: "
+labels:
+  - "type/feature"
+  - "needs-triage"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for proposing something. Thot Secure is a **defensive** platform, and
+        that is a constitutional invariant, not a preference — see
+        [GOVERNANCE.md §9](https://github.com/thotsecure/thot-secure/blob/main/GOVERNANCE.md#9-constitutional-invariants).
+
+        **Requests that add offensive capability are closed without discussion.**
+        That includes exploit code, aggressive or high-rate scanning,
+        brute-forcing, denial of service, hack-back or retaliation against third
+        parties, exfiltration, and collection outside a tenant's declared scope.
+        If your idea is "Thot Secure should also attack X", the answer is no, and a
+        fork under another name is the appropriate route.
+
+        If your proposal touches an existing safety guarantee — `DRY_RUN`,
+        supervised autonomy, the approval gate, rollback, tenant isolation, the
+        audit chain, the execution guard-rails — say so explicitly below. Those
+        changes need more than a feature request: they need an RFC and a vote.
+
+        Check [`ROADMAP.md`](https://github.com/thotsecure/thot-secure/blob/main/ROADMAP.md)
+        first. If the item is already listed, comment there with your use case
+        instead of opening a new issue.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: |
+        Describe the situation you are in, not the solution you have in mind.
+        What are you unable to do today? What do you do instead, and what does
+        that cost you? Concrete context ("we run 40 tenants and triage 600
+        findings a day") is what makes a proposal arguable.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: |
+        What you would like Thot Secure to do. If you know which component it
+        belongs to — a collector, a rule, a policy, a playbook, the API, the CLI,
+        the console — say so.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: |
+        Other ways to solve the problem, **including doing nothing**, and why you
+        think your proposal is better. Workarounds you already tried are useful
+        even when they failed.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of the project does this touch? Pick the closest match.
+      options:
+        - Collectors and ingestion
+        - Event bus
+        - Detection engine / rules
+        - Risk scoring
+        - Policy-as-code / decision
+        - Playbooks, actions and rollback
+        - Audit and compliance reporting
+        - Multi-tenancy, RBAC and API keys
+        - REST API v1 / WebSocket
+        - CLI
+        - Embedded console / UI
+        - Reports (SARIF, CEF, Markdown, HTML) and integrations
+        - SDKs (Python, TypeScript, Go)
+        - Deployment (Docker, Kubernetes, Helm, Terraform, Ansible)
+        - Documentation
+        - Governance, CI/CD or tooling
+        - Not sure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: safety-impact
+    attributes:
+      label: Impact on safety defaults
+      description: |
+        Be honest here. An answer of "none" that turns out to be wrong is far
+        more expensive at review time than an honest "it does".
+      options:
+        - "None: the feature is read-only and cannot change infrastructure state."
+        - "None: the feature produces findings or reports only; policies still decide."
+        - "It adds an action, so it will ship with a rollback and honour DRY_RUN."
+        - "It changes a default, a guard-rail, or the approval path — see the note below."
+    validations:
+      required: true
+
+  - type: textarea
+    id: guardrail-note
+    attributes:
+      label: If the proposal changes a default or a guard-rail, explain how safety is preserved
+      description: |
+        Required when the previous answer is the last option. Explain what
+        changes, why it is still safe by default, and what would prevent an
+        operator from being surprised. Leave blank otherwise.
+    validations:
+      required: false
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: How would we know it works?
+      description: |
+        A criterion a reviewer could check without asking you what you meant.
+        Measured behaviour, a described test, or a concrete expected output —
+        not "it feels faster".
+      placeholder: "With 40 tenants loaded, `GET /api/v1/findings` returns in under 300 ms at p95 on a 2-vCPU host, verified by a benchmark in CI."
+    validations:
+      required: true
+
+  - type: dropdown
+    id: contribute
+    attributes:
+      label: Would you like to implement it?
+      description: |
+        There is no obligation here, and "no" is a perfectly good answer — a
+        well-argued request is a real contribution on its own.
+      options:
+        - "Yes, I would like to open a pull request for this."
+        - "Yes, with guidance on where to start."
+        - "No, but I can test a proposed implementation."
+        - "No, I am only reporting the need."
+    validations:
+      required: true
+
+  - type: textarea
+    id: references
+    attributes:
+      label: References
+      description: |
+        Prior art, specifications, standards, an upstream tool's documentation, a
+        related CVE or advisory, an OWASP or MITRE reference. Links save the
+        reviewer a research task.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmations
+      options:
+        - label: This proposal adds **no offensive capability** (no exploit, no aggressive scanning, no brute force, no DoS, no hack-back, no collection outside a tenant's declared scope).
+          required: true
+        - label: This proposal does not weaken a safety default, an execution guard-rail, tenant isolation, or the audit chain — or, if it does, I have explained above how safety is preserved.
+          required: true
+        - label: I have searched the existing issues and Discussions, and checked ROADMAP.md, and this is not already covered.
+          required: true
+        - label: I understand that Thot Secure is volunteer-maintained, that requesting a feature is not a commitment to deliver it, and that no donation or sponsorship affects whether or when this is implemented.
+          required: true

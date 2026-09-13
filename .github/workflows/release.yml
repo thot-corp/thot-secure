@@ -1,0 +1,675 @@
+# Release — triggered by pushing a `v*` tag.
+#
+# What a release produces, and why each piece exists:
+#
+#   1. **Verification** — the tag, the version in the packaging metadata and the
+#      `CHANGELOG.md` section must agree before anything is published. A release
+#      whose notes and version disagree is worse than a late release.
+#   2. **Tests** — the full suite runs on the tagged commit, on every supported
+#      interpreter. Nothing ships untested, including a hotfix.
+#   3. **Distributions** — sdist and wheel, validated with `twine check`.
+#   4. **SBOM** — SPDX and CycloneDX inventories of what is inside the artefacts.
+#   5. **Signatures** — keyless Sigstore signing over the SBOMs, plus a build
+#      provenance attestation. No long-lived key exists to leak.
+#   6. **Changelog** — release notes extracted from `CHANGELOG.md` (the
+#      authoritative, curated source), with a git-cliff generated changelog as a
+#      complementary artefact and `github_changelog_generator` as a fallback.
+#   7. **GitHub Release** — created as a **draft**. A maintainer reviews the
+#      artefacts, then publishes. Automation prepares a release; a human is
+#      accountable for it.
+#   8. **Container image** — published to GHCR with provenance and an SBOM
+#      attestation attached at the registry level.
+#
+# No repository secret is required. `GITHUB_TOKEN` covers the release and the
+# registry push, and the OIDC token is issued by GitHub at runtime.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to (re)release, for example v0.1.0"
+        required: true
+        type: string
+
+concurrency:
+  group: release-${{ github.ref }}
+  # A release must never be cancelled halfway: a half-published release is a
+  # supply-chain problem, not an inconvenience.
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1. Verify that the tag, the packaging metadata and the changelog agree.
+  # ---------------------------------------------------------------------------
+  verify:
+    name: Verify release metadata
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Resolve and validate the version
+        id: version
+        shell: bash
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [ -n "${INPUT_TAG:-}" ]; then
+            tag="${INPUT_TAG}"
+          else
+            tag="${GITHUB_REF_NAME}"
+          fi
+          if [[ ! "${tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Tag '${tag}' is not a valid SemVer tag of the form vX.Y.Z (optionally with a pre-release suffix)."
+            exit 1
+          fi
+          version="${tag#v}"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "Resolved version: ${version} (tag ${tag})"
+
+      - name: Check the commit is reachable from a remote branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=100 origin '+refs/heads/*:refs/remotes/origin/*'
+          if [ -z "$(git branch -r --contains HEAD)" ]; then
+            echo "::error::This tag does not point at a commit contained in any remote branch. Release tags must be cut from main or a release branch."
+            exit 1
+          fi
+          git branch -r --contains HEAD
+
+      - name: Check CHANGELOG.md has a section for this version
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          import pathlib
+          import re
+          import sys
+
+          version = os.environ["VERSION"]
+          text = pathlib.Path("CHANGELOG.md").read_text(encoding="utf-8")
+          if not re.search(rf"^## \[{re.escape(version)}\]", text, re.M):
+              print(
+                  f"::error::CHANGELOG.md has no '## [{version}]' section. "
+                  "Add the release notes before tagging — the release body is "
+                  "extracted from that section.",
+                  file=sys.stderr,
+              )
+              sys.exit(1)
+          print(f"CHANGELOG.md contains a section for {version}.")
+          PY
+
+      - name: Check packaging metadata matches the tag
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          import pathlib
+          import sys
+          import tomllib
+
+          version = os.environ["VERSION"]
+          pyproject = pathlib.Path("pyproject.toml")
+          if not pyproject.exists():
+              print("::notice::pyproject.toml is absent — skipping the metadata check.")
+              raise SystemExit(0)
+
+          data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
+          declared = (
+              data.get("project", {}).get("version")
+              or data.get("tool", {}).get("poetry", {}).get("version")
+          )
+          if declared is None:
+              print("::error::No version declared in pyproject.toml.")
+              sys.exit(1)
+          # A dynamic version is resolved by the build backend; accept the match
+          # when the value is a table (dynamic = ["version"]).
+          if isinstance(declared, dict):
+              print("::notice::Version is dynamic — skipping the equality check.")
+              raise SystemExit(0)
+          if str(declared) != version:
+              print(
+                  f"::error::pyproject.toml declares version {declared!r} but the tag is {version!r}.",
+                  file=sys.stderr,
+              )
+              sys.exit(1)
+          print(f"pyproject.toml version {declared} matches the tag.")
+          PY
+
+      - name: Check CITATION.cff version matches the tag
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          import pathlib
+          import sys
+
+          import yaml
+
+          version = os.environ["VERSION"]
+          citation = pathlib.Path("CITATION.cff")
+          if not citation.exists():
+              print("::notice::CITATION.cff is absent — skipping.")
+              raise SystemExit(0)
+
+          data = yaml.safe_load(citation.read_text(encoding="utf-8")) or {}
+          declared = str(data.get("version", ""))
+          if declared and declared != version:
+              print(
+                  f"::error::CITATION.cff declares version {declared!r} but the tag is {version!r}. "
+                  "Update CITATION.cff and date-released in the release pull request.",
+                  file=sys.stderr,
+              )
+              sys.exit(1)
+          print(f"CITATION.cff version {declared or '(unset)'} is consistent with the tag.")
+          PY
+
+  # ---------------------------------------------------------------------------
+  # 2. Full test suite on the tagged commit.
+  # ---------------------------------------------------------------------------
+  test:
+    name: Test (Python ${{ matrix.python-version }})
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: true
+      matrix:
+        python-version:
+          - "3.11"
+          - "3.12"
+          - "3.13"
+    env:
+      THOT_ENV: dev
+      THOT_DRY_RUN: "true"
+      THOT_AUTONOMY: supervised
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install the package
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install coverage pytest
+          python -m pip install -e ".[dev]" || python -m pip install -e .
+
+      - name: unittest
+        run: python -m unittest discover -s tests -t . -v
+
+      - name: pytest
+        run: pytest -q --maxfail=1
+
+      - name: Validate shipped rules and policies
+        shell: bash
+        run: |
+          thotsecure rules validate --path rules
+          thotsecure policies validate
+
+  # ---------------------------------------------------------------------------
+  # 3. Build the distributions.
+  # ---------------------------------------------------------------------------
+  build:
+    name: Build distributions
+    needs: [verify, test]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tooling
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install build twine
+
+      - name: Build sdist and wheel
+        run: python -m build --outdir dist
+
+      - name: Check the distributions
+        run: twine check dist/*
+
+      - name: List what was built
+        run: ls -la dist
+
+      - name: Upload distributions
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ needs.verify.outputs.version }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 90
+
+  # ---------------------------------------------------------------------------
+  # 4 and 5. SBOM and signatures over the distributions.
+  # ---------------------------------------------------------------------------
+  sbom:
+    name: SBOM and signatures
+    needs: [verify, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write # keyless Sigstore signing
+      attestations: write # provenance attestation
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Download distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-${{ needs.verify.outputs.version }}
+          path: dist
+
+      - name: Install Syft
+        uses: anchore/sbom-action/download-syft@v0
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Generate SPDX SBOM for the distributions
+        shell: bash
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          set -euo pipefail
+          syft dir:dist --output "spdx-json=dist/thotsecure-${VERSION}.spdx.json"
+
+      - name: Generate CycloneDX SBOM for the distributions
+        shell: bash
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          set -euo pipefail
+          syft dir:dist --output "cyclonedx-json=dist/thotsecure-${VERSION}.cdx.json"
+
+      - name: Sign the SBOMs (keyless, OIDC)
+        shell: bash
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          set -euo pipefail
+          for file in "dist/thotsecure-${VERSION}.spdx.json" "dist/thotsecure-${VERSION}.cdx.json"; do
+            cosign sign-blob --yes \
+              --oidc-issuer=https://token.actions.githubusercontent.com \
+              --bundle "${file}.sigstore.json" \
+              "${file}"
+          done
+
+      - name: Sign the distributions
+        shell: bash
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          set -euo pipefail
+          for file in dist/*.whl dist/*.tar.gz; do
+            [ -f "$file" ] || continue
+            cosign sign-blob --yes \
+              --oidc-issuer=https://token.actions.githubusercontent.com \
+              --bundle "${file}.sigstore.json" \
+              "${file}"
+          done
+
+      - name: Verify every signature produced above
+        shell: bash
+        run: |
+          set -euo pipefail
+          for bundle in dist/*.sigstore.json; do
+            file="${bundle%.sigstore.json}"
+            cosign verify-blob \
+              --bundle "${bundle}" \
+              --certificate-identity-regexp "^https://github.com/${GITHUB_REPOSITORY}/" \
+              --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+              "${file}"
+          done
+
+      - name: Attest build provenance for the distributions and SBOMs
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: |
+            dist/*.whl
+            dist/*.tar.gz
+            dist/thotsecure-${{ needs.verify.outputs.version }}.spdx.json
+            dist/thotsecure-${{ needs.verify.outputs.version }}.cdx.json
+
+      - name: Upload signed artefacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-signed-${{ needs.verify.outputs.version }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 90
+
+  # ---------------------------------------------------------------------------
+  # 6. Changelog and release notes.
+  # ---------------------------------------------------------------------------
+  changelog:
+    name: Changelog
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Extract the release notes from CHANGELOG.md
+        # This is the authoritative source for the release body: the changelog is
+        # curated by maintainers, and generated notes are a starting point, not a
+        # substitution for a written entry.
+        shell: bash
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          import pathlib
+          import re
+          import sys
+
+          version = os.environ["VERSION"]
+          text = pathlib.Path("CHANGELOG.md").read_text(encoding="utf-8")
+          match = re.search(
+              rf"^## \[{re.escape(version)}\][^\n]*\n(?P<body>.*?)(?=^## \[|\Z)",
+              text,
+              re.M | re.S,
+          )
+          if not match:
+              print(f"::error::No CHANGELOG.md section found for {version}.", file=sys.stderr)
+              sys.exit(1)
+
+          body = match.group("body")
+          # Drop the horizontal rules used as separators inside the changelog.
+          body = re.sub(r"^\s*---\s*$", "", body, flags=re.M).strip()
+
+          notes = "\n".join(
+              [
+                  f"# Thot Secure {version}",
+                  "",
+                  f"Full changelog: https://github.com/{os.environ['GITHUB_REPOSITORY']}/blob/main/CHANGELOG.md",
+                  "",
+                  body,
+                  "",
+                  "---",
+                  "",
+                  "## Verifying this release",
+                  "",
+                  "Every artefact is signed with Sigstore (keyless) and accompanied by an SBOM",
+                  "and a build provenance attestation:",
+                  "",
+                  "```console",
+                  "cosign verify-blob \\",
+                  "  --bundle thotsecure-<version>.spdx.json.sigstore.json \\",
+                  f"  --certificate-identity-regexp \"^https://github.com/{os.environ['GITHUB_REPOSITORY']}/\" \\",
+                  "  --certificate-oidc-issuer \"https://token.actions.githubusercontent.com\" \\",
+                  "  thotsecure-<version>.spdx.json",
+                  "",
+                  "gh attestation verify thotsecure-<version>.spdx.json --repo "
+                  + os.environ["GITHUB_REPOSITORY"],
+                  "```",
+                  "",
+                  "Thot Secure is a defensive security project and contains no offensive capability.",
+                  "See SECURITY.md for the security policy and GOVERNANCE.md for the invariants",
+                  "that are not open to a vote.",
+                  "",
+              ]
+          )
+          pathlib.Path("release-notes.md").write_text(notes, encoding="utf-8")
+          print(f"Wrote release-notes.md ({len(notes)} bytes) for {version}.")
+          PY
+
+      - name: Generate a changelog with git-cliff
+        id: cliff
+        # Complementary artefact, not the release body: git-cliff groups the raw
+        # commit history, which is useful for a full-history changelog but is not a
+        # substitute for the curated CHANGELOG.md entry above.
+        continue-on-error: true
+        uses: orhun/git-cliff-action@v4
+        with:
+          args: --unreleased --tag ${{ needs.verify.outputs.version }}
+          output: git-cliff-changelog.md
+
+      - name: Generate a changelog with github_changelog_generator (fallback)
+        if: steps.cliff.outcome == 'failure'
+        continue-on-error: true
+        env:
+          CHANGELOG_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "git-cliff was unavailable or failed — falling back to github_changelog_generator."
+          gem install github_changelog_generator --no-document
+          github_changelog_generator \
+            --user "${GITHUB_REPOSITORY%%/*}" \
+            --project "${GITHUB_REPOSITORY##*/}" \
+            --future-release "${{ needs.verify.outputs.version }}" \
+            --output git-cliff-changelog.md
+
+      - name: Upload changelog artefacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: changelog-${{ needs.verify.outputs.version }}
+          path: |
+            release-notes.md
+            git-cliff-changelog.md
+          if-no-files-found: warn
+          retention-days: 90
+
+  # ---------------------------------------------------------------------------
+  # 7. Create the GitHub Release as a draft.
+  # ---------------------------------------------------------------------------
+  release:
+    name: Create GitHub Release
+    needs: [verify, build, sbom, changelog]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Download signed artefacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-signed-${{ needs.verify.outputs.version }}
+          path: dist
+
+      - name: Download release notes
+        uses: actions/download-artifact@v4
+        with:
+          name: changelog-${{ needs.verify.outputs.version }}
+          path: notes
+
+      - name: Show what will be attached
+        run: find dist notes -type f | sort
+
+      - name: Create the draft release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "Thot Secure ${{ needs.verify.outputs.version }}"
+          body_path: notes/release-notes.md
+          # A draft, deliberately. A maintainer downloads the artefacts, verifies a
+          # signature and reads the notes before publishing. Automation prepares a
+          # release; a human is accountable for it.
+          draft: true
+          prerelease: false
+          fail_on_unmatched_files: true
+          files: |
+            dist/*.whl
+            dist/*.tar.gz
+            dist/*.spdx.json
+            dist/*.cdx.json
+            dist/*.sigstore.json
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Remind the release maintainer
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          ## Draft release created — action required
+
+          A draft release was created for this tag. Before publishing it:
+
+          1. Download the wheel and sdist, and verify one signature:
+             `cosign verify-blob --bundle <file>.sigstore.json ...`
+          2. Verify provenance: `gh attestation verify <file> --repo <repo>`
+          3. Read the release notes and correct anything the changelog got wrong.
+          4. Confirm the container image is published to GHCR and its digest matches.
+          5. Only then, publish the release.
+
+          Publishing the draft re-runs the SBOM workflow through its `release:
+          published` trigger, which is idempotent and attaches any missing assets.
+          EOF
+
+  # ---------------------------------------------------------------------------
+  # 8. Container image to GHCR, with provenance and an SBOM attestation.
+  # ---------------------------------------------------------------------------
+  docker:
+    name: Publish container image
+    needs: [verify, test]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Detect the Dockerfile
+        id: dockerfile
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f Dockerfile ]; then
+            echo "path=./Dockerfile" >> "$GITHUB_OUTPUT"
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          elif [ -f deploy/Dockerfile ]; then
+            echo "path=./deploy/Dockerfile" >> "$GITHUB_OUTPUT"
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No Dockerfile found — skipping the image publication."
+          fi
+
+      - name: Set up QEMU
+        if: steps.dockerfile.outputs.found == 'true'
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Buildx
+        if: steps.dockerfile.outputs.found == 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: steps.dockerfile.outputs.found == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract image metadata
+        if: steps.dockerfile.outputs.found == 'true'
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=latest,enable=${{ !contains(needs.verify.outputs.version, '-') }}
+          labels: |
+            org.opencontainers.image.title=Thot Secure
+            org.opencontainers.image.description=Defensive multi-tenant SOAR and CSPM platform
+            org.opencontainers.image.licenses=Apache-2.0
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+
+      - name: Build and push the image
+        if: steps.dockerfile.outputs.found == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ steps.dockerfile.outputs.path }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Buildx attaches an SBOM and a provenance attestation to the image in
+          # the registry, so `docker buildx imagetools inspect` on the published
+          # manifest shows exactly what went in and how it was built.
+          provenance: true
+          sbom: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Summarise the publication
+        if: steps.dockerfile.outputs.found == 'true'
+        run: |
+          {
+            echo "## Container image published"
+            echo
+            echo '```'
+            echo "${{ steps.meta.outputs.tags }}"
+            echo '```'
+            echo
+            echo "Digest and attestations:"
+            echo
+            echo '```console'
+            echo "docker buildx imagetools inspect ghcr.io/${{ github.repository }}:${{ needs.verify.outputs.version }}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

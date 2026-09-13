@@ -1,0 +1,33 @@
+{
+  "event_id": "7c74d35c-9592-44ec-8c46-d19986e78f7e",
+  "schema_version": "1",
+  "tenant_id": "acme",
+  "ts": "2026-02-14T10:18:47.930Z",
+  "kind": "log.line",
+  "source": {
+    "type": "siem",
+    "name": "correlation-engine",
+    "host": "siem-01.acme.fr"
+  },
+  "severity_hint": "medium",
+  "labels": {
+    "src_ip": "192.0.2.44",
+    "dest_ip": "10.20.30.11",
+    "user": "a.diop",
+    "siem_rule_id": "SIEM-COR-0421",
+    "siem_rule_name": "Multiple admin actions from a single source",
+    "siem_index": "thot-secure-correlated",
+    "correlation_count": 12,
+    "mitre_technique": "T1078",
+    "detected_by": "third-party-siem"
+  },
+  "payload": {
+    "message": "12 actions d'administration consécutives depuis 192.0.2.44 en 240 s (seuil de corrélation : 5).",
+    "window_seconds": 240,
+    "threshold": 5,
+    "event_count": 12,
+    "severity_raw": "medium",
+    "ticket_ref": null
+  },
+  "raw_ref": null
+}

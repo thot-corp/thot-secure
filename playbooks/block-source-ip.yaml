@@ -1,0 +1,57 @@
+name: block-source-ip
+description: >-
+  Bloque une adresse source au niveau du connecteur WAF/pare-feu configuré. C'est la
+  contre-mesure de base contre une attaque entrante : réversible, à durée limitée, et sans
+  effet sur les autres utilisateurs.
+reversible: true
+dry_run_capable: true
+connectors: [waf]
+params:
+  target:
+    type: ip
+    required: true
+    description: Adresse IP ou plage CIDR à bloquer (la cible de l'attaque, pas votre actif).
+  duration_seconds:
+    type: duration
+    default: 3600
+    min: 60
+    max: 604800
+    description: >-
+      Durée du blocage. Toujours finie : un blocage permanent oublié devient un déni de
+      service que vous vous infligez à vous-même.
+  reason:
+    type: string
+    default: "Thot Secure — contre-mesure automatique"
+    description: Motif inscrit dans le journal du connecteur et dans le ticket associé.
+execute:
+  - connector: waf
+    call: block_ip
+    with:
+      ip: "${params.target}"
+      ttl: "${params.duration_seconds}"
+      note: "${params.reason}"
+  - connector: ticketing
+    call: open_ticket
+    optional: true
+    with:
+      title: "Blocage de ${params.target} — ${finding.title}"
+      severity: "${finding.severity}"
+      tenant_id: "${tenant.id}"
+      finding_id: "${finding.id}"
+      action_id: "${action.id}"
+      description: "${params.reason}"
+      remediation: "${finding.remediation}"
+rollback:
+  - connector: waf
+    call: unblock_ip
+    with:
+      ip: "${params.target}"
+  - connector: ticketing
+    call: close_ticket
+    optional: true
+    with:
+      rollback_token: "${params.rollback_token}"
+      resolution: "blocage annulé (rollback)"
+audit:
+  severity: high
+  notify: [ticketing]

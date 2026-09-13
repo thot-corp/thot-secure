@@ -1,0 +1,30 @@
+id: AO-WEB-051
+title: Politique de sécurité de contenu (CSP) absente
+description: >-
+  Sans Content-Security-Policy, toute injection de contenu s'exécute directement dans le
+  navigateur de l'utilisateur : la CSP est la contre-mesure de dernier recours contre les
+  injections (XSS, injection de balises, détournement de formulaires).
+status: stable
+severity: medium
+confidence: 0.9
+enabled: true
+tags: [web, hardening, owasp:a05, defense-in-depth]
+source_types: [web_probe]
+kinds: [http.response]
+match:
+  all:
+    - field: labels.check
+      op: eq
+      value: missing_csp
+dedup:
+  key: [labels.host]
+  ttl_seconds: 604800
+risk:
+  base: 28
+remediation: >-
+  Déployer une CSP en mode rapport d'abord (`Content-Security-Policy-Report-Only`) pour
+  mesurer l'impact, puis l'appliquer avec `default-src 'self'` et des sources explicitement
+  autorisées. Éviter `unsafe-inline` et `unsafe-eval`.
+references:
+  - https://owasp.org/www-project-secure-headers/
+  - https://developer.mozilla.org/docs/Web/HTTP/CSP

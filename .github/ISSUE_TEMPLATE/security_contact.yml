@@ -1,0 +1,97 @@
+name: Security contact — read this first
+description: Do NOT disclose a vulnerability here. This form routes you to the private reporting channels.
+title: "[Security]: read SECURITY.md before posting — do not include vulnerability details"
+labels:
+  - "security"
+  - "needs-triage"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Stop — do not describe a vulnerability in this issue
+
+        GitHub issues, pull requests, Discussions and comments are **public and
+        permanently indexed**. A vulnerability posted here is disclosed to every
+        Thot Secure deployment before a fix exists, and it puts real people's
+        infrastructure at risk. Reports containing vulnerability details are
+        deleted as soon as we see them, and we will ask you to resubmit privately.
+
+        ### Report a vulnerability privately
+
+        **Option 1 — GitHub Security Advisories (preferred).**
+        [Open a private advisory](https://github.com/thotsecure/thot-secure/security/advisories/new).
+        The report, the reproduction, the patch and the CVE request stay private in
+        one place, and you are credited in the published advisory.
+
+        **Option 2 — email, encrypted.**
+        `security@thotsecure.dev`, using the project PGP key published in
+        [`SECURITY.md`](https://github.com/thotsecure/thot-secure/blob/main/SECURITY.md).
+        Use this if you cannot use GitHub, or if the advisory form itself is
+        affected.
+
+        ### What we commit to
+
+        | Stage | Target |
+        |---|---|
+        | Acknowledgement by a human | **72 hours** |
+        | Triage, severity and a first assessment | **7 calendar days** |
+        | Fix or documented mitigation, critical severity | **30 calendar days** |
+
+        These are best-effort commitments from a volunteer team; they are published
+        so you can plan, and we will tell you if a date slips rather than go silent.
+        Read the full policy — scope, out-of-scope cases, CVE and credit policy — in
+        [`SECURITY.md`](https://github.com/thotsecure/thot-secure/blob/main/SECURITY.md).
+
+        ### The one thing we ask
+
+        Please do not test against infrastructure you do not own or are not
+        authorized to operate. Thot Secure is a defensive project, and unauthorized
+        testing of third parties is outside what this project can authorize or
+        support.
+
+        ### Not a vulnerability?
+
+        - Questions about **hardening your own deployment**, configuration, or how
+          to interpret a finding belong in
+          [Discussions](https://github.com/thotsecure/thot-secure/discussions) — that is
+          not a vulnerability, and it is fine to ask in public.
+        - A **rule firing on legitimate traffic** is a bug, not a vulnerability:
+          use the *False positive report* form.
+        - A **functional defect** that does not affect a security guarantee: use
+          the *Bug report* form.
+        - A **Code of Conduct** matter goes to `conduct@thotsecure.dev`, not here and
+          not to the security address.
+
+        Once you have read the above, complete the fields below so this issue can
+        be routed and closed. **Do not add technical details.**
+
+  - type: dropdown
+    id: intent
+    attributes:
+      label: What brought you to this form?
+      description: This only routes the issue; it is not a substitute for a private report.
+      options:
+        - "I have a vulnerability to report and will use the private channel linked above."
+        - "I want to check whether something I noticed is a vulnerability, without posting details."
+        - "I have a question about Thot Secure security hardening (no vulnerability involved)."
+        - "I have a question about the security policy itself (scope, timelines, credit, CVE)."
+        - "I am a maintainer or triager routing an issue that arrived here by mistake."
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: acknowledgements
+    attributes:
+      label: Acknowledgements
+      description: Every box is required. If you cannot tick them, do not submit — use the private channel.
+      options:
+        - label: I have read SECURITY.md and I understand that **vulnerability details must not be posted in a public issue**.
+          required: true
+        - label: I have **not** included, and will not include, vulnerability details, reproduction steps, payloads, affected versions with an exploit path, or proof-of-concept code in this public issue.
+          required: true
+        - label: I will report the technical details through GitHub Security Advisories or by email to security@thotsecure.dev.
+          required: true
+        - label: Any testing I performed was against systems I own or am authorized to test, and I did not access another tenant's data or degrade anyone's service.
+          required: true
+        - label: I understand that if this issue contains vulnerability details, it will be removed, and that removal is not retaliation but protection of other users.
+          required: true

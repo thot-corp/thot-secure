@@ -1,0 +1,32 @@
+name: unblock-source-ip
+description: >-
+  Retire un blocage précédemment appliqué. Utilisé comme rollback du playbook
+  `block-source-ip`, et directement lorsqu'un faux positif a bloqué un client légitime.
+reversible: true
+dry_run_capable: true
+connectors: [waf]
+params:
+  target:
+    type: ip
+    required: true
+    description: Adresse IP ou plage à débloquer.
+  reason:
+    type: string
+    default: "Thot Secure — levée de blocage"
+    description: Motif de la levée (faux positif, fin de mesure, demande client).
+execute:
+  - connector: waf
+    call: unblock_ip
+    with:
+      ip: "${params.target}"
+      note: "${params.reason}"
+rollback:
+  - connector: waf
+    call: block_ip
+    with:
+      ip: "${params.target}"
+      ttl: 3600
+      note: "réapplication du blocage après annulation du déblocage"
+audit:
+  severity: medium
+  notify: [ticketing]

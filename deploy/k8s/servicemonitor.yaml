@@ -1,0 +1,67 @@
+# =============================================================================
+# Thot Secure — ServiceMonitor (Prometheus Operator)
+# =============================================================================
+# CRD fournie par kube-prometheus-stack / prometheus-operator. Le ServiceMonitor
+# cible le Service `thotsecure-metrics` (port `metrics`) qui expose GET /metrics.
+#
+# Métriques collectées :
+#   thotsecure_events_ingested_total, thotsecure_findings_total{severity},
+#   thotsecure_actions_total{status,playbook}, thotsecure_rule_eval_seconds,
+#   thotsecure_pipeline_lag_seconds, thotsecure_audit_records_total
+#
+# Prérequis : le label `release` doit correspondre au sélecteur du Prometheus
+# déployé (`kubectl -n monitoring get prometheus -o yaml | grep -A5 serviceMonitorSelector`).
+# Adaptez-le, ou passez `serviceMonitorSelectorNilUsesHelmValues: false` côté chart.
+# =============================================================================
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: thotsecure
+  namespace: thotsecure
+  labels:
+    app.kubernetes.io/name: thotsecure
+    app.kubernetes.io/instance: thotsecure
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/component: metrics
+    app.kubernetes.io/part-of: thotsecure
+    app.kubernetes.io/managed-by: kubectl
+    # Étiquette attendue par le sélecteur par défaut de kube-prometheus-stack.
+    # À ajuster selon votre installation.
+    release: kube-prometheus-stack
+  annotations:
+    thotsecure.io/description: "Scrape de /metrics (Prometheus texte)."
+spec:
+  # Le Service et ses Endpoints vivent dans le même namespace que le monitor.
+  namespaceSelector:
+    matchNames:
+      - thotsecure
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: thotsecure
+      app.kubernetes.io/instance: thotsecure-metrics
+  endpoints:
+    - port: metrics
+      path: /metrics
+      scheme: http
+      # 30 s : compromis entre fraîcheur des alertes et charge (les règles
+      # d'alerte Prometheus utilisent des fenêtres de 5 à 30 min).
+      interval: 30s
+      scrapeTimeout: 10s
+      # Aucune authentification : /metrics est destiné au réseau interne. Ne
+      # l'exposez jamais sur l'Ingress public.
+      honorLabels: false
+      relabelings:
+        - action: replace
+          sourceLabels:
+            - __meta_kubernetes_pod_node_name
+          targetLabel: node
+        - action: replace
+          targetLabel: job
+          replacement: thotsecure
+      metricRelabelings:
+        # Conserve uniquement les métriques applicatives Thot Secure : réduit le
+        # bruit et la cardinalité côté Prometheus.
+        - sourceLabels:
+            - __name__
+          regex: "thotsecure_.*"
+          action: keep

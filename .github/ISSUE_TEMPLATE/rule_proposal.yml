@@ -1,0 +1,278 @@
+name: Detection rule proposal
+description: Propose a new detection rule (or a significant change to an existing one) for the shipped rule library.
+title: "[Rule]: AO-XXX-NNN — "
+labels:
+  - "rules"
+  - "type/rule"
+  - "needs-triage"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form to propose a rule for `rules/`. If you already have the
+        rule written, you can skip the description and open the pull request —
+        but read
+        [CONTRIBUTING.md §7](https://github.com/thotsecure/thot-secure/blob/main/CONTRIBUTING.md#7-adding-a-detection-rule)
+        first, and include the positive, negative and threshold tests. **A rule
+        without a negative test is not merged.**
+
+        Rules are the most valuable contribution to this project. A rule that
+        fires on legitimate traffic is worse than no rule at all, which is why
+        the false-positive questions below are not optional.
+
+        **A rule may not perform an attack.** A rule detects observed behaviour
+        in telemetry the tenant already collects. A proposal whose detection
+        method is "send a payload and see what happens" is a scanner, and it will
+        be closed: Thot Secure collects, it does not probe beyond a tenant's
+        explicitly declared and owned targets.
+
+  - type: input
+    id: rule-id
+    attributes:
+      label: Proposed rule ID
+      description: |
+        `AO-<FAMILY>-<NNN>`, picking the next free number in the family:
+        `AO-WEB-###` (HTTP/web), `AO-CLOUD-###` (cloud and containers),
+        `AO-DEP-###` (dependencies and supply chain), `AO-TLS-###` (transport and
+        certificates), `AO-AUTH-###` (authentication and session abuse),
+        `AO-HOST-###` (host and system telemetry). IDs are never reused or
+        renumbered — if you are unsure, write `AO-???-000` and a maintainer will
+        assign one.
+      placeholder: "AO-WEB-042"
+    validations:
+      required: true
+
+  - type: input
+    id: rule-title
+    attributes:
+      label: Proposed rule title
+      description: |
+        Describe the **observed behaviour**, not the attacker. "SQL injection
+        attempt in query string" — not "SQL hacker detected".
+      placeholder: "Path traversal attempt in multipart filename"
+    validations:
+      required: true
+
+  - type: textarea
+    id: behaviour
+    attributes:
+      label: What behaviour does this detect?
+      description: |
+        The activity as it appears in telemetry, and why it is worth alerting on.
+        Explain the attacker goal or the misconfiguration it exposes, and what
+        the consequence would be if it went unnoticed.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Proposed severity
+      description: |
+        Severity reflects impact if the activity is real, not how easy it is to
+        detect. `confidence` (below) expresses how sure the rule is.
+      options:
+        - critical
+        - high
+        - medium
+        - low
+        - info
+    validations:
+      required: true
+
+  - type: dropdown
+    id: confidence
+    attributes:
+      label: Expected confidence
+      description: How reliably does this pattern indicate the behaviour, when it matches at all?
+      options:
+        - "0.90 — 1.00 : very high, essentially no false positives expected"
+        - "0.70 — 0.89 : high, occasional benign matches"
+        - "0.50 — 0.69 : moderate, regular benign matches expected"
+        - "0.30 — 0.49 : low, use as a signal only, not as evidence"
+        - "below 0.30 : noisy, probably needs a threshold or a filter"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: source-types
+    attributes:
+      label: Data sources this rule needs
+      description: |
+        Which collector types produce the events this rule reads
+        (`source_types` in the rule schema)?
+      options:
+        - label: "`web_probe` — HTTP surface of a declared target"
+        - label: "`log_tail` — local log files"
+        - label: "`dependency_scan` — installed dependency inventory"
+        - label: "`config_audit` — configuration and posture state"
+        - label: "`syslog` — syslog stream"
+        - label: "`generic` — JSON-lines ingest from an external pipeline"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: kinds
+    attributes:
+      label: Event kinds this rule matches
+      description: The `kinds` field of the rule. At least one is required.
+      options:
+        - label: "`http.request`"
+        - label: "`http.response`"
+        - label: "`log.line`"
+        - label: "`tls.cert`"
+        - label: "`dependency`"
+        - label: "`config.audit`"
+        - label: "`syslog`"
+        - label: "`generic`"
+    validations:
+      required: true
+
+  - type: textarea
+    id: logic
+    attributes:
+      label: Detection logic
+      description: |
+        The matching conditions, ideally as a ready-to-use `match:` block
+        conforming to
+        [contract §5](https://github.com/thotsecure/thot-secure/blob/main/docs/architecture/api-contract.md).
+        Use the documented operators only: `eq, ne, gt, gte, lt, lte, in,
+        not_in, contains, icontains, startswith, endswith, regex, exists, cidr,
+        len_gt, len_lt`. For regex, watch for catastrophic backtracking — it is
+        compiled with a timeout, and a pathological pattern will be rejected.
+      render: yaml
+      value: |
+        match:
+          all:
+            - field: labels.path
+              op: regex
+              value: ""
+          any: []
+          not: []
+    validations:
+      required: true
+
+  - type: dropdown
+    id: threshold
+    attributes:
+      label: Does this rule need aggregation?
+      description: |
+        A single matching event is often not a signal. A `threshold` block
+        (`count`, `window_seconds`, `group_by`) turns a burst into one finding and
+        is the single most effective way to keep a rule quiet.
+      options:
+        - "No threshold: one matching event is worth a finding."
+        - "Yes: a threshold is required (describe it below)."
+        - "Not sure: suggest a grouping and I will test it."
+    validations:
+      required: true
+
+  - type: textarea
+    id: threshold-detail
+    attributes:
+      label: Threshold details
+      description: If a threshold is needed, give `count`, `window_seconds` and `group_by`, with the reasoning for each number.
+      render: yaml
+      placeholder: |
+        threshold:
+          count: 5
+          window_seconds: 120
+          group_by: [labels.src_ip, labels.path]
+    validations:
+      required: false
+
+  - type: textarea
+    id: false-positives
+    attributes:
+      label: Expected false positives
+      description: |
+        **This is the most important field in the form.** Under what legitimate
+        circumstances would this pattern appear? Think about search boxes, admin
+        tooling, API clients, monitoring probes, scanners the tenant runs
+        themselves, and internationalised input. If your honest answer is "none",
+        say why you are sure.
+      placeholder: |
+        - Free-text search fields containing SQL keywords ("union", "select").
+        - The tenant's own authorised vulnerability scanner, which will match on every run.
+        - Legacy endpoints that pass a JSON blob through a query parameter.
+    validations:
+      required: true
+
+  - type: textarea
+    id: test-cases
+    attributes:
+      label: Test cases
+      description: |
+        One event that **must** match, and one look-alike event that must **not**.
+        These become the tests in `tests/test_rules_engine.py`. Paste the canonical
+        `Event` JSON (redacted) as described in contract §3.1.
+      render: json
+    validations:
+      required: true
+
+  - type: input
+    id: owasp
+    attributes:
+      label: OWASP reference
+      description: The relevant OWASP Top 10 / ASVS / API Security category, if one applies.
+      placeholder: "OWASP Top 10 A03:2021 — Injection"
+    validations:
+      required: false
+
+  - type: input
+    id: mitre
+    attributes:
+      label: MITRE ATT&CK reference
+      description: |
+        The technique ID. It goes in both `mitre:` and as a `mitre:T####` tag in
+        the rule, per the schema.
+      placeholder: "T1190 — Exploit Public-Facing Application"
+    validations:
+      required: false
+
+  - type: textarea
+    id: references
+    attributes:
+      label: References
+      description: |
+        At least one authoritative, publicly reachable URL: vendor advisory,
+        specification, research write-up, documentation. Rules without a
+        reference are usually guesswork, and reviewers ask for it.
+    validations:
+      required: true
+
+  - type: textarea
+    id: remediation
+    attributes:
+      label: Suggested remediation
+      description: |
+        What should the responder do when this fires? This becomes the rule's
+        `remediation` field and is surfaced in findings and reports. Keep it
+        concrete and reversible where possible ("block the source IP for 1 h at
+        the WAF, verify the application logs, patch the input handler").
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmations
+      options:
+        - label: This rule detects **observed telemetry**. It does not require Thot Secure to attack, scan, fuzz or probe anything.
+          required: true
+        - label: This rule produces **findings only**. It does not trigger an action by itself — policies decide, and autonomy is configured per tenant.
+          required: true
+        - label: I have checked that no existing rule in `rules/` already covers this behaviour, or I have explained below why a separate rule is justified.
+          required: true
+        - label: I can provide the positive and negative test events, and I will run `thotsecure rules validate --path rules` before opening a pull request.
+          required: true
+        - label: The test data contains **no secrets, no real customer data and no production telemetry**.
+          required: true
+
+  - type: textarea
+    id: overlap
+    attributes:
+      label: Overlap with existing rules
+      description: If a similar rule exists, list its ID and explain why extending it is not enough.
+    validations:
+      required: false

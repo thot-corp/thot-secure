@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Connexion{% endblock %}
+{% block content %}
+<main class="login">
+  <section class="card narrow">
+    <h1>Thot Secure</h1>
+    <p class="muted">
+      SOAR/CSPM défensif — détection, décision <em>policy-as-code</em> et contre-mesures
+      réversibles et auditées.
+    </p>
+
+    {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+
+    <form method="post" action="/ui/login">
+      <label for="api_key">Clé API</label>
+      <input id="api_key" name="api_key" type="password" autocomplete="off" required
+             placeholder="thot_XXXXXXXX_…" spellcheck="false">
+      <p class="hint">
+        La clé est échangée contre un cookie de session signé (<code>HttpOnly</code>,
+        <code>SameSite=Strict</code>). Elle n'est jamais stockée dans le navigateur.
+      </p>
+      <button type="submit">Se connecter</button>
+    </form>
+
+    <details>
+      <summary>Aucune clé ? (environnement de développement)</summary>
+      <p>
+        Si la base est vide, un tenant d'amorçage et une clé d'administration sont créés au
+        premier démarrage avec la valeur de <code>THOT_BOOTSTRAP_API_KEY</code>.
+      </p>
+      <pre>thotsecure tenant create --id acme --name "ACME" --mode supervised
+thotsecure key create --tenant acme --role responder</pre>
+      <p class="muted">
+        Cette clé d'amorçage est publique : elle est refusée en production
+        (<code>THOT_ENV=prod</code>).
+      </p>
+    </details>
+  </section>
+</main>
+{% endblock %}

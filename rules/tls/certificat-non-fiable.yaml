@@ -1,0 +1,34 @@
+id: AO-TLS-003
+title: Certificat TLS non validable par le magasin système
+description: >-
+  La chaîne de certification du certificat présenté n'est pas validable : certificat
+  auto-signé, autorité inconnue, chaîne incomplète ou nom d'hôte non correspondant. Les
+  clients légitimes recevront un avertissement de sécurité, et un attaquant en position
+  d'homme du milieu peut se faire passer pour le service.
+status: stable
+severity: high
+confidence: 0.9
+enabled: true
+tags: [tls, hardening, cis:2.4, mitre:T1557]
+source_types: [tls_cert]
+kinds: [tls.cert]
+match:
+  all:
+    - field: labels.check
+      op: eq
+      value: cert_untrusted
+dedup:
+  key: [labels.host]
+  ttl_seconds: 86400
+risk:
+  base: 48
+false_positives:
+  - >-
+    Infrastructure interne utilisant une autorité de certification privée : dans ce cas,
+    distribuez l'autorité racine aux clients (et non l'exception sur chaque poste).
+remediation: >-
+  Déployer un certificat émis par une autorité reconnue (ou une AC interne dont la racine est
+  distribuée), servir la chaîne intermédiaire complète, et vérifier la correspondance du nom
+  d'hôte. Ne jamais désactiver la vérification côté client comme solution permanente.
+references:
+  - https://attack.mitre.org/techniques/T1557/

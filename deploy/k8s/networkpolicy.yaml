@@ -1,0 +1,327 @@
+# =============================================================================
+# Thot Secure — NetworkPolicy : refus par défaut, flux explicites
+# =============================================================================
+# Modèle « default deny » :
+#   1. `thotsecure-default-deny` : tout est refusé (entrant ET sortant) pour tous
+#      les pods du namespace.
+#   2. Chaque flux légitime est ensuite autorisé nommément, avec un commentaire
+#      qui justifie sa raison d'être.
+#
+# Flux entrants autorisés :
+#   * depuis le contrôleur d'Ingress (console + API + WebSocket)
+#   * depuis le namespace de supervision (scrape de /metrics et sondes)
+#
+# Flux sortants autorisés :
+#   * résolution DNS vers kube-system (CoreDNS)
+#   * bus NATS (uniquement si THOT_BUS=nats)
+#   * cibles surveillées déclarées par le tenant (périmètre opt-in)
+#
+# NOTE : les NetworkPolicy ne sont appliquées que si le CNI les prend en charge
+# (Calico, Cilium, Antrea, Weave...). Avec flannel seul, elles sont ignorées sans
+# erreur — vérifiez la capacité de votre CNI avant de considérer ce contrôle
+# comme effectif.
+# =============================================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: thotsecure-default-deny
+  namespace: thotsecure
+  labels:
+    app.kubernetes.io/name: thotsecure
+    app.kubernetes.io/instance: thotsecure
+    app.kubernetes.io/component: network-policy
+    app.kubernetes.io/part-of: thotsecure
+    app.kubernetes.io/managed-by: kubectl
+  annotations:
+    thotsecure.io/description: "Refus de tout trafic par defaut (entrant et sortant)."
+spec:
+  # Sélecteur vide : la politique s'applique à TOUS les pods du namespace.
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  # Aucune règle `ingress`/`egress` : tout est refusé. La règle est donc
+  # volontairement sans `ingress:` ni `egress:`.
+---
+# =============================================================================
+# Entrant : contrôleur d'Ingress -> API / console
+# =============================================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: thotsecure-allow-ingress-controller
+  namespace: thotsecure
+  labels:
+    app.kubernetes.io/name: thotsecure
+    app.kubernetes.io/instance: thotsecure
+    app.kubernetes.io/component: network-policy
+    app.kubernetes.io/part-of: thotsecure
+    app.kubernetes.io/managed-by: kubectl
+  annotations:
+    thotsecure.io/description: "Autorise le controleur d'Ingress a joindre l'API et la console."
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: thotsecure
+      app.kubernetes.io/instance: thotsecure
+  policyTypes:
+    - Ingress
+  ingress:
+    # Le sélecteur de namespace couvre tous les pods du namespace d'Ingress, et
+    # non un pod précis : c'est la pratique usuelle avec ingress-nginx, dont le
+    # nom de pod contient un suffixe aléatoire. Restreindre par étiquette de pod
+    # est préférable si votre contrôleur en expose une stable.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+# =============================================================================
+# Entrant : supervision -> /metrics et sondes
+# =============================================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: thotsecure-allow-monitoring
+  namespace: thotsecure
+  labels:
+    app.kubernetes.io/name: thotsecure
+    app.kubernetes.io/instance: thotsecure
+    app.kubernetes.io/component: network-policy
+    app.kubernetes.io/part-of: thotsecure
+    app.kubernetes.io/managed-by: kubectl
+  annotations:
+    thotsecure.io/description: "Autorise Prometheus a scraper /metrics et les sondes."
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: thotsecure
+      app.kubernetes.io/instance: thotsecure
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        # `monitoring` : namespace usuel de kube-prometheus-stack.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+        # Alternative/addition : tout pod portant l'étiquette de Prometheus,
+        # quel que soit son namespace (utile si la supervision vit ailleurs).
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        # /metrics est exposé sur le même port HTTP que l'API : cette politique
+        # autorise donc aussi l'API à ces sources. Préférez un port dédié si
+        # votre modèle de menaces exige une séparation stricte.
+        - protocol: TCP
+          port: 8080
+---
+# =============================================================================
+# Entrant : sondes kubelet (liveness/readiness/startup)
+# =============================================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: thotsecure-allow-kubelet-probes
+  namespace: thotsecure
+  labels:
+    app.kubernetes.io/name: thotsecure
+    app.kubernetes.io/instance: thotsecure
+    app.kubernetes.io/component: network-policy
+    app.kubernetes.io/part-of: thotsecure
+    app.kubernetes.io/managed-by: kubectl
+  annotations:
+    thotsecure.io/description: "Autorise le kubelet (noeud) a executer les sondes HTTP."
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: thotsecure
+      app.kubernetes.io/instance: thotsecure
+  policyTypes:
+    - Ingress
+  ingress:
+    # Les sondes HTTP proviennent de l'adresse du nœud, pas d'un pod : on
+    # autorise donc les plages de nœuds. Adaptez le CIDR à votre cluster.
+    - from:
+        - ipBlock:
+            # Plage par défaut de nombreux clusters (kubeadm, k3s, EKS, AKS
+            # selon la configuration). REMPLACEZ-LA par le CIDR réel de vos
+            # nœuds : une plage trop large annule l'intérêt du default-deny.
+            cidr: 10.0.0.0/8
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+# =============================================================================
+# Sortant : résolution DNS
+# =============================================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: thotsecure-allow-dns-egress
+  namespace: thotsecure
+  labels:
+    app.kubernetes.io/name: thotsecure
+    app.kubernetes.io/instance: thotsecure
+    app.kubernetes.io/component: network-policy
+    app.kubernetes.io/part-of: thotsecure
+    app.kubernetes.io/managed-by: kubectl
+  annotations:
+    thotsecure.io/description: "Autorise la resolution DNS vers kube-system (CoreDNS)."
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: thotsecure
+      app.kubernetes.io/instance: thotsecure
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+# =============================================================================
+# Sortant : bus NATS (uniquement si THOT_BUS=nats)
+# =============================================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: thotsecure-allow-nats-egress
+  namespace: thotsecure
+  labels:
+    app.kubernetes.io/name: thotsecure
+    app.kubernetes.io/instance: thotsecure
+    app.kubernetes.io/component: network-policy
+    app.kubernetes.io/part-of: thotsecure
+    app.kubernetes.io/managed-by: kubectl
+  annotations:
+    thotsecure.io/description: "Autorise le client NATS embarque vers le bus (THOT_BUS=nats)."
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: thotsecure
+      app.kubernetes.io/instance: thotsecure
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        # Le bus peut vivre dans le même namespace (nats.thotsecure) ou dans un
+        # namespace dédié (nats). Adaptez/dupliquez ce bloc selon votre
+        # déploiement ; supprimez la politique entière si THOT_BUS=memory.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: thotsecure
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: nats
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: nats
+      ports:
+        - protocol: TCP
+          port: 4222
+---
+# =============================================================================
+# Sortant : cibles surveillées (périmètre déclaré, opt-in)
+# =============================================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: thotsecure-allow-targets-egress
+  namespace: thotsecure
+  labels:
+    app.kubernetes.io/name: thotsecure
+    app.kubernetes.io/instance: thotsecure
+    app.kubernetes.io/component: network-policy
+    app.kubernetes.io/part-of: thotsecure
+    app.kubernetes.io/managed-by: kubectl
+  annotations:
+    thotsecure.io/description: >-
+      Autorise les collecteurs a joindre les cibles declarees par le tenant.
+      Remplacez les plages de documentation par votre perimetre reel.
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: thotsecure
+      app.kubernetes.io/instance: thotsecure
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        # IMPORTANT : ces CIDR sont des exemples de DOCUMENTATION (RFC 5737).
+        # Tant qu'ils ne correspondent à rien, aucun accès aux cibles réelles
+        # n'est possible : c'est volontaire (fail-closed). Remplacez-les par le
+        # périmètre réellement déclaré dans `targets.yaml`, et rien d'autre.
+        # N'utilisez JAMAIS 0.0.0.0/0 ici : cela reviendrait à autoriser
+        # l'application à joindre n'importe quelle adresse d'Internet.
+        - ipBlock:
+            cidr: 192.0.2.0/24
+            except:
+              # Exemple de cible protégée (infrastructure propre) : jamais
+              # actionnable automatiquement.
+              - 192.0.2.250/32
+        - ipBlock:
+            cidr: 198.51.100.0/24
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 80
+        - protocol: TCP
+          port: 8080
+        - protocol: TCP
+          port: 8443
+---
+# =============================================================================
+# Sortant : journaux et métriques vers la supervision (poussée Loki/OTLP)
+# =============================================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: thotsecure-allow-observability-egress
+  namespace: thotsecure
+  labels:
+    app.kubernetes.io/name: thotsecure
+    app.kubernetes.io/instance: thotsecure
+    app.kubernetes.io/component: network-policy
+    app.kubernetes.io/part-of: thotsecure
+    app.kubernetes.io/managed-by: kubectl
+  annotations:
+    thotsecure.io/description: "Autorise l'envoi des journaux structurees vers Loki (namespace monitoring)."
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: thotsecure
+      app.kubernetes.io/instance: thotsecure
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        # Loki (push HTTP) et OTLP gRPC, si vous ajoutez un exportateur.
+        - protocol: TCP
+          port: 3100
+        - protocol: TCP
+          port: 4317
+        - protocol: TCP
+          port: 4318

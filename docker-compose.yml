@@ -1,0 +1,314 @@
+# =============================================================================
+# Thot Secure — pile « quickstart » (défaut : thotsecure seul)
+# =============================================================================
+# Thot Secure est un SOAR/CSPM 100 % défensif : aucune capacité offensive, aucune
+# exfiltration, aucune action destructive par défaut.
+#
+# Démarrage minimal :
+#
+#   1. Créez un fichier `.env` À CÔTÉ de ce fichier (jamais commité) :
+#
+#        THOT_SECRET_KEY=<sortie de `openssl rand -hex 32`>
+#        THOT_BOOTSTRAP_API_KEY=<clé admin initiale, à faire tourner ensuite>
+#
+#   2. puis :
+#
+#        docker compose up -d
+#        curl -fsS http://127.0.0.1:8080/healthz
+#        # console embarquée : http://127.0.0.1:8080/
+#
+# Profils disponibles :
+#   (défaut)               -> service `thotsecure` uniquement
+#   --profile distributed  -> ajoute le bus NATS (`nats`)
+#   --profile demo         -> ajoute la démo one-shot (`demo`)
+#
+# Exemples :
+#   docker compose --profile demo up
+#   docker compose --profile distributed --profile demo up -d
+#
+# ATTENTION — VARIABLES OBLIGATOIRES
+#   `THOT_SECRET_KEY` est OBLIGATOIRE : c'est le pepper des clés API et la
+#   clé de signature. Compose refuse de démarrer si elle est absente (syntaxe
+#   `${VAR:?message}`). Ne la mettez JAMAIS dans ce fichier ni dans un dépôt :
+#   utilisez le fichier `.env`, un gestionnaire de secrets, ou
+#   `THOT_SECRET_KEY_FILE` (Docker secrets / systemd credentials).
+# =============================================================================
+
+name: thotsecure
+
+services:
+  # ---------------------------------------------------------------------------
+  # Application principale : API REST /api/v1, console embarquée, sondes
+  # /healthz, /readyz et exposition Prometheus /metrics.
+  # ---------------------------------------------------------------------------
+  thotsecure:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        THOT_VERSION: "0.1.0"
+        BUILD_REVISION: "${BUILD_REVISION:-unknown}"
+        BUILD_DATE: "${BUILD_DATE:-unknown}"
+    image: thotsecure:0.1.0
+    # `init: true` fournit un PID 1 minimal qui récolte les processus zombies et
+    # relaie SIGTERM/SIGINT (tini n'est pas embarqué dans l'image : voir Dockerfile).
+    init: true
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    env_file:
+      # Chemin relatif à ce fichier compose (le dépôt). Les valeurs du fichier
+      # .env de Compose (`${VAR}` ci-dessous) ont la priorité sur ce .env.
+      - path: .env
+        required: false
+    environment:
+      # --- Identité d'instance ------------------------------------------------
+      THOT_ENV: "${THOT_ENV:-prod}"
+      THOT_HOST: "0.0.0.0"
+      THOT_PORT: "8080"
+      # --- Secrets (jamais en clair ici) -------------------------------------
+      # Obligatoire : Compose échoue avec un message explicite si absent.
+      THOT_SECRET_KEY: "${THOT_SECRET_KEY:?THOT_SECRET_KEY est obligatoire (openssl rand -hex 32). Voir l'en-tete de docker-compose.yml.}"
+      # Clé admin initiale : à créer puis à faire tourner immédiatement.
+      THOT_BOOTSTRAP_API_KEY: "${THOT_BOOTSTRAP_API_KEY:?THOT_BOOTSTRAP_API_KEY est obligatoire et ne doit jamais rester 'ao_dev_local_change_me'.}"
+      # --- Persistance SQLite (stdlib sqlite3, aucun SGBD externe) -----------
+      THOT_DB_URL: "sqlite:////var/lib/thotsecure/thotsecure.db"
+      THOT_RETENTION_DAYS: "${THOT_RETENTION_DAYS:-30}"
+      # --- Contenus montés en lecture seule ----------------------------------
+      THOT_RULES_DIR: "/etc/thotsecure/rules"
+      THOT_POLICIES_DIR: "/etc/thotsecure/policies"
+      THOT_PLAYBOOKS_DIR: "/etc/thotsecure/playbooks"
+      # Périmètre déclaré : aucune cible n'est active sans opt-in explicite.
+      THOT_TARGETS_FILE: "/etc/thotsecure/targets.yaml"
+      # --- Bus d'événements ---------------------------------------------------
+      THOT_BUS: "${THOT_BUS:-memory}"
+      THOT_NATS_URL: "${THOT_NATS_URL:-nats://nats:4222}"
+      # --- Observabilité ------------------------------------------------------
+      THOT_LOG_LEVEL: "${THOT_LOG_LEVEL:-INFO}"
+      THOT_LOG_FORMAT: "${THOT_LOG_FORMAT:-json}"
+      THOT_RATE_LIMIT_PER_MIN: "${THOT_RATE_LIMIT_PER_MIN:-600}"
+      THOT_TLS_ENABLED: "false"
+      # --- Mode Rego optionnel (binaire à monter, désactivé par défaut) -----
+      THOT_OPA_BIN: ""
+      # =======================================================================
+      # GARDE-FOUS DE SÛRETÉ — NE PAS MODIFIER À LA LÉGÈRE
+      # =======================================================================
+      # THOT_DRY_RUN=true : aucune action réelle n'est exécutée ; les
+      # playbooks tournent en mode simulé et journalisent `simulated: true`.
+      # Le passer à `false` autorise des contre-mesures RÉELLES (blocage
+      # d'IP, révocation de session, isolation d'hôte...).
+      THOT_DRY_RUN: "${THOT_DRY_RUN:-true}"
+      # THOT_AUTONOMY=supervised : toute action critique passe par une
+      # approbation humaine (`require_approval`). `auto` n'est légitime
+      # qu'après une procédure de validation documentée, par tenant.
+      THOT_AUTONOMY: "${THOT_AUTONOMY:-supervised}"
+      # =======================================================================
+    volumes:
+      # Base SQLite + quarantaine (données persistantes).
+      - thotsecure-data:/var/lib/thotsecure
+      # Bibliothèque de règles livrée : LECTURE SEULE. Le volume est initialisé
+      # depuis l'image (rempli au premier démarrage) puis figé.
+      - thotsecure-rules:/etc/thotsecure/rules:ro
+      # Politiques de décision : LECTURE SEULE.
+      - thotsecure-policies:/etc/thotsecure/policies:ro
+      # Playbooks (action + rollback) : LECTURE SEULE.
+      - thotsecure-playbooks:/etc/thotsecure/playbooks:ro
+      # Périmètre déclaré par tenant : LECTURE SEULE. Montez votre propre
+      # fichier (ex. ./config/targets.yaml) si vous en avez un.
+      - thotsecure-targets:/etc/thotsecure/targets.yaml:ro
+      # Zone temporaire inscriptible malgré le rootfs en lecture seule.
+      # uid/gid 10001 = utilisateur non-root de l'image.
+      - type: tmpfs
+        target: /tmp
+        tmpfs:
+          size: 67108864
+          mode: 1777
+          uid: "10001"
+          gid: "10001"
+    # --- Durcissement conteneur ---------------------------------------------
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    # Jamais de `privileged`, jamais de socket Docker, jamais de hostNetwork.
+    privileged: false
+    networks:
+      - thotsecure
+    # --- Ressources ----------------------------------------------------------
+    cpus: "2.0"
+    mem_limit: 1g
+    mem_reservation: 256m
+    pids_limit: 256
+    stop_grace_period: 30s
+    # --- Journalisation ------------------------------------------------------
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    # --- Sondes --------------------------------------------------------------
+    healthcheck:
+      # Pas de curl dans l'image : urllib de la stdlib suffit.
+      test: ["CMD", "python", "-c", "import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=4).status == 200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    depends_on:
+      # Le service nats n'existe que sous `--profile distributed` : Compose
+      # ignore cette dépendance quand le profil n'est pas actif.
+      nats:
+        condition: service_healthy
+        required: false
+
+  # ---------------------------------------------------------------------------
+  # Bus d'événements distribué (OPTIONNEL) — profil `distributed`.
+  # Le client NATS d'Thot Secure est embarqué en stdlib : aucune dépendance Python
+  # supplémentaire n'est requise. Activez-le avec THOT_BUS=nats.
+  # ---------------------------------------------------------------------------
+  nats:
+    image: nats:2.10-alpine
+    profiles: ["distributed"]
+    init: true
+    restart: unless-stopped
+    command:
+      - "-js"
+      - "--store_dir=/data"
+      - "--http_port=8222"
+      - "--max_payload=1048576"
+    expose:
+      - "4222"
+    ports:
+      # Supervision NATS : liez à la boucle locale uniquement.
+      - "127.0.0.1:8222:8222"
+    volumes:
+      - nats-data:/data
+    # --- Durcissement conteneur ---------------------------------------------
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    user: "1000:1000"
+    networks:
+      - thotsecure
+    # --- Ressources ----------------------------------------------------------
+    cpus: "1.0"
+    mem_limit: 512m
+    pids_limit: 128
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8222/healthz"]
+      interval: 10s
+      timeout: 5s
+      start_period: 5s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # Démonstration one-shot — profil `demo`.
+  # Initialise la base, crée un tenant `demo`, injecte un jeu de données et
+  # produit findings + actions. Comme THOT_DRY_RUN=true par défaut, les
+  # actions sont simulées : la démo est sûre à exécuter partout.
+  #
+  #   docker compose --profile demo up demo
+  # ---------------------------------------------------------------------------
+  demo:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        THOT_VERSION: "0.1.0"
+    image: thotsecure:0.1.0
+    profiles: ["demo"]
+    init: true
+    restart: "no"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      THOT_ENV: "dev"
+      THOT_SECRET_KEY: "${THOT_SECRET_KEY:?THOT_SECRET_KEY est obligatoire meme pour la demo.}"
+      THOT_BOOTSTRAP_API_KEY: "${THOT_BOOTSTRAP_API_KEY:-ao_demo_local_change_me}"
+      THOT_DB_URL: "sqlite:////var/lib/thotsecure/thotsecure.db"
+      THOT_RULES_DIR: "/etc/thotsecure/rules"
+      THOT_POLICIES_DIR: "/etc/thotsecure/policies"
+      THOT_PLAYBOOKS_DIR: "/etc/thotsecure/playbooks"
+      THOT_TARGETS_FILE: "/etc/thotsecure/targets.yaml"
+      THOT_BUS: "memory"
+      THOT_LOG_LEVEL: "INFO"
+      THOT_LOG_FORMAT: "console"
+      # La démo reste en simulation : garde-fou inchangé.
+      THOT_DRY_RUN: "true"
+      THOT_AUTONOMY: "supervised"
+    volumes:
+      # Même volume de données que le service `thotsecure` : la démo peuple la
+      # base que l'application servira ensuite.
+      - thotsecure-data:/var/lib/thotsecure
+      - thotsecure-rules:/etc/thotsecure/rules:ro
+      - thotsecure-policies:/etc/thotsecure/policies:ro
+      - thotsecure-playbooks:/etc/thotsecure/playbooks:ro
+      - thotsecure-targets:/etc/thotsecure/targets.yaml:ro
+      - type: tmpfs
+        target: /tmp
+        tmpfs:
+          size: 67108864
+          mode: 1777
+          uid: "10001"
+          gid: "10001"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    privileged: false
+    networks:
+      - thotsecure
+    cpus: "1.0"
+    mem_limit: 512m
+    stop_grace_period: 10s
+    # `uvicorn` n'est pas lancé ici : la commande est écrite en forme shell
+    # volontairement (init-db puis demo, séquentiels et dépendants).
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - "set -e; thotsecure init-db; thotsecure demo --tenant demo; echo 'Demo terminee. Consultez la console : http://127.0.0.1:8080/'"
+
+volumes:
+  thotsecure-data:
+    driver: local
+    labels:
+      org.opencontainers.image.title: "Thot Secure — donnees (SQLite + quarantaine)"
+  thotsecure-rules:
+    driver: local
+    labels:
+      org.opencontainers.image.title: "Thot Secure — regles (lecture seule)"
+  thotsecure-policies:
+    driver: local
+    labels:
+      org.opencontainers.image.title: "Thot Secure — politiques (lecture seule)"
+  thotsecure-playbooks:
+    driver: local
+    labels:
+      org.opencontainers.image.title: "Thot Secure — playbooks (lecture seule)"
+  thotsecure-targets:
+    driver: local
+    labels:
+      org.opencontainers.image.title: "Thot Secure — perimetre declare (lecture seule)"
+  nats-data:
+    driver: local
+    labels:
+      org.opencontainers.image.title: "Thot Secure — bus NATS (profil distributed)"
+
+networks:
+  # Réseau dédié : nom fixe pour que la pile d'observabilité
+  # (docker-compose.observability.yml) puisse s'y attacher de façon
+  # déterministe et résoudre le nom de service `thotsecure`.
+  thotsecure:
+    name: thotsecure
+    driver: bridge
+    labels:
+      org.opencontainers.image.title: "Thot Secure — reseau applicatif"

@@ -1,0 +1,23 @@
+# =============================================================================
+# Thot Secure — provisionnement automatique des tableaux de bord
+# =============================================================================
+# Les fichiers JSON déposés dans `deploy/grafana/dashboards/` sont chargés au
+# démarrage de Grafana (et à chaud quand ils changent, grâce à `updateIntervalSeconds`).
+# Les tableaux de bord restent modifiables dans l'interface ; pour persister une
+# modification, exportez le JSON dans le dépôt (source unique de vérité).
+# =============================================================================
+
+apiVersion: 1
+
+providers:
+  - name: thotsecure
+    orgId: 1
+    folder: Thot Secure
+    folderUid: thotsecure
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

@@ -1,0 +1,65 @@
+Thot Secure
+Copyright 2026 The Thot Secure Authors
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+---
+
+Thot Secure is a defensive security project
+----------------------------------------
+
+Thot Secure is a SOAR/CSPM platform built for defense only. It collects telemetry
+from systems you own or are authorized to operate, detects suspicious activity
+with declarative rules, scores risk, decides on a response, and applies a
+**reversible** counter-measure that is always recorded in a tamper-evident
+audit chain.
+
+The project contains no offensive capability whatsoever. Specifically, there
+is no exploit code, no aggressive scanning, no credential brute-forcing, no
+denial-of-service tooling, and no "hack-back" or retaliation feature against
+third parties. The `probe` collector only audits targets that the tenant has
+explicitly declared as owned in `config/targets.yaml`. Contributions that add
+offensive capability are rejected (see `GOVERNANCE.md`, "Constitutional
+invariants").
+
+Safe defaults are part of the project's identity: `THOT_DRY_RUN=true` and
+`THOT_AUTONOMY=supervised` out of the box, an explicit allow-list of
+protected targets, and an approval gate in front of every critical action.
+
+Third-party components
+----------------------
+
+Thot Secure redistributes and depends on third-party open source software. The
+authoritative, machine-readable inventory of those components and their
+licenses is the SBOM published with each release (SPDX and CycloneDX, signed
+with Sigstore), together with the dependency tables in `pyproject.toml`,
+`web/package.json`, and `sdks/go/go.mod`. Third-party license texts remain the
+property of their respective authors and are governed by their own terms.
+
+Trademarks
+----------
+
+"Thot Secure" and the Thot Secure logo are used to identify this project. This
+NOTICE does not grant any trademark rights beyond reasonable and customary use
+in describing the origin of the Work, as set out in Section 6 of the Apache
+License, Version 2.0.
+
+No warranty
+-----------
+
+Thot Secure is provided "AS IS", without warranty of any kind. A security
+automation platform can change the state of your infrastructure: validate
+policies and playbooks in dry-run mode against a non-production environment
+before enabling autonomous action, and keep an out-of-band path to reverse any
+change. See `SECURITY.md` for the security policy and `DISCLAIMER`-level
+details in `docs/`.

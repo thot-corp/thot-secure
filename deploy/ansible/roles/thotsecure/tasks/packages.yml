@@ -1,0 +1,126 @@
+---
+# =============================================================================
+# tasks/packages.yml — prérequis système
+# -----------------------------------------------------------------------------
+# On n'installe QUE le strict nécessaire : chaque paquet supplémentaire est une
+# surface d'attaque et une dépendance de plus à patcher.
+#
+# Note sur les noms de paquets Python 3.11 :
+#   - Debian 12 (bookworm) et Ubuntu 23.04+ fournissent « python3.11 ».
+#     Sur Ubuntu 22.04, python3.11 vient du dépôt deadsnakes ou d'un backport :
+#     adaptez la liste ci-dessous à votre socle si nécessaire.
+#   - RedHat/EL 9 fournit « python3.11 » (AppStream) ; sur EL 8, module
+#     « python3.11 » également disponible.
+# =============================================================================
+
+- name: "Paquets | Mettre à jour le cache APT"
+  ansible.builtin.apt:
+    update_cache: true
+    # 3600 s : on ne réactualise pas l'index à chaque tâche du play.
+    cache_valid_time: 3600
+  when: ansible_os_family == 'Debian'
+  retries: 3
+  delay: 5
+  register: thotsecure_apt_cache
+  until: thotsecure_apt_cache is succeeded
+  tags:
+    - install
+    - packages
+
+- name: "Paquets | Installer les prérequis Debian/Ubuntu"
+  ansible.builtin.package:
+    name:
+      - "{{ thotsecure_python }}" # interpréteur exigé par thotsecure (>= 3.11)
+      - "{{ thotsecure_python }}-venv" # module venv (paquet séparé sur Debian)
+      - "python3-pip" # pip de secours pour l'amorçage
+      - "ca-certificates" # chaîne de confiance TLS (PyPI, ACME)
+      - "rsync" # copie de contenu déclaratif et sauvegardes
+      - "openssl" # génération de la clé de signature et des certificats
+      - "sqlite3" # inspection/ sauvegarde de la base applicative
+      - "curl" # diagnostics et vérifications de santé
+    state: present
+  when: ansible_os_family == 'Debian'
+  tags:
+    - install
+    - packages
+
+- name: "Paquets | Installer les prérequis RedHat/EL"
+  ansible.builtin.package:
+    name:
+      - "{{ thotsecure_python }}" # AppStream fournit python3.11 (+ ensurepip)
+      - "python3-pip" # pip de secours pour l'amorçage
+      - "ca-certificates"
+      - "rsync"
+      - "openssl"
+      - "sqlite" # sur EL le binaire client est « sqlite », pas « sqlite3 »
+      - "curl"
+    state: present
+  when: ansible_os_family == 'RedHat'
+  tags:
+    - install
+    - packages
+
+- name: "Paquets | Installer les paquets optionnels demandés (best effort)"
+  # « si dispo » : sur certains socles minimalistes, un paquet peut être absent
+  # des dépôts activés. On ne fait PAS échouer le playbook pour autant, mais on
+  # journalise l'avertissement pour que l'opérateur tranche.
+  # Exemple utile sur Debian : thotsecure_optional_packages: ["haveged"]
+  # (entropie disponible plus tôt au démarrage, utile pour openssl/TLS).
+  ansible.builtin.package:
+    name: "{{ thotsecure_optional_packages }}"
+    state: present
+  register: thotsecure_optional_packages_result
+  failed_when: false
+  when: thotsecure_optional_packages | length > 0
+  tags:
+    - install
+    - packages
+
+- name: "Paquets | Signaler les paquets optionnels non installés"
+  ansible.builtin.debug:
+    msg: >-
+      AVERTISSEMENT : paquets optionnels non installés
+      ({{ thotsecure_optional_packages | join(', ') }}).
+      Sans conséquence sur Thot Secure : ces paquets n'apportent qu'un confort
+      d'exploitation. Installez-les manuellement si vous les souhaitez.
+  when:
+    - thotsecure_optional_packages | length > 0
+    - thotsecure_optional_packages_result is failed
+  tags:
+    - install
+    - packages
+
+- name: "Paquets | Vérifier que pip est utilisable par l'interpréteur cible"
+  # command : on interroge le module pip de l'interpréteur lui-même, ce qu'aucun
+  # module Ansible ne permet de faire directement avant la création du venv.
+  ansible.builtin.command:
+    argv:
+      - "{{ thotsecure_python }}"
+      - "-m"
+      - "pip"
+      - "--version"
+  register: thotsecure_pip_version
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  tags:
+    - install
+    - packages
+
+- name: "Paquets | Refuser l'absence de pip sur l'interpréteur cible"
+  ansible.builtin.assert:
+    that:
+      - thotsecure_pip_version.rc | default(1) == 0
+    fail_msg: >-
+      « {{ thotsecure_python }} -m pip » ne fonctionne pas
+      (code retour {{ thotsecure_pip_version.rc | default('n/a') }},
+      erreur : {{ thotsecure_pip_version.stderr | default('') | trim }}).
+      pip est indispensable pour créer l'environnement virtuel et installer
+      Thot Secure. Installez-le :
+        Debian/Ubuntu : apt-get install {{ thotsecure_python }}-venv python3-pip
+        RedHat/EL     : dnf install python3.11-pip
+    success_msg: "pip disponible pour {{ thotsecure_python }} : {{ thotsecure_pip_version.stdout | trim }}."
+    quiet: true
+  tags:
+    - install
+    - packages

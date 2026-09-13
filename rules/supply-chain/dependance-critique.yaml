@@ -1,0 +1,34 @@
+id: AO-DEP-002
+title: Dépendance critique exposée (CVSS ≥ 9)
+description: >-
+  Une dépendance présente une vulnérabilité de gravité critique (CVSS ≥ 9). Ces
+  vulnérabilités sont presque toujours exploitables à distance et sans authentification, et
+  sont activement exploitées dans les heures qui suivent leur publication.
+status: stable
+severity: critical
+confidence: 0.9
+enabled: true
+tags: [supply-chain, owasp:a06, mitre:T1195, urgent]
+source_types: [dependency]
+kinds: [dependency]
+match:
+  all:
+    - field: labels.check
+      op: eq
+      value: vulnerable_dependency
+    - field: labels.cvss
+      op: gte
+      value: 9.0
+dedup:
+  key: [labels.package, labels.version, labels.cve]
+  ttl_seconds: 86400
+risk:
+  base: 78
+remediation: >-
+  Traiter comme un incident : identifier les services exposant la dépendance concernée,
+  appliquer le correctif ou une mesure de contournement documentée par l'éditeur, puis
+  vérifier l'absence de compromission (journaux d'accès anormaux, processus inattendus).
+  Rechercher également les indicateurs de compromission publiés avec l'avis.
+references:
+  - https://osv.dev
+  - https://attack.mitre.org/techniques/T1195/

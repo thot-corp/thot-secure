@@ -1,0 +1,16 @@
+version: 1
+id: notify-only-hardening
+priority: 120
+description: >-
+  Durcissement (en-têtes, cookies, divulgation de version) : ce sont des écarts de
+  configuration, pas des attaques. Thot Secure les notifie et propose un playbook, mais ne
+  touche jamais à la configuration à votre place — un durcissement appliqué sans revue peut
+  casser un parcours utilisateur légitime.
+when:
+  finding.tags_any: [hardening, config, cis:2.4, cis:5.2, cis:5.4, cis:5.31]
+then:
+  decision: notify_only
+  playbook: harden-endpoint
+  params:
+    target: labels.host
+    profile: baseline

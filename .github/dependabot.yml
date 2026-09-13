@@ -1,0 +1,235 @@
+# Dependabot configuration — https://docs.github.com/code-security/dependabot/dependabot-version-updates
+#
+# Thot Secure is a security tool, so its own dependency hygiene is part of the
+# product. Updates are checked weekly rather than daily: a maintainer-to-be
+# review of five dependency pull requests on Monday morning is realistic, and a
+# daily flood of twenty is not, which is how dependency pull requests end up
+# ignored and security updates end up buried.
+#
+# Grouping policy:
+#   * minor and patch updates are grouped per ecosystem, so routine maintenance
+#     arrives as one reviewable pull request instead of a dozen;
+#   * major updates are deliberately NOT grouped — a major bump needs its own
+#     diff, its own reasoning and its own changelog entry;
+#   * security updates are never blocked by grouping, because GitHub raises
+#     them with their own advisory metadata.
+#
+# Labels must exist in the repository; they are declared in .github/labels.yml.
+# A label that does not exist is silently ignored by Dependabot.
+
+version: 2
+
+updates:
+  # ---------------------------------------------------------------------------
+  # Python — the application package and the test/typing tooling.
+  # Manifest: pyproject.toml (+ requirements*.txt if present).
+  # ---------------------------------------------------------------------------
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 10
+    versioning-strategy: "increase-if-necessary"
+    labels:
+      - "dependencies"
+      - "area/packaging"
+    commit-message:
+      prefix: "build(deps)"
+      include: "scope"
+    groups:
+      python-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+      python-dev-tooling:
+        patterns:
+          - "ruff"
+          - "mypy"
+          - "pytest*"
+          - "pre-commit"
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      # pydantic and PyYAML are part of the contract for thotsecure.core, which is
+      # deliberately restricted to the standard library plus these two. A major
+      # bump there is a breaking change with a migration guide, not a routine
+      # update, so it is handled by hand.
+      - dependency-name: "pydantic"
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "PyYAML"
+        update-types:
+          - "version-update:semver-major"
+
+  # ---------------------------------------------------------------------------
+  # Node — the optional React dashboard. The embedded Jinja2 console in
+  # src/thotsecure/ui/ must keep working without a Node build; a change here can
+  # never make Node a hard requirement.
+  # ---------------------------------------------------------------------------
+  - package-ecosystem: "npm"
+    directory: "/web"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:15"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 10
+    versioning-strategy: "increase"
+    labels:
+      - "dependencies"
+      - "area/ci"
+    commit-message:
+      prefix: "build(web)"
+      include: "scope"
+    groups:
+      web-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+      web-react:
+        patterns:
+          - "react"
+          - "react-dom"
+          - "@types/react*"
+        update-types:
+          - "minor"
+          - "patch"
+      web-build-tooling:
+        patterns:
+          - "vite"
+          - "@vitejs/*"
+          - "typescript"
+          - "eslint*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # ---------------------------------------------------------------------------
+  # Node — the TypeScript SDK package.
+  # ---------------------------------------------------------------------------
+  - package-ecosystem: "npm"
+    directory: "/sdks/typescript"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:30"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 5
+    versioning-strategy: "increase"
+    labels:
+      - "dependencies"
+      - "area/sdk"
+    commit-message:
+      prefix: "build(sdk-ts)"
+      include: "scope"
+    groups:
+      sdk-ts-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # ---------------------------------------------------------------------------
+  # Go — the Go SDK. A bump here can change the published module, so it is
+  # reviewed rather than auto-merged.
+  # ---------------------------------------------------------------------------
+  - package-ecosystem: "gomod"
+    directory: "/sdks/go"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:45"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "area/sdk"
+    commit-message:
+      prefix: "build(sdk-go)"
+      include: "scope"
+    groups:
+      sdk-go-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # ---------------------------------------------------------------------------
+  # GitHub Actions — pinned action versions. A compromised or outdated action is
+  # a supply-chain path straight into the release pipeline, which is why these
+  # updates are treated as security-relevant and labelled as such.
+  # ---------------------------------------------------------------------------
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "07:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "area/ci"
+      - "security"
+    commit-message:
+      prefix: "ci(deps)"
+      include: "scope"
+    groups:
+      actions-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+      actions-codeql:
+        patterns:
+          - "github/codeql-action*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # ---------------------------------------------------------------------------
+  # Docker — base images. Digest pinning and base-image currency matter more
+  # here than anywhere else: the image is what users actually run.
+  # ---------------------------------------------------------------------------
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "07:15"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "area/deploy"
+      - "security"
+    commit-message:
+      prefix: "build(docker)"
+      include: "scope"
+
+  - package-ecosystem: "docker"
+    directory: "/deploy"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "07:30"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "area/deploy"
+      - "security"
+    commit-message:
+      prefix: "build(docker)"
+      include: "scope"

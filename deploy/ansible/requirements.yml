@@ -1,0 +1,43 @@
+---
+# =============================================================================
+# Thot Secure — dépendances Ansible Galaxy
+# -----------------------------------------------------------------------------
+# Installation :
+#   ansible-galaxy collection install -r requirements.yml
+#
+# Hors ligne (poste sans accès Internet) : téléchargez les archives .tar.gz des
+# collections sur un poste connecté puis :
+#   ansible-galaxy collection install ansible-posix-*.tar.gz -p ./collections
+# et renseignez collections_paths dans ansible.cfg.
+#
+# Aucun rôle externe n'est requis : tout le rôle thotsecure n'utilise que des
+# modules d'ansible-core (ansible.builtin.*) et des modules de collection
+# déclarés ci-dessous. Cela évite toute dépendance à un tiers non audité dans
+# une chaîne de déploiement de sécurité.
+# =============================================================================
+
+collections:
+  # community.general fournit :
+  #   - community.general.ufw            (pare-feu UFW, Debian/Ubuntu)
+  #   - community.general.firewalld      (pare-feu RedHat/EL)
+  #   - le callback stdout « yaml » référencé dans ansible.cfg
+  - name: community.general
+    version: ">=8.0.0"
+    source: https://galaxy.ansible.com
+
+  # ansible.posix fournit :
+  #   - ansible.posix.sysctl             (durcissement noyau)
+  #   - ansible.posix.firewalld          (repli si community.general est absent)
+  #   - ansible.posix.seboolean          (si SELinux est activé)
+  - name: ansible.posix
+    version: ">=1.5.4"
+    source: https://galaxy.ansible.com
+
+  # ansible.utils fournit les filtres de validation réseau (ipaddr, etc.)
+  # utilisés pour valider thotsecure_firewall_allowed_ssh_cidrs.
+  - name: ansible.utils
+    version: ">=3.0.0"
+    source: https://galaxy.ansible.com
+
+# Aucun rôle Galaxy externe : volontairement vide.
+roles: []

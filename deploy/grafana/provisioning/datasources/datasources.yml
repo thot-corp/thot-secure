@@ -1,0 +1,48 @@
+# =============================================================================
+# Thot Secure — sources de données Grafana provisionnées en as-code
+# =============================================================================
+# Prometheus et Loki sont provisionnés en lecture seule : toute modification
+# faite dans l'interface est écrasée au redémarrage, ce qui garantit la
+# reproductibilité de la supervision.
+# =============================================================================
+
+apiVersion: 1
+
+deleteDatasources:
+  - name: Prometheus
+    orgId: 1
+  - name: Loki
+    orgId: 1
+
+datasources:
+  - name: Prometheus
+    uid: prometheus
+    type: prometheus
+    access: proxy
+    # Nom de service Docker : réseau `thotsecure` partagé.
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+    jsonData:
+      httpMethod: POST
+      timeInterval: 15s
+      # Aucun envoi de données vers l'extérieur.
+      manageAlerts: true
+      prometheusType: Prometheus
+      prometheusVersion: 2.51.2
+      exemplarTraceIdDestinations: []
+    secureJsonData: {}
+
+  - name: Loki
+    uid: loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    isDefault: false
+    editable: false
+    jsonData:
+      maxLines: 1000
+      timeout: 60
+      # Corrélation journaux <-> métriques désactivée : pas de dérive de démo.
+      derivedFields: []
+    secureJsonData: {}
