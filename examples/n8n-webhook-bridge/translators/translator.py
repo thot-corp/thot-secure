@@ -1194,7 +1194,7 @@ def post_json(
         headers["X-API-Key"] = api_key
 
     # S310 : `urlopen` ouvrirait n'importe quel schéma (`file:`, `ftp:`, `data:`…) alors que
-    # cette URL vient de la ligne de commande. Les deux `# noqa: S310` ci-dessous pointent sur
+    # cette URL vient de la ligne de commande. Les deux directives `noqa` visant S310 ci-dessous pointent sur
     # ce contrôle, seule barrière avant la connexion.
     scheme = urlparse.urlparse(url).scheme.lower()
     if scheme not in ("http", "https"):
