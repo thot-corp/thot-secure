@@ -3,7 +3,7 @@
 *Déployer Thot Secure, c'est d'abord décider où vit l'état local — dimensionnement, sauvegarde, montée de version et observabilité en découlent.*
 
 !!! note "Cette page complète `deploy/README.md`"
-    Les manifestes exacts (`Dockerfile`, `compose.yaml`, Kubernetes, Helm, Terraform, Ansible) et les **seuils d'alerte définitifs** appartiennent au **lot déploiement** : leur référence est [`deploy/README.md`](../deploy/README.md). Cette page décrit la *démarche d'exploitation* (modèles, dimensionnement, sauvegarde, rotation de clés, montée de version, observabilité). En cas de divergence sur un manifeste ou un seuil, c'est `deploy/README.md` qui fait foi.
+    Les manifestes exacts (`Dockerfile`, `compose.yaml`, Kubernetes, Helm, Terraform, Ansible) et les **seuils d'alerte définitifs** appartiennent au **lot déploiement** : leur référence est `deploy/README.md`. Cette page décrit la *démarche d'exploitation* (modèles, dimensionnement, sauvegarde, rotation de clés, montée de version, observabilité). En cas de divergence sur un manifeste ou un seuil, c'est `deploy/README.md` qui fait foi.
 
 Référence normative : [`docs/architecture/api-contract.md`](../architecture/api-contract.md) — §2 (arborescence, dont `deploy/`), §4.1 (sondes, `/metrics`), §8 (CLI), §9 (variables d'environnement), §10 (sécurité produit). Les éléments d'infrastructure cités ici comme *illustratifs* ne sont pas garantis par le contrat gelé.
 
@@ -463,7 +463,7 @@ Ces six alertes couvrent les signaux réellement documentés par le contrat. **L
 | `ThotSecureStorageCapacity` | disque/WAL saturés ou purge de rétention en échec | < 20 % libre, ou 2 purges manquées | haute | purger/archiver, vérifier `PRAGMA integrity_check` | [runbook.md](runbook.md) — incident 5 |
 
 !!! note "Noms et seuils définitifs : lot déploiement"
-    Les identifiants ci-dessus (`ThotSecureDown`, `ThotSecureNotReady`, …) sont des **propositions d'exploitation**, pas des alertes livrées ni des noms officiels. Les noms d'alertes définitifs, les expressions exactes (qui dépendent des noms de métriques relevés sur `/metrics`) et les seuils sont fixés par le **lot déploiement** dans [`deploy/README.md`](../deploy/README.md) et dans ses artefacts Prometheus/Helm. Cette section propose une couverture minimale ; elle doit être **alignée** avec `deploy/README.md` avant mise en production — n'activez pas deux jeux d'alertes divergents sur la même instance.
+    Les identifiants ci-dessus (`ThotSecureDown`, `ThotSecureNotReady`, …) sont des **propositions d'exploitation**, pas des alertes livrées ni des noms officiels. Les noms d'alertes définitifs, les expressions exactes (qui dépendent des noms de métriques relevés sur `/metrics`) et les seuils sont fixés par le **lot déploiement** dans `deploy/README.md` et dans ses artefacts Prometheus/Helm. Cette section propose une couverture minimale ; elle doit être **alignée** avec `deploy/README.md` avant mise en production — n'activez pas deux jeux d'alertes divergents sur la même instance.
 
 Pour chaque alerte, la conduite à tenir est décrite dans [`runbook.md`](runbook.md) (section indiquée dans le tableau). Les tableaux de bord et l'agrégation de logs relèvent également du lot déploiement.
 

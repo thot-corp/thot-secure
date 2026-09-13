@@ -4,7 +4,7 @@
 
 La CLI est le moyen le plus direct d'exploiter Thot Secure : elle parle à la même base et au même
 moteur que l'API, sans dépendance réseau. Les commandes listées ici sont **exactement** celles du
-§8 du contrat d'interface ([`../architecture/api-contract.md`](../architecture/api-contract.md)) ;
+§8 du contrat d'interface ([`../architecture/api-contract.md`](architecture/api-contract.md)) ;
 les correspondances avec les routes REST sont données au §9 de cette page.
 
 !!! warning "N'utilisez pas d'option non documentée en production"
@@ -28,7 +28,7 @@ thotsecure serve --host 0.0.0.0 --port 8080
 
 Toutes les commandes peuvent s'exécuter hors ligne sur une base locale — `serve` n'est nécessaire que
 pour l'API et la console. Détails d'installation (paquets, dépendances optionnelles, Docker) :
-[`../installation.md`](../installation.md).
+[`../installation.md`](installation.md).
 
 !!! note "Aide détaillée d'une sous-commande"
     `thotsecure --help` liste les commandes ; chaque sous-commande expose sa propre aide
@@ -81,7 +81,7 @@ $env:THOT_DRY_RUN     = 'true'
 thotsecure doctor
 ```
 
-Référence complète : [`../configuration.md`](../configuration.md).
+Référence complète : [`../configuration.md`](configuration.md).
 
 ## 3. Vue d'ensemble des commandes
 
@@ -154,7 +154,7 @@ thotsecure serve --host 0.0.0.0 --port 8080
 !!! warning "`--reload` n'est pas pour la production"
     Le rechargement automatique surveille les fichiers et redémarre le processus : il masque des
     erreurs de démarrage et consomme des ressources. En production, utilisez le service systemd /
-    conteneur décrit dans [`../operations/deployment.md`](../operations/deployment.md).
+    conteneur décrit dans [`../operations/deployment.md`](operations/deployment.md).
 
 ### 4.2 `thotsecure init-db`
 
@@ -179,7 +179,7 @@ thotsecure init-db
 Diagnostic de bout en bout : configuration, base, bus, répertoires de règles/politiques/playbooks,
 clé bootstrap, mode d'autonomie et `dry_run`, cohérence de la chaîne d'audit. **Première commande à
 lancer** devant tout comportement inattendu — procédure complète dans
-[`../operations/runbook.md`](../operations/runbook.md).
+[`../operations/runbook.md`](operations/runbook.md).
 
 ```bash
 thotsecure doctor
@@ -242,7 +242,7 @@ thotsecure tenant list --json | ConvertFrom-Json | Format-Table tenant_id, mode,
     En mode `auto`, une politique peut déclencher une contre-mesure sans approbation humaine. Ne
     basculez un tenant en `auto` qu'après avoir posé l'`autonomy_allowlist` (infra propre protégée),
     vérifié le parc de playbooks réversibles et testé le rollback. Voir
-    [`../decision/policies.md`](../decision/policies.md).
+    [`../decision/policies.md`](decision/policies.md).
 
 ### 4.5 `thotsecure key create` / `thotsecure key revoke`
 
@@ -280,7 +280,7 @@ thotsecure key revoke --key-id $key.key_id
 !!! danger "Le secret n'est jamais relisible"
     Les clés sont stockées **hachées (`scrypt`)**. Si l'affichage est perdu, il n'existe aucun moyen
     de retrouver la clé : créez-en une nouvelle et révoquez l'ancienne. Une clé divulguée se révoque
-    **immédiatement** — procédure dans [`../operations/runbook.md`](../operations/runbook.md).
+    **immédiatement** — procédure dans [`../operations/runbook.md`](operations/runbook.md).
 
 ### 4.6 `thotsecure rules list` / `thotsecure rules validate`
 
@@ -321,8 +321,8 @@ if ($LASTEXITCODE -ne 0) { throw "règles invalides : merge bloqué" }
 
 !!! tip "La validation ne remplace pas la revue"
     `rules validate` vérifie la **forme** (opérateurs, types, champs pointés), pas la pertinence de
-    la détection. Voir [`../detection/rules.md`](../detection/rules.md) et, pour l'import de règles
-    Sigma, [`../detection/sigma.md`](../detection/sigma.md).
+    la détection. Voir [`../detection/rules.md`](detection/rules.md) et, pour l'import de règles
+    Sigma, [`../detection/sigma.md`](detection/sigma.md).
 
 ### 4.7 `thotsecure policies validate`
 
@@ -547,7 +547,7 @@ if (-not $verify.valid) { Write-Error "audit rompu à seq=$($verify.broken_at)" 
     `3` signifie « la vérification est **négative** » : la chaîne de hachage ne se recalcule pas.
     Traitez-le comme un incident de sécurité (arrêt des écritures, isolement de la base, export
     `jsonl` conservé), pas comme un bug de script à contourner. Voir
-    [`../operations/runbook.md`](../operations/runbook.md).
+    [`../operations/runbook.md`](operations/runbook.md).
 
 ### 4.12 `thotsecure report`
 
@@ -604,8 +604,8 @@ findings créés : 1 (AO-TLS-014, low)
     Une cible non déclarée est refusée. Thot Secure ne contient **aucune capacité offensive** : pas de
     scan agressif, pas de brute force, pas de hack-back, pas d'exploitation, pas de DoS, aucun test
     sur un tiers — même « juste pour vérifier ». En cas de doute sur le périmètre, arrêtez-vous et
-    lisez [`../architecture/threat-model.md`](../architecture/threat-model.md) et
-    [`../governance.md`](../governance.md).
+    lisez [`../architecture/threat-model.md`](architecture/threat-model.md) et
+    [`../governance.md`](governance.md).
 
 ### 4.14 `thotsecure demo`
 
@@ -843,11 +843,11 @@ if ($LASTEXITCODE -ne 0) { throw 'politiques invalides' }
        `THOT_AUTONOMY=supervised` et n'appelez `actions execute` qu'après un `actions approve`
        humain. Un runner compromis ne doit pas pouvoir modifier votre infrastructure.
     4. **`doctor` en première étape de diagnostic** avant toute escalade ; suite dans
-       [`../operations/runbook.md`](../operations/runbook.md).
+       [`../operations/runbook.md`](operations/runbook.md).
     5. **Codes de sortie traités explicitement**, en particulier `3` (verdict négatif) qui doit
        bloquer le pipeline.
     6. **Secrets jamais en clair** : ni dans les scripts, ni dans les logs, ni dans les URL — voir
-       [`api/usage.md`](api/usage.md) et [`../compliance/soc2-iso27001.md`](../compliance/soc2-iso27001.md).
+       [`api/usage.md`](api/usage.md) et [`../compliance/soc2-iso27001.md`](compliance/soc2-iso27001.md).
 
 ## 9. Correspondances CLI ↔ REST ↔ SDK
 
@@ -879,11 +879,11 @@ if ($LASTEXITCODE -ne 0) { throw 'politiques invalides' }
     sont pas figés par le contrat : cette colonne est volontairement prudente. Pour un script,
     utilisez la CLI (locale, sans réseau) ou l'API REST — les deux sont contractuelles.
 
-Voir aussi : [`../architecture/api-contract.md`](../architecture/api-contract.md) (référence gelée),
+Voir aussi : [`../architecture/api-contract.md`](architecture/api-contract.md) (référence gelée),
 [`api/usage.md`](api/usage.md) (mode d'emploi REST),
-[`../quickstart.md`](../quickstart.md) (premiers pas),
-[`../faq.md`](../faq.md), [`../glossary.md`](../glossary.md),
-[`../roadmap.md`](../roadmap.md), [`../contributing.md`](../contributing.md),
-[`../support.md`](../support.md).
+[`../quickstart.md`](quickstart.md) (premiers pas),
+[`../faq.md`](faq.md), [`../glossary.md`](glossary.md),
+[`../roadmap.md`](roadmap.md), [`../contributing.md`](contributing.md),
+[`../support.md`](support.md).
 
 <!-- Métadonnées: statut=stable, version=0.1.0 (MVP), dernière revue=2026-09-13 -->

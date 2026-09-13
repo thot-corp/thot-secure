@@ -218,8 +218,13 @@ updates:
       prefix: "build(docker)"
       include: "scope"
 
+  # Interface web optionnelle : `web/Dockerfile` (build Node puis Nginx).
+  # Note : la configuration déclarait auparavant « /deploy », répertoire qui ne contient
+  # AUCUN Dockerfile — Dependabot échouait donc à chaque exécution planifiée. Un écosystème
+  # pointant vers un répertoire vide est une erreur silencieuse : le job échoue, personne ne
+  # le lit, et l'on croit être couvert.
   - package-ecosystem: "docker"
-    directory: "/deploy"
+    directory: "/web"
     schedule:
       interval: "weekly"
       day: "monday"

@@ -461,7 +461,10 @@ Codes de sortie : `0` succès, `1` erreur, `2` usage, `3` vérification négativ
 
 ---
 
-## 9. Variables d'environnement (`THOT_*`)
+## 9. Variables d'environnement
+
+> Toutes les variables ci-dessous portent le préfixe **`THOT_`** (ex. `THOT_DRY_RUN`).
+> Les noms sont donnés sans préfixe dans le tableau pour rester lisibles.
 
 | Variable | Défaut | Rôle |
 |---|---|---|

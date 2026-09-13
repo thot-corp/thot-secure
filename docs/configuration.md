@@ -10,7 +10,7 @@ Kubernetes se relit en revue, se versionne et se compare entre environnements.
 
     * **`THOT_DRY_RUN=false`** : Thot Secure cesse de simuler. Les connecteurs configurés
       peuvent alors modifier votre infrastructure (blocage d'IP, révocation de session,
-      isolation d'hôte…). Le [garde-fou](decision/policies.md#les-5-garde-fous-non-contournables)
+      isolation d'hôte…). Le [garde-fou](decision/policies.md#6-garde-fous-non-contournables)
       « dry-run global prioritaire » n'a plus rien à protéger.
     * **`THOT_AUTONOMY=auto`** : les politiques marquées `decision: auto` s'exécutent
       **sans approbation humaine**. Combiné au dry-run levé, c'est une exécution automatique
@@ -103,7 +103,7 @@ Deux conséquences pratiques :
 * **Le niveau 5 est le seul endroit sans échappatoire.** Aucune politique, aussi
   soigneusement écrite soit-elle, ne peut exécuter une action sur une cible protégée, ni
   dépasser le plafond horaire, ni ignorer le dry-run global. Détail :
-  [les 5 garde-fous](decision/policies.md#les-5-garde-fous-non-contournables).
+  [les 5 garde-fous](decision/policies.md#6-garde-fous-non-contournables).
 
 !!! note "Articulation exacte global / tenant pour le dry-run"
 
@@ -317,6 +317,6 @@ que vous doutez de l'état réel de la configuration.
     La **collecte** et la **détection** continuent : c'est voulu. On coupe la capacité
     d'agir, pas la capacité de voir — sinon on perd précisément l'information nécessaire
     au diagnostic. La procédure complète, avec les incidents associés, est dans le
-    [Runbook d'incident](operations/runbook.md#procedure-durgence-couper-lautomatisation).
+    [Runbook d'incident](operations/runbook.md#0-premier-reflexe-couper-lautomatisation).
 
 <!-- Métadonnées: statut=stable, version=0.1.0 (MVP), dernière revue=2026-09-13 -->

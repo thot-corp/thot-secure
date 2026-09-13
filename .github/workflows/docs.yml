@@ -100,6 +100,16 @@ jobs:
       - name: Show tool versions
         run: mkdocs --version
 
+      - name: Check internal documentation links
+        # Exécuté AVANT le build : `mkdocs build --strict` échoue bien sur un lien interne
+        # cassé, mais son message est noyé dans la sortie du build. Ce contrôle donne la
+        # liste exacte des liens fautifs, et il ne dépend d'aucun paquet externe — il
+        # s'exécute donc même si l'installation de MkDocs échoue.
+        #
+        # Motif : le premier tag (v0.1.0) a échoué ici. 18 liens de `docs/cli.md` étaient
+        # préfixés d'un `../` de trop, et 5 renvoyaient vers un fichier hors de `docs/`.
+        run: python scripts/check-docs-links.py --strict
+
       - name: Build the site (--strict)
         # Warnings become errors on purpose — see the header. `site_dir` is left
         # at the mkdocs.yml default (`site`), which is the path uploaded below.

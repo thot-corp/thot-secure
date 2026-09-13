@@ -172,9 +172,8 @@ jobs:
           python - <<'PY'
           import os
           import pathlib
+          import re
           import sys
-
-          import yaml
 
           version = os.environ["VERSION"]
           citation = pathlib.Path("CITATION.cff")
@@ -182,8 +181,15 @@ jobs:
               print("::notice::CITATION.cff is absent — skipping.")
               raise SystemExit(0)
 
-          data = yaml.safe_load(citation.read_text(encoding="utf-8")) or {}
-          declared = str(data.get("version", ""))
+          # Analyse SANS PyYAML, volontairement : ce job n'installe aucune dépendance.
+          # Un `import yaml` sans `pip install pyyaml` fait échouer la release sur un runner
+          # neuf — c'est exactement ce qui s'est produit sur le tag v0.1.0. Ajouter une
+          # installation réseau dans le chemin de release élargirait en plus la surface
+          # d'approvisionnement pour un simple contrôle de version.
+          # CITATION.cff est un fichier que nous contrôlons : une clé `version` racine suffit.
+          text = citation.read_text(encoding="utf-8")
+          match = re.search(r'(?m)^version:\s*"?([^"\s#]+)"?\s*$', text)
+          declared = match.group(1) if match else ""
           if declared and declared != version:
               print(
                   f"::error::CITATION.cff declares version {declared!r} but the tag is {version!r}. "

@@ -2,7 +2,7 @@
 
 *Sept incidents, une même règle : d'abord couper l'automatisation, ensuite comprendre — jamais l'inverse.*
 
-Ce runbook suppose une instance Thot Secure en production, une base SQLite locale (`THOT_DB_URL=sqlite:///./data/thotsecure.db` par défaut), et une astreinte qui a accès à la sauvegarde et à `THOT_SECRET_KEY`. Référence normative : [`../architecture/api-contract.md`](../architecture/api-contract.md) — §4.1 (sondes), §4.2 (tenants et clés), §4.6 (actions et erreurs `409`), §4.7 (audit), §6 (garde-fous), §8 (CLI et codes de sortie), §9 (variables d'environnement). L'exploitation courante (dimensionnement, sauvegarde, montée de version) est décrite dans [`deployment.md`](deployment.md) ; les manifestes exacts dans [`deploy/README.md`](../deploy/README.md).
+Ce runbook suppose une instance Thot Secure en production, une base SQLite locale (`THOT_DB_URL=sqlite:///./data/thotsecure.db` par défaut), et une astreinte qui a accès à la sauvegarde et à `THOT_SECRET_KEY`. Référence normative : [`../architecture/api-contract.md`](../architecture/api-contract.md) — §4.1 (sondes), §4.2 (tenants et clés), §4.6 (actions et erreurs `409`), §4.7 (audit), §6 (garde-fous), §8 (CLI et codes de sortie), §9 (variables d'environnement). L'exploitation courante (dimensionnement, sauvegarde, montée de version) est décrite dans [`deployment.md`](deployment.md) ; les manifestes exacts dans `deploy/README.md`.
 
 Exemples d'appels — adaptez l'hôte et la clé :
 
@@ -626,7 +626,7 @@ Un runbook ne vaut que si l'astreinte peut l'exécuter **sans chercher un accès
 * [ ] **Accès à la sauvegarde** testé par la personne d'astreinte (pas seulement par l'équipe plateforme).
 * [ ] **Accès à `THOT_SECRET_KEY`** : coffre accessible 24/7, procédure d'accès d'urgence connue, **séparé de la sauvegarde** de la base.
 * [ ] **Accès au coffre** et aux identifiants des connecteurs (WAF, pare-feu) pour la réconciliation manuelle.
-* [ ] **Accès en lecture à [`deploy/README.md`](../deploy/README.md)** : c'est lui qui porte les manifestes et les seuils d'alerte.
+* [ ] **Accès en lecture à `deploy/README.md`** : c'est lui qui porte les manifestes et les seuils d'alerte.
 * [ ] **Clé `admin` d'astreinte** disponible (hors CI), et une clé par usage par ailleurs.
 * [ ] **Test de restauration trimestriel** : restauration réelle + `thotsecure doctor` + `thotsecure audit verify`, avec relevé du RTO réellement obtenu ([`deployment.md`](deployment.md) §4.4).
 * [ ] **Alertes actives** et dirigées vers l'astreinte ([`deployment.md`](deployment.md) §9).
@@ -639,7 +639,7 @@ Un runbook ne vaut que si l'astreinte peut l'exécuter **sans chercher un accès
 * **Les incidents purement infrastructure ou cloud** : réseau, DNS, hyperviseur, stockage, panne d'un fournisseur. Ils relèvent de l'équipe infrastructure ; ce runbook ne traite que ce qu'Thot Secure voit et subit.
 * **La compromission du SI lui-même** : poste de travail, annuaire, chaîne CI, hôte de production compromis. Cela relève d'une cellule de réponse à incident et d'investigation forensic — Thot Secure est un outil **strictement défensif** (pas de scan agressif, pas de hack-back, aucune capacité offensive) et n'est pas un outil de réponse à compromission.
 * **La décision juridique** : qualification réglementaire, notification à une autorité de contrôle, information des personnes concernées, dépôt de plainte. Le runbook fournit les **faits** (fenêtre, données touchées, `broken_at`, clés révoquées) ; la décision appartient au DPO et au service juridique ([`../compliance/rgpd.md`](../compliance/rgpd.md)).
-* **La modification des manifestes et des seuils d'alerte** : c'est le **lot déploiement** ([`deploy/README.md`](../deploy/README.md)).
+* **La modification des manifestes et des seuils d'alerte** : c'est le **lot déploiement** (`deploy/README.md`).
 * **Le dimensionnement et la montée de version** : voir [`deployment.md`](deployment.md).
 
 <!-- Métadonnées: statut=stable, version=0.1.0 (MVP), dernière revue=2026-09-13 -->

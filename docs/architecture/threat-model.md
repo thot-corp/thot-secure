@@ -232,7 +232,7 @@ Trois pièges opérationnels à connaître :
   (voir [Runbook : audit verify échoue](../operations/runbook.md#3-audit-verify-echoue)).
 * **L'immuabilité s'oppose au droit à l'effacement.** On ne supprime pas une entrée d'audit :
   on pseudonymise à la source. Le compromis est expliqué honnêtement dans
-  [RGPD](../compliance/rgpd.md#droits-des-personnes-et-immuabilite-de-laudit).
+  [RGPD](../compliance/rgpd.md#71-le-compromis-honnete-avec-limmutabilite-de-laudit).
 
 ### 6.3 Repudiation (contestation)
 

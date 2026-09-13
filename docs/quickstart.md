@@ -117,7 +117,7 @@ thotsecure key create --tenant demo --role responder --label "poste-local"
 ```
 
 Conservez la valeur `ao_…` retournée. Rôles disponibles : `viewer`, `analyst`, `responder`,
-`admin` (voir [Utiliser l'API REST](api/usage.md#roles-et-capacites)).
+`admin` (voir [Utiliser l'API REST](api/usage.md#2-roles-capacites-et-moindre-privilege)).
 
 !!! tip "Différence entre clé de démarrage et clé de travail"
 
@@ -339,13 +339,13 @@ curl -s -X PATCH http://127.0.0.1:8080/api/v1/tenants/demo \
 ```
 
 La procédure complète (« couper l'automatisation ») est le **premier réflexe** du
-[Runbook d'incident](operations/runbook.md#procedure-durgence-couper-lautomatisation).
+[Runbook d'incident](operations/runbook.md#0-premier-reflexe-couper-lautomatisation).
 
 !!! danger "Ne levez le dry-run qu'avec une raison écrite"
 
     Passer `THOT_DRY_RUN=false` ou un tenant en `auto` donne à Thot Secure le pouvoir de
     modifier votre infrastructure. Faites-le progressivement (un tenant, un playbook, une
-    cible à la fois), avec les [cinq garde-fous](decision/policies.md#les-5-garde-fous-non-contournables)
+    cible à la fois), avec les [cinq garde-fous](decision/policies.md#6-garde-fous-non-contournables)
     en place, des cibles protégées déclarées, et une personne capable d'annuler l'action.
 
 ---

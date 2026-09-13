@@ -79,7 +79,7 @@ flowchart TB
     exécutée que si **cinq garde-fous** l'autorisent : plafond horaire par tenant, cooldown
     par couple (playbook, cible), cibles protégées jamais modifiées, dry-run global
     prioritaire, et approbation obligatoire hors périmètre déclaré. Voir
-    [les 5 garde-fous](../decision/policies.md#les-5-garde-fous-non-contournables).
+    [les 5 garde-fous](../decision/policies.md#6-garde-fous-non-contournables).
 
 ## 2. Conteneurs (C4 niveau 2)
 
