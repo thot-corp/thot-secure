@@ -16,7 +16,7 @@ autopromotion: "AVERTISSEMENT — Lobsters autorise la soumission de son propre 
 
 > **Titre :** `Thot Secure v0.1.0: a defensive SOAR where the audit log is a hash chain and every action has a rollback`
 >
-> **URL :** `https://github.com/thotsecure/thot-secure`
+> **URL :** `https://github.com/thot-corp/thot-secure`
 >
 > **Tags proposés (candidats — à vérifier sur place le jour J) :** `security`, `python`, `devops`, `release`
 >
@@ -45,7 +45,7 @@ autopromotion: "AVERTISSEMENT — Lobsters autorise la soumission de son propre 
 
 # 3. COMMENTAIRE D'AUTEUR — à copier tel quel (EN)
 
-Author here. v0.1.0, Apache-2.0, alpha. Thot Secure is a defensive SOAR/CSPM: normalized events, YAML detection rules, a risk score, a policy-as-code decision, then a playbook. Four design decisions below, including the parts I'm not sure about. Repo: https://github.com/thotsecure/thot-secure
+Author here. v0.1.0, Apache-2.0, alpha. Thot Secure is a defensive SOAR/CSPM: normalized events, YAML detection rules, a risk score, a policy-as-code decision, then a playbook. Four design decisions below, including the parts I'm not sure about. Repo: https://github.com/thot-corp/thot-secure
 
 **Why a hash chain instead of a blockchain.** The requirement is tamper-evidence over a log you keep yourself, and a chain of hashes gets you that without a consensus layer or an operational dependency. Each record commits to its predecessor: `hash = sha256(seq|ts|tenant_id|actor|actor_role|action|canonical(target)|canonical(before)|canonical(after)|prev_hash)`, where `canonical()` is sorted JSON with compact separators in UTF-8, and the first record has `prev_hash = "sha256:genesis"`. Verification is a local operation — `GET /api/v1/audit/verify` returns `{"valid":true,"records":n,"broken_at":null}` — and the log exports as `jsonl` or `cef` so another system can hold an independent copy. What that gets you: you can prove the log is internally consistent and detect any edit, deletion or reordering that breaks the chain. What it doesn't get you, and I'd rather state it than have it discovered: a chain proves consistency of *what you have*, not completeness of *what exists*. Whoever controls the host can truncate the log and start a fresh chain, and anyone who can rewrite the database can recompute the whole chain. The real defence is anchoring the head hash somewhere you don't control — ship records to your SIEM, notarize the head periodically, or both. That's a deployment choice, not a product feature, so I left it there. A blockchain would answer the trust question only if you trusted neither your host nor your SIEM, and would cost a consensus mechanism and a lot of operational surface for it.
 

@@ -394,5 +394,5 @@ tracked in [`ROADMAP.md`](ROADMAP.md).
 - The React dashboard in `web/` is optional and not required for the embedded
   console, which is fully functional without a Node toolchain.
 
-[Unreleased]: https://github.com/thotsecure/thot-secure/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/thotsecure/thot-secure/compare/v0.0.0...v0.1.0
+[Unreleased]: https://github.com/thot-corp/thot-secure/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/thot-corp/thot-secure/compare/v0.0.0...v0.1.0

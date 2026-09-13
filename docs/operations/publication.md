@@ -36,7 +36,7 @@ décision humaine.
 #     le dépôt local contient déjà tout. Nom recommandé : thot-secure (org : thotsecure)
 
 # 2.2 Déclarer le remote et pousser la branche principale
-git remote add origin git@github.com:thotsecure/thot-secure.git
+git remote add origin git@github.com:thot-corp/thot-secure.git
 git push -u origin main
 
 # 2.3 Vérifier qu'aucun fichier sensible n'est parti
@@ -87,7 +87,7 @@ refuse une archive non vérifiée) :
 
 ```bash
 cosign verify-blob --bundle thotsecure-0.1.0.tar.gz.sigstore \
-  --certificate-identity-regexp 'https://github.com/thotsecure/thot-secure/.*' \
+  --certificate-identity-regexp 'https://github.com/thot-corp/thot-secure/.*' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   thotsecure-0.1.0.tar.gz
 sha256sum -c thotsecure-0.1.0.tar.gz.sha256

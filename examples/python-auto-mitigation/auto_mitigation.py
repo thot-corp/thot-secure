@@ -137,7 +137,7 @@ DEFAULT_DURATION_SECONDS = 3600
 
 DEFAULT_TIMEOUT = 15.0
 
-USER_AGENT = "thotsecure-auto-mitigation/0.1.0 (+https://github.com/thotsecure/thot-secure)"
+USER_AGENT = "thotsecure-auto-mitigation/0.1.0 (+https://github.com/thot-corp/thot-secure)"
 
 #: Mot attendu pour la confirmation interactive. Volontairement explicite : « oui » vite tapé ne
 #: doit pas suffire à bloquer une adresse.

@@ -1,7 +1,26 @@
-github: [thotsecure]
-open_collective: thotsecure
-liberapay: thotsecure
+# Canaux de soutien officiels de Thot Secure.
+#
+# ⚠️ RÈGLE DE SÛRETÉ : ne déclarer ici QUE des comptes et des URL que le projet contrôle
+# réellement et a vérifiés. Un identifiant de plateforme laissé par défaut peut appartenir à
+# quelqu'un d'autre : le bouton « Sponsor » enverrait alors les dons à un tiers. C'est un
+# vecteur de fraude, pas une simple coquille de configuration.
+#
+# Pour réactiver un canal : créer le compte, vérifier qu'il est bien le vôtre (page publique,
+# historique, cohérence avec le dépôt), PUIS décommenter la ligne correspondante.
+
+# GitHub Sponsors : valide dès que l'organisation thot-corp est inscrite au programme.
+# Tant qu'elle ne l'est pas, GitHub n'affiche simplement pas de bouton, sans erreur.
+github: [thot-corp]
+
+# Non créés à ce jour — volontairement désactivés (cf. règle de sûreté ci-dessus).
+# open_collective: thot-corp
+# liberapay: thot-corp
+
 custom:
-  - "https://thotsecure.dev/support"
+  # Page de soutien **du dépôt** : elle existe, elle est versionnée et vérifiable.
+  # Remplacez-la par l'URL du site vitrine le jour où le domaine vous appartient
+  # (regardez d'abord qui le détient : un domaine abandonné peut être revendu à un tiers).
+  - "https://github.com/thot-corp/thot-secure/blob/main/docs/support.md"
+  # Adresses de dons vérifiables depuis ce dépôt. Réseau indiqué, jamais de QR externe.
   - "bitcoin:33cDzgvVe7m9P4X58pW3rsMKuxrRXFmPBR"
   - "solana:95s8JxNzLbre9nopbdxakkc4dtNCzkzA2JUTDFQnM7Hi"

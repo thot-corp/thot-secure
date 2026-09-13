@@ -10,20 +10,20 @@ blank_issues_enabled: false
 
 contact_links:
   - name: 🔒 Report a security vulnerability (private)
-    url: https://github.com/thotsecure/thot-secure/security/advisories/new
+    url: https://github.com/thot-corp/thot-secure/security/advisories/new
     about: >-
       Never disclose a vulnerability in a public issue. Use a private GitHub
       Security Advisory; alternatively email security@thotsecure.dev. Read
       SECURITY.md for scope, response timelines and the PGP key.
 
   - name: 🛡️ Security policy (read before reporting)
-    url: https://github.com/thotsecure/thot-secure/blob/main/SECURITY.md
+    url: https://github.com/thot-corp/thot-secure/blob/main/SECURITY.md
     about: >-
       Supported versions, in-scope and out-of-scope reports, safe harbour, the
       CVE request process, the credit policy, and the private reporting channels.
 
   - name: 💬 Questions and ideas (Discussions)
-    url: https://github.com/thotsecure/thot-secure/discussions
+    url: https://github.com/thot-corp/thot-secure/discussions
     about: >-
       Ask about deployment, configuration, hardening your own instance, or how to
       interpret a finding. Not for vulnerability reports and not for defect
@@ -36,19 +36,19 @@ contact_links:
       deployment guides, the rule-writing guide and the API reference.
 
   - name: 🤝 Contributing guide
-    url: https://github.com/thotsecure/thot-secure/blob/main/CONTRIBUTING.md
+    url: https://github.com/thot-corp/thot-secure/blob/main/CONTRIBUTING.md
     about: >-
       Development setup, the DCO sign-off requirement, Conventional Commits,
       pull request requirements, and the procedure for adding a detection rule.
 
   - name: 🗺️ Roadmap
-    url: https://github.com/thotsecure/thot-secure/blob/main/ROADMAP.md
+    url: https://github.com/thot-corp/thot-secure/blob/main/ROADMAP.md
     about: >-
       What is planned for v0.2, v0.3 and v1.0, with acceptance criteria for each
       item. Check here before requesting a feature.
 
   - name: 🏛️ Governance
-    url: https://github.com/thotsecure/thot-secure/blob/main/GOVERNANCE.md
+    url: https://github.com/thot-corp/thot-secure/blob/main/GOVERNANCE.md
     about: >-
       How decisions are made: lazy consensus, votes, nominations, conflict
       resolution, and the constitutional invariants — including the rule that the

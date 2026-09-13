@@ -126,7 +126,7 @@ PAGE_LIMIT = 200
 
 DEFAULT_TIMEOUT = 20.0
 
-USER_AGENT = "thotsecure-ci-sarif-gate/0.1.0 (+https://github.com/thotsecure/thot-secure)"
+USER_AGENT = "thotsecure-ci-sarif-gate/0.1.0 (+https://github.com/thot-corp/thot-secure)"
 
 SARIF_VERSION = "2.1.0"
 SARIF_SCHEMA = "https://json.schemastore.org/sarif-2.1.0.json"
@@ -620,7 +620,7 @@ def build_sarif(
     server_sarif: Mapping[str, str] | None = None,
     uri_template: str = DEFAULT_URI_TEMPLATE,
     tool_version: str = "0.1.0",
-    information_uri: str = "https://github.com/thotsecure/thot-secure",
+    information_uri: str = "https://github.com/thot-corp/thot-secure",
 ) -> dict[str, Any]:
     """Construit un SARIF 2.1.0 **agrégé** à partir des findings et des SARIF serveur éventuels.
 

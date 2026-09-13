@@ -65,8 +65,8 @@ You do not need to write Python to move this project forward.
   triage role in an issue if you would like to help there.
 
 Look for issues labelled
-[`good first issue`](https://github.com/thotsecure/thot-secure/labels/good%20first%20issue)
-and [`help wanted`](https://github.com/thotsecure/thot-secure/labels/help%20wanted).
+[`good first issue`](https://github.com/thot-corp/thot-secure/labels/good%20first%20issue)
+and [`help wanted`](https://github.com/thot-corp/thot-secure/labels/help%20wanted).
 If you want to work on something that is not tracked yet, open an issue first
 so we can agree on the shape before you spend time on a patch.
 
@@ -78,7 +78,7 @@ Requirements: **Python 3.11+** (CI covers 3.11, 3.12 and 3.13), `git`, and —
 only for the optional React dashboard in `web/` — Node.js 20+.
 
 ```console
-git clone https://github.com/thotsecure/thot-secure.git
+git clone https://github.com/thot-corp/thot-secure.git
 cd thot-secure
 python -m venv .venv
 # Windows (PowerShell)

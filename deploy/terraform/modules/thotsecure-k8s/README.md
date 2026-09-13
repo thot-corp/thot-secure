@@ -7,7 +7,7 @@ Kubernetes générique (AWS EKS, Azure AKS, k3s, ...) :
   Pod Security Admission `restricted` ;
 - **coquille de Secret optionnelle** — jamais de valeur secrète dans Terraform ;
 - **release Helm** du chart local `deploy/helm/thotsecure`, durcie par défaut :
-  l'image `ghcr.io/thotsecure/thot-secure:0.1.0` tourne en utilisateur non-root
+  l'image `ghcr.io/thot-corp/thot-secure:0.1.0` tourne en utilisateur non-root
   **UID/GID 10001**, avec `readOnlyRootFilesystem: true`, `tmpfs` sur `/tmp`,
   `capabilities.drop: ["ALL"]`, `allowPrivilegeEscalation: false` et
   `seccompProfile: RuntimeDefault`. Jamais `privileged`, jamais `hostNetwork`,
@@ -52,7 +52,7 @@ module "thotsecure_k8s" {
   # Chart local : chemin résolu depuis le répertoire du module racine appelant.
   chart_path = "../../../helm/thotsecure"
 
-  image_repository = "ghcr.io/thotsecure/thot-secure"
+  image_repository = "ghcr.io/thot-corp/thot-secure"
   image_tag        = "0.1.0"
 
   # Garde-fous de sûreté : ne pas modifier sans procédure de validation humaine.
@@ -93,7 +93,7 @@ module "thotsecure_k8s" {
 | `create_namespace` | `bool` | `true` | Créer le namespace (labels standards + PSA `restricted`). |
 | `release_name` | `string` | `"thotsecure"` | Nom de la release Helm (sert aussi de nom de Service/Deployment). |
 | `chart_path` | `string` | — | Chemin **local** vers `deploy/helm/thotsecure` (résolu depuis le module racine). |
-| `image_repository` | `string` | `"ghcr.io/thotsecure/thot-secure"` | Dépôt de l'image conteneur. |
+| `image_repository` | `string` | `"ghcr.io/thot-corp/thot-secure"` | Dépôt de l'image conteneur. |
 | `image_tag` | `string` | `"0.1.0"` | Tag d'image (préférer un tag immuable). |
 | `image_pull_policy` | `string` | `"IfNotPresent"` | `Always`, `IfNotPresent` ou `Never`. |
 | `replica_count` | `number` | `1` | Nombre de réplicas (>= 1 ; > 1 incompatible avec SQLite RWO + bus `memory`). |

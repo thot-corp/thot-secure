@@ -77,7 +77,7 @@ Longueur : **233/280 caractères**
 
 <!--post:6-->
 ```text
-Try it with no credentials: thotsecure init-db, thotsecure demo --tenant demo, thotsecure audit verify. Unconfigured connectors run simulated and return a rollback token. Code, rules, good first issues: https://github.com/thotsecure/thot-secure
+Try it with no credentials: thotsecure init-db, thotsecure demo --tenant demo, thotsecure audit verify. Unconfigured connectors run simulated and return a rollback token. Code, rules, good first issues: https://github.com/thot-corp/thot-secure
 ```
 
 ---
@@ -105,7 +105,7 @@ Longueur : **206/280 caractères**
 
 <!--post:8-->
 ```text
-v0.1.0 is pre-1.0 on purpose and Apache-2.0. Good first issues are scoped to about a day of work, DCO sign-off, no CLA. The one hard rule: no offensive capability. Repo: https://github.com/thotsecure/thot-secure
+v0.1.0 is pre-1.0 on purpose and Apache-2.0. Good first issues are scoped to about a day of work, DCO sign-off, no CLA. The one hard rule: no offensive capability. Repo: https://github.com/thot-corp/thot-secure
 ```
 
 ---
@@ -113,7 +113,7 @@ v0.1.0 is pre-1.0 on purpose and Apache-2.0. Good first issues are scoped to abo
 ## Notes de publication
 
 - **Heure optimale :** mardi/mercredi/jeudi 14 h - 16 h UTC. Un thread technique posté entre 20 h et 23 h UTC atteint surtout l'Europe du soir et rate la matinée US du lendemain.
-- **Un seul lien :** `https://github.com/thotsecure/thot-secure` apparaît une fois, en post 6 (ou dans sa variante). Ne pas le répéter en réponse.
+- **Un seul lien :** `https://github.com/thot-corp/thot-secure` apparaît une fois, en post 6 (ou dans sa variante). Ne pas le répéter en réponse.
 - **Comptage :** les comptes annoncés sont des comptes **bruts** de caractères, mesurés sur la ligne du bloc `text`. X applique par ailleurs sa propre règle de comptage (une URL est comptée 23 caractères quelle que soit sa longueur), donc les posts contenant le lien sont encore plus confortables en pratique que le compte affiché.
 - **Longueur du lien :** l'URL du dépôt fait 34 caractères bruts. Si le compte d'un post approche 280, raccourcir le texte plutôt que l'URL — un lien raccourci par un tiers (bit.ly & co) est un signal négatif pour un projet de sécurité.
 - **Fil :** publier les 6 posts en une seule fois, en auto-réponse, pour que le thread soit lisible immédiatement. Ne pas étaler sur plusieurs jours.

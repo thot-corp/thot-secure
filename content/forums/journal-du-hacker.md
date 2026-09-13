@@ -56,7 +56,7 @@ Ce qui est interdit dans ce texte : tout chiffre non mesuré ; tout superlatif ;
 
 > **Titre :** `Thot Secure 0.1.0 — SOAR défensif auto-hébergeable : actions réversibles, audit chaîné, dry-run par défaut`
 >
-> **URL :** `https://github.com/thotsecure/thot-secure`
+> **URL :** `https://github.com/thot-corp/thot-secure`
 >
 > **Étiquettes :** à vérifier le jour J (candidats : développement, sécurité, réseau, logiciel libre)
 >
@@ -74,7 +74,7 @@ Les défauts sont fermés : `THOT_DRY_RUN=true` et `THOT_AUTONOMY=supervised`, q
 
 Sur l'auto-hébergement : les défauts pointent vers l'intérieur (SQLite, bus en mémoire, console Jinja2 sans chaîne de build Node, aucun CDN). Aucun mécanisme de télémétrie n'apparaît dans le contrat d'interface ; c'est un constat de lecture, à confirmer par audit du code, pas une garantie que je demande de croire sur parole.
 
-C'est un alpha et il manque des choses : pas d'agent endpoint, pas de corpus de règles éprouvé, PostgreSQL seulement documenté, quatre rôles RBAC. Dépôt : `https://github.com/thotsecure/thot-secure`
+C'est un alpha et il manque des choses : pas d'agent endpoint, pas de corpus de règles éprouvé, PostgreSQL seulement documenté, quatre rôles RBAC. Dépôt : `https://github.com/thot-corp/thot-secure`
 
 ---
 

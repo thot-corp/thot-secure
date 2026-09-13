@@ -70,7 +70,7 @@ Short, verifiable facts for the author to keep in mind while replying in comment
 
 I'm the author — disclosure first, since that's the rule here.
 
-Thot Secure is a defensive SOAR/CSPM in Python/FastAPI. The pipeline is: normalize events → match YAML rules → score → decide from policy-as-code → run a playbook that always has a rollback path. Repo: https://github.com/thotsecure/thot-secure — that is the only link in this post.
+Thot Secure is a defensive SOAR/CSPM in Python/FastAPI. The pipeline is: normalize events → match YAML rules → score → decide from policy-as-code → run a playbook that always has a rollback path. Repo: https://github.com/thot-corp/thot-secure — that is the only link in this post.
 
 The four design bets, in the order they mattered to me:
 
@@ -140,7 +140,7 @@ Formulation à éviter absolument : toute comparaison dénigrant Wazuh ou Shuffl
 # 6. Règles d'auto-promotion appliquées à ce post (FR)
 
 1. **Participation d'abord.** Ne pas publier sans historique de commentaires dans r/netsec. Un compte dédié à la publication d'un outil est traité comme du spam, à raison.
-2. **Un seul lien.** `https://github.com/thotsecure/thot-secure`, une seule occurrence, dans le corps du post. Aucun lien vers un site de projet, une page de soutien, un article de blog ou une boutique.
+2. **Un seul lien.** `https://github.com/thot-corp/thot-secure`, une seule occurrence, dans le corps du post. Aucun lien vers un site de projet, une page de soutien, un article de blog ou une boutique.
 3. **Disclosure en première ligne** : « I'm the author ». Non négociable, y compris dans les commentaires où l'on répond à une objection de conception.
 4. **Pas de dons sur ce canal.** Décision volontaire : r/netsec n'est pas un lieu de sollicitation, et une section dons dans un post d'outil décrédibilise l'ensemble de l'argumentaire technique. Si quelqu'un demande comment soutenir le projet, répondre en une phrase qu'il existe une page de soutien dans le produit (`GET /ui/support`) et s'arrêter là — sans adresse, sans insistance, sans relance.
 5. **Pas de relance.** Si le post ne prend pas, ne pas le republier ni le faire remonter.

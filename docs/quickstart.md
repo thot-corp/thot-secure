@@ -30,14 +30,14 @@ elle travaille sur des données synthétiques locales.
 === "bash"
 
     ```bash
-    git clone https://github.com/thotsecure/thot-secure.git
+    git clone https://github.com/thot-corp/thot-secure.git
     cd thot-secure
     ```
 
 === "PowerShell"
 
     ```powershell
-    git clone https://github.com/thotsecure/thot-secure.git
+    git clone https://github.com/thot-corp/thot-secure.git
     Set-Location thotsecure
     ```
 

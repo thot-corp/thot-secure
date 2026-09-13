@@ -99,7 +99,7 @@ Highest-value contribution is a detection rule: one YAML file, one test that mus
 
 python -m unittest discover -s tests -t . -v
 
-https://github.com/thotsecure/thot-secure
+https://github.com/thot-corp/thot-secure
 #infosec #blueteam #opensource #SOAR #detection
 ```
 
@@ -145,7 +145,7 @@ An audit log you can edit is not evidence. Thot Secure v0.1.0 chains every recor
 
 - **Heure optimale :** mardi ou mercredi, 13 h - 15 h UTC. Les timelines Mastodon sont chronologiques : un fil posté le matin en Europe reste visible l'après-midi en Amérique du Nord.
 - **Hashtags :** uniquement dans le dernier post, comme indiqué — `#infosec #blueteam #opensource #SOAR #detection`. Cinq, pas trente : ce sont ceux qui servent réellement la découverte sur les instances infosec.
-- **Un seul lien :** `https://github.com/thotsecure/thot-secure` dans le post 7. Ne pas le répéter en réponse au fil.
+- **Un seul lien :** `https://github.com/thot-corp/thot-secure` dans le post 7. Ne pas le répéter en réponse au fil.
 - **Découpage :** poster les 7 posts à la suite en auto-réponse. Chaque post doit rester compréhensible seul, mais le fil doit se lire d'un bloc — d'où les phrases de liaison dans les posts 4, 5 et 6.
 - **Comptage :** compte brut, retours à la ligne inclus, avec une marge volontaire sous 500 pour absorber les différences d'instances (certaines acceptent 1000, d'autres restent à 500). En cas de dépassement sur une instance stricte, couper le post 6 en deux plutôt que de supprimer une limite assumée.
 - **Pas de chiffre d'impact :** ce fil n'annonce aucun gain mesuré. Les seuls chiffres cités sont des faits du produit (codes de sortie 0/1/2/3, seuil `gte: 70`, 500 événements par lot d'ingestion). Aucun benchmark, aucune moyenne inventée.

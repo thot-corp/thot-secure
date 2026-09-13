@@ -36,7 +36,7 @@ import (
 )
 
 const (
-	probeUserAgent = "thotsecure-healthcheck/0.1.0 (+https://github.com/thotsecure/thot-secure)"
+	probeUserAgent = "thotsecure-healthcheck/0.1.0 (+https://github.com/thot-corp/thot-secure)"
 	probeVersion   = "0.1.0"
 	defaultBaseURL = "http://127.0.0.1:8080"
 

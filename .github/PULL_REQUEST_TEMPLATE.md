@@ -4,11 +4,11 @@ Thanks for contributing to Thot Secure!
 A few things that will make this pull request faster to review:
 
 * Keep it focused — one logical change per pull request.
-* Read CONTRIBUTING.md if you have not: https://github.com/thotsecure/thot-secure/blob/main/CONTRIBUTING.md
+* Read CONTRIBUTING.md if you have not: https://github.com/thot-corp/thot-secure/blob/main/CONTRIBUTING.md
 * Conventional-commit style title and commits: `feat(detection): ...`, `fix(audit): ...`, `rule(AO-WEB-042): ...`
 * Every commit needs a DCO sign-off (`git commit -s`). There is no CLA.
 * Do not use this template for a security vulnerability. Use the private
-  channel in SECURITY.md instead: https://github.com/thotsecure/thot-secure/security/advisories/new
+  channel in SECURITY.md instead: https://github.com/thot-corp/thot-secure/security/advisories/new
 -->
 
 ## What does this change?
@@ -106,6 +106,6 @@ or a follow-up you deliberately left out of scope.
 ---
 
 <sub>By submitting this pull request I confirm that my contribution is made under the terms of the
-<a href="https://github.com/thotsecure/thot-secure/blob/main/LICENSE">Apache License 2.0</a>, that I have the
+<a href="https://github.com/thot-corp/thot-secure/blob/main/LICENSE">Apache License 2.0</a>, that I have the
 right to submit it, and that I agree to the
-<a href="https://github.com/thotsecure/thot-secure/blob/main/CODE_OF_CONDUCT.md">Code of Conduct</a>.</sub>
+<a href="https://github.com/thot-corp/thot-secure/blob/main/CODE_OF_CONDUCT.md">Code of Conduct</a>.</sub>

@@ -131,7 +131,7 @@ DEFAULT_MAX_PAGES = 200
 DEFAULT_STATE_FILE = "siem-forwarder-state.json"
 DEFAULT_DEDUPE_SIZE = 20000
 
-USER_AGENT = "thotsecure-siem-forwarder/0.1.0 (+https://github.com/thotsecure/thot-secure)"
+USER_AGENT = "thotsecure-siem-forwarder/0.1.0 (+https://github.com/thot-corp/thot-secure)"
 
 #: Produit et version annoncés dans l'en-tête CEF (``CEF:0|<vendor>|<product>|<version>|…``).
 CEF_VENDOR = "Thot Secure"

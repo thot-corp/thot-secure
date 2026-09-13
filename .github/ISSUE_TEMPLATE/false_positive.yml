@@ -22,7 +22,7 @@ body:
         If what fired is not a false positive but a genuine security
         **vulnerability** — for example a finding produced by the wrong tenant, or
         an action triggered when it should not have been — use the private channel
-        in [SECURITY.md](https://github.com/thotsecure/thot-secure/blob/main/SECURITY.md)
+        in [SECURITY.md](https://github.com/thot-corp/thot-secure/blob/main/SECURITY.md)
         instead.
 
   - type: input
@@ -60,7 +60,7 @@ body:
     attributes:
       label: The triggering event
       description: |
-        The canonical `Event` JSON ([contract §3.1](https://github.com/thotsecure/thot-secure/blob/main/docs/architecture/api-contract.md)),
+        The canonical `Event` JSON ([contract §3.1](https://github.com/thot-corp/thot-secure/blob/main/docs/architecture/api-contract.md)),
         **redacted**. This is what a maintainer will turn into a negative test.
       render: json
       value: |

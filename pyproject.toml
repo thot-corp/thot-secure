@@ -61,10 +61,10 @@ dev = [
 [project.urls]
 Homepage = "https://thotsecure.dev"
 Documentation = "https://thotsecure.dev/docs"
-Repository = "https://github.com/thotsecure/thot-secure"
-Changelog = "https://github.com/thotsecure/thot-secure/blob/main/CHANGELOG.md"
-Issues = "https://github.com/thotsecure/thot-secure/issues"
-Security = "https://github.com/thotsecure/thot-secure/security/advisories/new"
+Repository = "https://github.com/thot-corp/thot-secure"
+Changelog = "https://github.com/thot-corp/thot-secure/blob/main/CHANGELOG.md"
+Issues = "https://github.com/thot-corp/thot-secure/issues"
+Security = "https://github.com/thot-corp/thot-secure/security/advisories/new"
 Funding = "https://thotsecure.dev/support"
 
 [project.scripts]

@@ -17,7 +17,7 @@ autopromotion: "AVERTISSEMENT — HN autorise le Show HN d'un projet dont on est
 **Pourquoi Show HN et pas un simple lien.** Le canal attend qu'un auteur réponde. Un Show HN sans auteur présent pendant la première heure est lu comme une publicité. Nous partons donc du principe que l'auteur bloque deux heures.
 
 **Variante A — retenue : soumission d'URL vers le dépôt + commentaire d'auteur immédiat.**
-La soumission pointe vers `https://github.com/thotsecure/thot-secure` ; le commentaire d'auteur (§4) apporte le contexte, les limites et les chiffres vérifiables. C'est la forme la plus courante et la plus honnête pour un outil : le lecteur peut vérifier lui-même, immédiatement, ce qui est affirmé.
+La soumission pointe vers `https://github.com/thot-corp/thot-secure` ; le commentaire d'auteur (§4) apporte le contexte, les limites et les chiffres vérifiables. C'est la forme la plus courante et la plus honnête pour un outil : le lecteur peut vérifier lui-même, immédiatement, ce qui est affirmé.
 
 **Variante B — repli : self post texte.**
 À utiliser seulement s'il n'y a rien de réellement exécutable à cliquer (dépôt privé, absence de README). Ce n'est pas notre cas, mais la variante est fournie par sécurité.
@@ -55,7 +55,7 @@ Le texte ci-dessous n'affirme que des éléments du contrat d'interface ou du d�
 
 > **Titre :** `Show HN: Thot Secure – defensive SOAR with reversible actions and dry-run by default`
 >
-> **URL :** `https://github.com/thotsecure/thot-secure`
+> **URL :** `https://github.com/thot-corp/thot-secure`
 
 Puis, immédiatement, en premier commentaire :
 
@@ -78,7 +78,7 @@ What I'd genuinely like to be argued out of: whether a policy engine with guardr
 
 > **Titre :** `Show HN: Thot Secure – defensive SOAR with reversible actions and dry-run by default`
 
-Body: same text as the first comment above, minus the "Author here" line, with the repo URL as the final line: `https://github.com/thotsecure/thot-secure`. Nothing else is added — no badge, no screenshot, no roadmap list.
+Body: same text as the first comment above, minus the "Author here" line, with the repo URL as the final line: `https://github.com/thot-corp/thot-secure`. Nothing else is added — no badge, no screenshot, no roadmap list.
 
 ---
 

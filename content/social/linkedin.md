@@ -48,7 +48,7 @@ Mesurable : /api/v1/stats/overview expose compteurs 24 h/7 j, moyennes MTTA/MTTR
 
 Ordre de grandeur à remplacer par vos chiffres : sur quelques milliers d'alertes par semaine, l'essentiel du temps humain part dans la qualification. C'est le poste que la policy-as-code attaque d'abord.
 
-https://github.com/thotsecure/thot-secure
+https://github.com/thot-corp/thot-secure
 ```
 
 **Hashtags (à coller en fin de post, après le lien) :** `#Cybersécurité #SOC #OpenSource #SOAR`
@@ -78,7 +78,7 @@ Le reste tient en deux garanties par défaut : dry_run actif (THOT_DRY_RUN=true)
 
 Apache-2.0, Python/FastAPI, SQLite pour le MVP, console embarquée sans build Node.
 
-https://github.com/thotsecure/thot-secure
+https://github.com/thot-corp/thot-secure
 ```
 
 **Hashtags :** `#Cybersécurité #Audit #SIEM #OpenSource`
@@ -101,7 +101,7 @@ Les décisions sont du YAML versionné (auto, require_approval, notify_only, ign
 
 Pour mesurer avant d'automatiser : thotsecure demo --tenant demo déroule findings et actions en local, sans credentials.
 
-Apache-2.0 : https://github.com/thotsecure/thot-secure
+Apache-2.0 : https://github.com/thot-corp/thot-secure
 ```
 
 **Hashtags :** `#Cybersécurité #SOC #OpenSource`

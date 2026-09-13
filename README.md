@@ -93,7 +93,7 @@ avec un opt-in (`allow_probe: true`), une requête par contrôle, aucun rythme a
 
 ```bash
 # 1. Installation
-git clone https://github.com/thotsecure/thot-secure.git && cd thot-secure
+git clone https://github.com/thot-corp/thot-secure.git && cd thot-secure
 python -m venv .venv && . .venv/bin/activate     # Windows : .venv\Scripts\Activate.ps1
 pip install -e .
 thotsecure init-db

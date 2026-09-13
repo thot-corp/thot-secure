@@ -19,11 +19,11 @@ d'interface [`docs/architecture/api-contract.md`](../../docs/architecture/api-co
 ## Installation
 
 ```bash
-go get github.com/thotsecure/thot-secure/sdks/go
+go get github.com/thot-corp/thot-secure/sdks/go
 ```
 
 ```go
-import thotsecure "github.com/thotsecure/thot-secure/sdks/go"
+import thotsecure "github.com/thot-corp/thot-secure/sdks/go"
 ```
 
 Go ≥ 1.22 est requis (génériques, `log/slog`, `min`/`max`).

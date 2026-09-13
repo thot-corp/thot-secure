@@ -48,7 +48,7 @@ Tout ce qui suit provient du contrat d'interface (`docs/architecture/api-contrac
 | Affirmation | Source |
 |---|---|
 | Licence Apache-2.0, version `0.1.0`, statut « Development Status :: 3 - Alpha », Python ≥ 3.11 | `pyproject.toml` du dépôt |
-| Dépôt public : `https://github.com/thotsecure/thot-secure` | `pyproject.toml`, `Dockerfile`, `CONTRIBUTING.md` |
+| Dépôt public : `https://github.com/thot-corp/thot-secure` | `pyproject.toml`, `Dockerfile`, `CONTRIBUTING.md` |
 | Développement sous DCO, sans CLA ; au moins une approbation de mainteneur avant fusion ; document de gouvernance référencé depuis `CONTRIBUTING.md` | `CONTRIBUTING.md` du dépôt |
 | Interdiction des capacités offensives traitée comme invariant constitutionnel du projet | `CONTRIBUTING.md` du dépôt ; §1 et §10 du contrat |
 | Tests en `unittest` exécutables sans dépendance externe ; commande `python -m unittest discover -s tests -t . -v` ; `pytest` fonctionne aussi et tourne en CI | §11 du contrat |
@@ -86,7 +86,7 @@ Thot Secure est un SOAR/CSPM défensif en Python/FastAPI, sous Apache-2.0, publi
 
 # 5. TEXTE DU JOURNAL — à copier tel quel (FR)
 
-Je suis l'auteur d'Thot Secure, un projet que je publie en v0.1.0 sous licence Apache-2.0. Le dépôt est ici : `https://github.com/thotsecure/thot-secure`.
+Je suis l'auteur d'Thot Secure, un projet que je publie en v0.1.0 sous licence Apache-2.0. Le dépôt est ici : `https://github.com/thot-corp/thot-secure`.
 
 ## Le problème visé
 
@@ -173,7 +173,7 @@ Le plus utile aujourd'hui n'est pas du code : c'est de signaler ce qui casse à 
 >
 > **Corps :** reprendre le §5 en retirant les titres de section et en condensant les paragraphes « Où sont les compromis » et « Ce qui manque », pour viser 500 à 600 mots. Points à conserver impérativement : statut alpha, SQLite par défaut, connecteurs en mode simulé, absence (ou présence, selon vérification) d'agents endpoint, commande exacte des tests, et la déclaration de qualité d'auteur.
 >
-> **Liens :** dépôt `https://github.com/thotsecure/thot-secure`. Aucun autre lien.
+> **Liens :** dépôt `https://github.com/thot-corp/thot-secure`. Aucun autre lien.
 
 ---
 

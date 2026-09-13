@@ -19,8 +19,8 @@ site_author: Contributeurs Thot Secure
 
 # Dépôt affiché dans l'en-tête (bouton « star », lien « Modifier cette page »).
 # À ajuster si le dépôt officiel est publié sous une autre organisation.
-repo_url: https://github.com/thotsecure/thot-secure
-repo_name: thotsecure/thot-secure
+repo_url: https://github.com/thot-corp/thot-secure
+repo_name: thot-corp/thot-secure
 edit_uri: edit/main/docs/
 
 # Mention de pied de page (licence + positionnement défensif).
@@ -149,10 +149,10 @@ extra:
   generator: false
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/thotsecure/thot-secure
+      link: https://github.com/thot-corp/thot-secure
       name: Dépôt GitHub (code, règles, issues)
     - icon: fontawesome/solid/heart
-      link: https://github.com/thotsecure/thot-secure/blob/main/docs/support.md
+      link: https://github.com/thot-corp/thot-secure/blob/main/docs/support.md
       name: Soutenir le projet (hébergement, certificats, audits)
   # Bannière d'annonce renvoyant vers la feuille de route : elle est injectée par
   # docs/javascripts/extra.js, qui réutilise le lien « Feuille de route » déjà

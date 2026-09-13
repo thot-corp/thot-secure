@@ -120,7 +120,7 @@ DEFAULT_BATCH_SIZE = 100
 DEFAULT_TIMEOUT = 10.0
 DEFAULT_RETRY_AFTER_MAX = 30.0
 
-USER_AGENT = "thotsecure-webhook-bridge/0.1.0 (+https://github.com/thotsecure/thot-secure)"
+USER_AGENT = "thotsecure-webhook-bridge/0.1.0 (+https://github.com/thot-corp/thot-secure)"
 
 REDACTED = "[REDACTED]"
 REDACTED_JWT = "[REDACTED_JWT]"

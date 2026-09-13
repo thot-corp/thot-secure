@@ -12,7 +12,7 @@ body:
         Use this form to propose a rule for `rules/`. If you already have the
         rule written, you can skip the description and open the pull request —
         but read
-        [CONTRIBUTING.md §7](https://github.com/thotsecure/thot-secure/blob/main/CONTRIBUTING.md#7-adding-a-detection-rule)
+        [CONTRIBUTING.md §7](https://github.com/thot-corp/thot-secure/blob/main/CONTRIBUTING.md#7-adding-a-detection-rule)
         first, and include the positive, negative and threshold tests. **A rule
         without a negative test is not merged.**
 
@@ -135,7 +135,7 @@ body:
       description: |
         The matching conditions, ideally as a ready-to-use `match:` block
         conforming to
-        [contract §5](https://github.com/thotsecure/thot-secure/blob/main/docs/architecture/api-contract.md).
+        [contract §5](https://github.com/thot-corp/thot-secure/blob/main/docs/architecture/api-contract.md).
         Use the documented operators only: `eq, ne, gt, gte, lt, lte, in,
         not_in, contains, icontains, startswith, endswith, regex, exists, cidr,
         len_gt, len_lt`. For regex, watch for catastrophic backtracking — it is

@@ -85,7 +85,7 @@ C'est la méthode recommandée : elle installe le paquet `src/thotsecure` en mod
 ### 3.1 Bash (Linux, macOS, WSL2)
 
 ```bash
-git clone https://github.com/thotsecure/thot-secure.git
+git clone https://github.com/thot-corp/thot-secure.git
 cd thot-secure
 
 python -m venv venv
@@ -102,7 +102,7 @@ thotsecure doctor
 ### 3.2 PowerShell (Windows)
 
 ```powershell
-git clone https://github.com/thotsecure/thot-secure.git
+git clone https://github.com/thot-corp/thot-secure.git
 Set-Location thotsecure
 
 python -m venv venv
@@ -172,7 +172,7 @@ Le premier parcours fonctionnel (création de tenant, clé API, ingestion, findi
 === "Depuis un clone (méthode sûre)"
 
     ```bash
-    git clone https://github.com/thotsecure/thot-secure.git
+    git clone https://github.com/thot-corp/thot-secure.git
     cd thot-secure
     pipx install .
     thotsecure doctor

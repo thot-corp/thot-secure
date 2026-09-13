@@ -10,7 +10,7 @@ body:
       value: |
         Thanks for proposing something. Thot Secure is a **defensive** platform, and
         that is a constitutional invariant, not a preference — see
-        [GOVERNANCE.md §9](https://github.com/thotsecure/thot-secure/blob/main/GOVERNANCE.md#9-constitutional-invariants).
+        [GOVERNANCE.md §9](https://github.com/thot-corp/thot-secure/blob/main/GOVERNANCE.md#9-constitutional-invariants).
 
         **Requests that add offensive capability are closed without discussion.**
         That includes exploit code, aggressive or high-rate scanning,
@@ -24,7 +24,7 @@ body:
         audit chain, the execution guard-rails — say so explicitly below. Those
         changes need more than a feature request: they need an RFC and a vote.
 
-        Check [`ROADMAP.md`](https://github.com/thotsecure/thot-secure/blob/main/ROADMAP.md)
+        Check [`ROADMAP.md`](https://github.com/thot-corp/thot-secure/blob/main/ROADMAP.md)
         first. If the item is already listed, comment there with your use case
         instead of opening a new issue.
 

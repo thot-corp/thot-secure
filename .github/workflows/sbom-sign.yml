@@ -190,12 +190,12 @@ jobs:
           # 2. Verify the SBOM signature against this repository's workflow identity
           cosign verify-blob \
             --bundle thotsecure-<version>.spdx.json.sigstore.json \
-            --certificate-identity-regexp "^https://github.com/thotsecure/thot-secure/" \
+            --certificate-identity-regexp "^https://github.com/thot-corp/thot-secure/" \
             --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
             thotsecure-<version>.spdx.json
 
           # 3. Verify build provenance
-          gh attestation verify thotsecure-<version>.spdx.json --repo thotsecure/thot-secure
+          gh attestation verify thotsecure-<version>.spdx.json --repo thot-corp/thot-secure
           ```
 
           A successful verification proves the artefact was produced by this

@@ -119,7 +119,7 @@ spec:
     spec:
       containers:
         - name: api
-          image: ghcr.io/thotsecure/thot-secure:0.1.0
+          image: ghcr.io/thot-corp/thot-secure:0.1.0
           ports:
             - { name: http, containerPort: 8080 }
           # /healthz : le processus répond (aucune dépendance externe) → redémarrage si bloqué
@@ -153,7 +153,7 @@ sonde sert de `check` dans un sidecar de supervision. Le binaire est alors prés
 
 ```yaml
         - name: api
-          image: ghcr.io/thotsecure/thot-secure:0.1.0
+          image: ghcr.io/thot-corp/thot-secure:0.1.0
           livenessProbe:
             exec:
               command:
@@ -210,7 +210,7 @@ spec:
           restartPolicy: Never
           containers:
             - name: probe
-              image: ghcr.io/thotsecure/thotsecure-healthcheck:0.1.0
+              image: ghcr.io/thot-corp/thotsecure-healthcheck:0.1.0
               args: ["-url", "http://thotsecure:8080", "-metrics", "-json"]
 ```
 

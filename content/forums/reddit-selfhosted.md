@@ -106,7 +106,7 @@ But : pouvoir écrire une phrase du post sans la surinterpréter. Chaque case do
 >
 > **Corps :**
 
-I'm the author. Thot Secure is a defensive SOAR/CSPM (event collection → YAML detection rules → risk score → policy-based decision → reversible playbook). It's Apache-2.0 and alpha. Repo: https://github.com/thotsecure/thot-secure — the only link here.
+I'm the author. Thot Secure is a defensive SOAR/CSPM (event collection → YAML detection rules → risk score → policy-based decision → reversible playbook). It's Apache-2.0 and alpha. Repo: https://github.com/thot-corp/thot-secure — the only link here.
 
 **What you can actually run today.** Defaults are boring on purpose:
 

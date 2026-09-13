@@ -102,5 +102,5 @@ Seule la source officielle — dépôt Git + site du projet — fait foi ; le pr
 
 La contribution la plus utile reste une règle de détection avec son test négatif.
 
-Le dépôt : https://github.com/thotsecure/thot-secure
+Le dépôt : https://github.com/thot-corp/thot-secure
 <!--body:end-->

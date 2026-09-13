@@ -33,9 +33,9 @@ httpx = ["httpx>=0.27"]
 dev = ["pytest>=8.0", "mypy>=1.10", "ruff>=0.5"]
 
 [project.urls]
-Homepage = "https://github.com/thotsecure/thot-secure"
-Documentation = "https://github.com/thotsecure/thot-secure/blob/main/docs/architecture/api-contract.md"
-Source = "https://github.com/thotsecure/thot-secure"
+Homepage = "https://github.com/thot-corp/thot-secure"
+Documentation = "https://github.com/thot-corp/thot-secure/blob/main/docs/architecture/api-contract.md"
+Source = "https://github.com/thot-corp/thot-secure"
 
 [tool.setuptools]
 packages = ["thotsecure_sdk"]

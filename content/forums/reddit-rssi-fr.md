@@ -131,7 +131,7 @@ Thot Secure traite des données personnelles (adresses IP, agents utilisateurs, 
 
 La purge effective de tous les objets dérivés, et pas seulement des événements ; le comportement réel de `GET /api/v1/audit/verify` après une coupure, une restauration de sauvegarde ou une migration ; l'ancrage de la tête de chaîne hors de l'hôte qui la produit ; l'adéquation de l'exposition réseau par défaut (`0.0.0.0`, `GET /metrics` et `GET /readyz` publics) à votre zone de confiance ; la justification et la minimisation de chaque donnée personnelle qui entre dans la chaîne ; et la qualification exacte de vos traitements avec votre DPO.
 
-Dépôt (le seul lien de ce post) : `https://github.com/thotsecure/thot-secure`
+Dépôt (le seul lien de ce post) : `https://github.com/thot-corp/thot-secure`
 
 Je réponds volontiers aux questions techniques sur la chaîne, la vérification et les rôles. Sur les questions juridiques, je vous dirai franchement que ce n'est pas mon métier.
 

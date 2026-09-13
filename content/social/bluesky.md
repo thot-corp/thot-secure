@@ -68,7 +68,7 @@ Longueur : **189/300 caractères**
 
 <!--post:5-->
 ```text
-Five minutes, no credentials: thotsecure init-db, thotsecure demo --tenant demo, thotsecure doctor. Unconfigured connectors run simulated and return a rollback token. github.com/thotsecure/thot-secure
+Five minutes, no credentials: thotsecure init-db, thotsecure demo --tenant demo, thotsecure doctor. Unconfigured connectors run simulated and return a rollback token. github.com/thot-corp/thot-secure
 ```
 
 ---
@@ -103,7 +103,7 @@ Longueur : **210/300 caractères**
 
 <!--post:8-->
 ```text
-Highest-value contribution right now: a detection rule. One YAML file, one test that must match, one look-alike test that must not, documented false positives. DCO sign-off, no CLA: github.com/thotsecure/thot-secure
+Highest-value contribution right now: a detection rule. One YAML file, one test that must match, one look-alike test that must not, documented false positives. DCO sign-off, no CLA: github.com/thot-corp/thot-secure
 ```
 
 ---
@@ -113,6 +113,6 @@ Highest-value contribution right now: a detection rule. One YAML file, one test 
 - **Heure optimale :** mardi ou jeudi, 15 h - 17 h UTC. Éviter de publier un fil technique le week-end : la portée retombe avant les réponses.
 - **Comptage :** compte brut de la ligne, espaces compris. Bluesky mesure les graphèmes : les accents et les apostrophes typographiques peuvent valoir plus d'un octet mais restent un seul caractère — ce fil est intégralement en ASCII pour supprimer le risque.
 - **Pas de hashtags :** ce choix est volontaire. Sur Bluesky, la découverte passe par les feeds et les reposts, pas par les hashtags ; quatre hashtags en fin de fil y ressemblent à du démarchage. Les hashtags demandés (`#infosec #blueteam #opensource #SOAR`) sont portés par le thread Mastodon, canal où ils servent réellement.
-- **Un seul lien :** `github.com/thotsecure/thot-secure` en post 5 uniquement. Si le fil est reposté, conserver la même forme.
+- **Un seul lien :** `github.com/thot-corp/thot-secure` en post 5 uniquement. Si le fil est reposté, conserver la même forme.
 - **Longueur de l'URL :** version courte sans schéma (32 caractères) pour rester sous les 300 sur le dernier post. Ne pas utiliser de raccourcisseur tiers.
 - **Pas de chiffre d'impact :** aucune métrique de gain n'est affirmée. Le contrat d'interface expose des compteurs et des moyennes (MTTA/MTTR dans `GET /api/v1/stats/overview`), pas de benchmark ; MTTD n'y figure pas et ne doit pas être cité.

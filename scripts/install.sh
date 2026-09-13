@@ -4,7 +4,7 @@
 # -----------------------------------------------------------------------------
 #  Installation en une commande :
 #
-#      curl -fsSL https://raw.githubusercontent.com/thotsecure/thot-secure/main/scripts/install.sh | sudo bash
+#      curl -fsSL https://raw.githubusercontent.com/thot-corp/thot-secure/main/scripts/install.sh | sudo bash
 #
 #  Ce script est fait pour être LU avant d'être exécuté. Un `curl … | bash`
 #  exécute du code distant avec vos privilèges : téléchargez-le, lisez-le,
@@ -103,7 +103,7 @@ trap 'on_error "${LINENO}" "$?"' ERR
 # -----------------------------------------------------------------------------
 # 2. Constantes (miroir de deploy/ansible/roles/thotsecure/defaults/main.yml)
 # -----------------------------------------------------------------------------
-readonly REPO_DEFAULT="thotsecure/thot-secure"
+readonly REPO_DEFAULT="thot-corp/thot-secure"
 readonly SERVICE_NAME="thotsecure"        # nom de service et de commande cible
 readonly LEGACY_NAME="thotsecure"           # nom technique actuel (renommage en cours)
 readonly SERVICE_USER="thotsecure"
@@ -144,7 +144,7 @@ USAGE
 OPTIONS
     --version <tag>      Installer une version précise (ex. v0.1.0 ou 0.1.0).
                          Par défaut : la dernière release publiée.
-    --repo <owner/name> Dépôt GitHub source (défaut : thotsecure/thot-secure).
+    --repo <owner/name> Dépôt GitHub source (défaut : thot-corp/thot-secure).
     --prefix <chemin>   Préfixe d'installation des binaires (défaut : /usr/local).
     --content-dir <dir> Copier rules/, policies/, playbooks/ et config/ vers
                          /etc/thotsecure depuis ce répertoire (défaut : la racine
@@ -172,7 +172,7 @@ SÛRETÉ
 EXEMPLES
     sudo ./scripts/install.sh --dry-run --version v0.1.0
     sudo ./scripts/install.sh --prefix /usr/local --content-dir /opt/thotsecure/src
-    curl -fsSL https://raw.githubusercontent.com/thotsecure/thot-secure/main/scripts/install.sh \
+    curl -fsSL https://raw.githubusercontent.com/thot-corp/thot-secure/main/scripts/install.sh \
       | sudo bash -s -- --dry-run
 AIDE
 }

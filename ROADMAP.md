@@ -38,7 +38,7 @@ criterion; a measured number against a described environment is.
 - Pick up an item marked 📋 or 🔍 and open an issue saying so — that is how a
   status changes to 🚧.
 - Small, self-contained items suitable for a first contribution are labelled
-  [`good first issue`](https://github.com/thotsecure/thot-secure/labels/good%20first%20issue).
+  [`good first issue`](https://github.com/thot-corp/thot-secure/labels/good%20first%20issue).
   The reserved block at the end of this file lists what we expect to be
   available there.
 - Larger items start as an RFC issue before any code is written, so the shape is

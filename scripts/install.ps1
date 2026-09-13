@@ -316,7 +316,7 @@ function Test-Signature {
         Write-Step 'Le condensé vérifie l''intégrité, PAS l''origine. Pour un déploiement'
         Write-Step 'réel, préférez l''artefact accompagné de son *.sigstore.json, puis :'
         Write-Step '  cosign verify-blob --bundle <archive>.sigstore.json `'
-        Write-Step '    --certificate-identity-regexp "^https://github.com/thotsecure/thot-secure/" `'
+        Write-Step '    --certificate-identity-regexp "^https://github.com/thot-corp/thot-secure/" `'
         Write-Step '    --certificate-oidc-issuer https://token.actions.githubusercontent.com <archive>'
         return
     }
@@ -337,14 +337,14 @@ function Test-Signature {
 
     & $cosign.Source 'verify-blob' `
         '--bundle' $bundle `
-        '--certificate-identity-regexp' '^https://github.com/thotsecure/thot-secure/' `
+        '--certificate-identity-regexp' '^https://github.com/thot-corp/thot-secure/' `
         '--certificate-oidc-issuer' 'https://token.actions.githubusercontent.com' `
         $Archive | Out-Host
     if ($LASTEXITCODE -ne 0) {
         Write-Err "SIGNATURE SIGSTORE INVALIDE : REFUS D'INSTALLER $(Split-Path -Leaf $Archive)."
         Stop-Script 'Vérification de signature échouée.' $ExitVerify
     }
-    Write-Ok 'Signature Sigstore vérifiée (identité OIDC du dépôt thotsecure/thot-secure).'
+    Write-Ok 'Signature Sigstore vérifiée (identité OIDC du dépôt thot-corp/thot-secure).'
 }
 
 # -----------------------------------------------------------------------------

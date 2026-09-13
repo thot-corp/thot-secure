@@ -24,11 +24,11 @@ regle_absolue: jamais en accroche, jamais en titre, jamais en premier post d'un 
 
 ## 1. Version une ligne (signature de fin d'article, bas de README)
 
-> Thot Secure est un projet bénévole sous Apache-2.0. Si ce travail vous est utile : [soutenir le projet](https://github.com/thotsecure/thot-secure#soutenir) — dons volontaires, aucune contrepartie attendue. Vérifiez toujours l'adresse depuis le dépôt officiel.
+> Thot Secure est un projet bénévole sous Apache-2.0. Si ce travail vous est utile : [soutenir le projet](https://github.com/thot-corp/thot-secure#soutenir) — dons volontaires, aucune contrepartie attendue. Vérifiez toujours l'adresse depuis le dépôt officiel.
 
 **Variante anglaise :**
 
-> Thot Secure is a volunteer-run Apache-2.0 project. If it's useful to you: [support the project](https://github.com/thotsecure/thot-secure#support) — voluntary donations, no strings attached. Always verify the address from the official repository.
+> Thot Secure is a volunteer-run Apache-2.0 project. If it's useful to you: [support the project](https://github.com/thot-corp/thot-secure#support) — voluntary donations, no strings attached. Always verify the address from the official repository.
 
 *Note de publication : remplacer l'URL par le chemin réel de la section de soutien du dépôt. Ne jamais coller une adresse crypto directement dans une signature de forum ou de réseau social.*
 

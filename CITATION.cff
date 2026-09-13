@@ -40,12 +40,12 @@ contact:
     website: "https://thotsecure.dev"
     # The authoritative roster is MAINTAINERS.md in the repository.
 
-repository-code: "https://github.com/thotsecure/thot-secure"
-repository-artifact: "https://github.com/thotsecure/thot-secure/releases"
+repository-code: "https://github.com/thot-corp/thot-secure"
+repository-artifact: "https://github.com/thot-corp/thot-secure/releases"
 url: "https://thotsecure.dev"
 
 license: "Apache-2.0"
-license-url: "https://github.com/thotsecure/thot-secure/blob/main/LICENSE"
+license-url: "https://github.com/thot-corp/thot-secure/blob/main/LICENSE"
 
 version: "0.1.0"
 

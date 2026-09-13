@@ -30,7 +30,7 @@ alarm than handle a public disclosure.
 ### Preferred: GitHub Security Advisories
 
 Open a private advisory from the repository's **Security** tab:
-`https://github.com/thotsecure/thot-secure/security/advisories/new`.
+`https://github.com/thot-corp/thot-secure/security/advisories/new`.
 
 This is the preferred channel because it keeps the report, the reproduction,
 the patch and the CVE request in one private place, gives you credit in the

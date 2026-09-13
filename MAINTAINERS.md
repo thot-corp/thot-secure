@@ -26,7 +26,7 @@ people named in §3 and §4.
 
 | Purpose | Contact | Received by |
 |---|---|---|
-| Vulnerability reports | `security@thotsecure.dev` + [GitHub Security Advisories](https://github.com/thotsecure/thot-secure/security/advisories/new) | All security maintainers (§3) |
+| Vulnerability reports | `security@thotsecure.dev` + [GitHub Security Advisories](https://github.com/thot-corp/thot-secure/security/advisories/new) | All security maintainers (§3) |
 | Code of Conduct reports | `conduct@thotsecure.dev` | Enforcement contacts listed in §6 |
 | General maintainer contact | `maintainers@thotsecure.dev` | All active maintainers |
 | Donations / support page | `support@thotsecure.dev` | Support duty (no counterpart offered) |

@@ -18,7 +18,7 @@ body:
           runs outside `DRY_RUN`, tenant isolation fails, the audit chain can be
           tampered with, a rollback does not reverse an effect, or a guard-rail can
           be bypassed — **stop and use the private channel in
-          [SECURITY.md](https://github.com/thotsecure/thot-secure/blob/main/SECURITY.md)
+          [SECURITY.md](https://github.com/thot-corp/thot-secure/blob/main/SECURITY.md)
           instead.** That is a vulnerability, not a bug report, and it needs a fix
           before it is public.
         - Search the existing issues and Discussions first. If you find the same

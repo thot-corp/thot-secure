@@ -52,7 +52,7 @@ variable "chart_path" {
 variable "image_repository" {
   description = "Dépôt de l'image conteneur Thot Secure."
   type        = string
-  default     = "ghcr.io/thotsecure/thot-secure"
+  default     = "ghcr.io/thot-corp/thot-secure"
 
   validation {
     condition     = length(trimspace(var.image_repository)) > 0

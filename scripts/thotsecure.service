@@ -42,8 +42,8 @@ Description=Thot Secure (thotsecure) — SOAR/CSPM défensif (API /api/v1 et con
 
 # Documentation : pointe vers le dépôt et la documentation d'exploitation.
 # Aucune ressource réseau n'est récupérée : c'est purement déclaratif.
-Documentation=https://github.com/thotsecure/thot-secure
-Documentation=https://github.com/thotsecure/thot-secure/blob/main/docs/operations/deployment.md
+Documentation=https://github.com/thot-corp/thot-secure
+Documentation=https://github.com/thot-corp/thot-secure/blob/main/docs/operations/deployment.md
 Documentation=man:systemd.service(5)
 
 # Ordre de démarrage : le service écoute sur le réseau, on attend donc que la

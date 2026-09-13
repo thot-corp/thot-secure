@@ -19,13 +19,13 @@ body:
         ### Report a vulnerability privately
 
         **Option 1 — GitHub Security Advisories (preferred).**
-        [Open a private advisory](https://github.com/thotsecure/thot-secure/security/advisories/new).
+        [Open a private advisory](https://github.com/thot-corp/thot-secure/security/advisories/new).
         The report, the reproduction, the patch and the CVE request stay private in
         one place, and you are credited in the published advisory.
 
         **Option 2 — email, encrypted.**
         `security@thotsecure.dev`, using the project PGP key published in
-        [`SECURITY.md`](https://github.com/thotsecure/thot-secure/blob/main/SECURITY.md).
+        [`SECURITY.md`](https://github.com/thot-corp/thot-secure/blob/main/SECURITY.md).
         Use this if you cannot use GitHub, or if the advisory form itself is
         affected.
 
@@ -40,7 +40,7 @@ body:
         These are best-effort commitments from a volunteer team; they are published
         so you can plan, and we will tell you if a date slips rather than go silent.
         Read the full policy — scope, out-of-scope cases, CVE and credit policy — in
-        [`SECURITY.md`](https://github.com/thotsecure/thot-secure/blob/main/SECURITY.md).
+        [`SECURITY.md`](https://github.com/thot-corp/thot-secure/blob/main/SECURITY.md).
 
         ### The one thing we ask
 
@@ -53,7 +53,7 @@ body:
 
         - Questions about **hardening your own deployment**, configuration, or how
           to interpret a finding belong in
-          [Discussions](https://github.com/thotsecure/thot-secure/discussions) — that is
+          [Discussions](https://github.com/thot-corp/thot-secure/discussions) — that is
           not a vulnerability, and it is fine to ask in public.
         - A **rule firing on legitimate traffic** is a bug, not a vulnerability:
           use the *False positive report* form.

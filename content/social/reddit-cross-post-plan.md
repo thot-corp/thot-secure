@@ -27,7 +27,7 @@ Objectif : faire relire le projet par cinq ou six communautés **différentes**,
 ## 1. Règles non négociables avant toute publication
 
 1. **Participer d'abord.** Aucune publication de projet avant d'avoir un historique réel de commentaires utiles dans le subreddit visé. Viser plusieurs semaines de participation, pas trois commentaires la veille.
-2. **Un seul lien par post.** `https://github.com/thotsecure/thot-secure`. Ce lien apparaît **une fois**, dans le corps du post.
+2. **Un seul lien par post.** `https://github.com/thot-corp/thot-secure`. Ce lien apparaît **une fois**, dans le corps du post.
 3. **Disclosure d'auteur.** Le post commence ou se termine par : *« I'm one of the maintainers of Thot Secure. »* Pas de compte neutre qui « découvre » le projet.
 4. **Un angle par subreddit.** Le tableau §3 donne l'angle et le point d'entrée de chaque texte. Ne jamais réutiliser le même texte d'un sub à l'autre.
 5. **Lire les règles avant d'écrire.** Politique d'auto-promotion, format de titre imposé, flair obligatoire, thread hebdomadaire dédié. En cas de doute, demander aux modérateurs **avant** de publier.

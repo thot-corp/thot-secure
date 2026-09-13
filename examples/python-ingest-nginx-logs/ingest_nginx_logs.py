@@ -166,7 +166,7 @@ DEFAULT_QUEUE_SIZE = 5000
 DEFAULT_MAX_ATTEMPTS = 4
 DEFAULT_STATE_FILE = "ingest-nginx-state.json"
 
-USER_AGENT = "thotsecure-nginx-ingest/0.1.0 (+https://github.com/thotsecure/thot-secure)"
+USER_AGENT = "thotsecure-nginx-ingest/0.1.0 (+https://github.com/thot-corp/thot-secure)"
 
 REDACTED = "[REDACTED]"
 REDACTED_JWT = "[REDACTED_JWT]"
