@@ -33,7 +33,7 @@ from ..core.models import Decision, Finding, Tenant, severity_rank
 from ..core.util import iso_z, utcnow
 from ..detection.matchers import RegexTooComplexError, compile_regex
 from ..scope import TargetRegistry
-from ..storage.store import Store
+from ..storage import StoreProtocol
 
 log = get_logger("decision.engine")
 
@@ -112,7 +112,7 @@ class DecisionEngine:
 
     def __init__(
         self,
-        store: Store,
+        store: StoreProtocol,
         policies: list[Any] | None = None,
         *,
         settings: Settings | None = None,

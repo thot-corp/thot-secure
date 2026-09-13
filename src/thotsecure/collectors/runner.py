@@ -23,7 +23,7 @@ from ..core.models import CollectorStatus, Event
 from ..core.util import iso_z, new_id, parse_dt, utcnow
 from ..pipeline import Pipeline
 from ..scope import TargetRegistry
-from ..storage.store import Store
+from ..storage import StoreProtocol
 from .base import Collector, CollectorContext, CollectorResult
 from .registry import CollectorRegistry
 
@@ -40,7 +40,7 @@ class CollectorRunner:
         self,
         registry: CollectorRegistry,
         pipeline: Pipeline,
-        store: Store,
+        store: StoreProtocol,
         audit: AuditChain,
         targets: TargetRegistry,
         *,

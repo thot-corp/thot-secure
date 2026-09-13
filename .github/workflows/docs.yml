@@ -88,14 +88,18 @@ jobs:
           restore-keys: |
             pip-docs-${{ runner.os }}-
 
-      - name: Install MkDocs Material
-        # Pinned to a major version so a theme release cannot silently change the
-        # rendered site, while still receiving patch fixes. The repository has no
-        # requirements-docs.txt yet; when one is added, install from it instead so
-        # the local build and CI agree exactly.
+      - name: Install documentation dependencies
+        # Installation depuis `requirements-docs.txt` : ce fichier épingle MkDocs Material
+        # **et** `mkdocs-minify-plugin`, que `mkdocs.yml` déclare explicitement.
+        #
+        # Cause d'échec corrigée ici : le premier tag (v0.1.0) installait uniquement
+        # `mkdocs-material==9.*`. Or le plugin `minify` n'en fait pas partie — `mkdocs build
+        # --strict` échouait donc sur « plugin minify not installed ». Un fichier de
+        # dépendances rend le poste local et la CI strictement identiques, et Dependabot le
+        # surveille comme les autres.
         run: |
           python -m pip install --upgrade pip
-          python -m pip install "mkdocs-material==9.*"
+          python -m pip install -r requirements-docs.txt
 
       - name: Show tool versions
         run: mkdocs --version

@@ -642,7 +642,9 @@ def build_stack(
     rules_loaded, rule_diagnostics = load_rules_from_dir(settings.rules_path)
     playbooks_loaded, playbook_diagnostics = load_playbooks_from_dir(settings.playbooks_path)
     connectors = ConnectorRegistry.from_file(
-        settings.connectors_path, dry_run=dry_run if connectors_dry_run is None else connectors_dry_run
+        settings.connectors_path,
+        dry_run=dry_run if connectors_dry_run is None else connectors_dry_run,
+        root_dir=settings.root_path,
     )
     registry = TargetRegistry.from_file(settings.targets_path)
     policies_loaded, policy_diagnostics = load_policies_from_dir(

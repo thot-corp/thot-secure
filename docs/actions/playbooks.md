@@ -2,7 +2,7 @@
 
 *Une contre-mesure n'est acceptable que si elle est nommée, bornée, journalisée et réversible.*
 
-Cette page décrit le cycle de vie d'une `Action`, le format des playbooks, les playbooks livrés, le branchement des connecteurs, le mode simulation par défaut, les garanties de rollback, l'idempotence et l'expiration. Références normatives : [`docs/architecture/api-contract.md`](../architecture/api-contract.md) §1, §3.4, §4.6, §7, §8, §9 et §10. La partie amont (politique → `Decision`) est traitée dans [`../decision/policies.md`](../decision/policies.md).
+Cette page décrit le cycle de vie d'une `Action`, le format des playbooks, les playbooks livrés, le branchement des connecteurs (y compris les **pilotes natifs** Cloudflare, AWS WAF, Slack et GitHub Issues, §4 bis), le mode simulation par défaut, les garanties de rollback, l'idempotence et l'expiration. Références normatives : [`docs/architecture/api-contract.md`](../architecture/api-contract.md) §1, §3.4, §4.6, §7, §8, §9 et §10. La partie amont (politique → `Decision`) est traitée dans [`../decision/policies.md`](../decision/policies.md).
 
 ---
 
@@ -137,17 +137,21 @@ Le MVP livre **onze** playbooks. Réversibilité : l'invariant §1.3 (« toute a
 
 ## 4. Connecteurs
 
-Un connecteur est l'adaptateur qui traduit une étape `execute`/`rollback` en appel réel (ou simulé) vers une technologie. Le §7 n'énumère les identifiants que pour `block-source-ip` : **`cloudflare`, `aws-waf`, `modsecurity`, `nginx-local`, `null`**.
+Un connecteur est l'adaptateur qui traduit une étape `execute`/`rollback` en appel réel (ou simulé) vers une technologie. Le §7 n'énumère les identifiants que pour `block-source-ip` : **`cloudflare`, `aws-waf`, `modsecurity`, `nginx-local`, `null`**. Les énumérer au contrat, c'est dire ce que le produit vise ; les **livrer**, c'est autre chose : l'état réel des pilotes disponibles est décrit en §4 bis (Cloudflare, AWS WAF, Slack et GitHub Issues sont désormais natifs, `modsecurity` ne l'est pas).
+
+!!! note "Deux vocabulaires à ne pas confondre"
+    Le **nom logique** (`waf`, `ratelimit`, `notify`, `ticketing`, `artifact`…) est ce que les playbooks écrivent : il ne change jamais. Le **pilote** (`simulation`, `cloudflare`, `aws-waf`, `slack`, `github-issues`, `nginx-local`, `http-webhook`…) est la mise en œuvre, choisie dans `config/connectors.yaml`. Le même playbook `block-source-ip` agit donc réellement sur Cloudflare, sur un IPSet AWS WAF, sur un fichier Nginx, ou nulle part — sans être modifié. `thotsecure playbooks list` affiche la correspondance effective.
 
 | Famille | Ce que le connecteur fait dans Thot Secure | Identifiants documentés au §7 | Playbooks concernés |
 |---|---|---|---|
-| Cloudflare | Blocage / déblocage d'IP, règle WAF, limitation de débit en périphérie. | `cloudflare` | `block-source-ip`, `unblock-source-ip`, `rate-limit-source` |
-| AWS WAF | Blocage / déblocage d'IP, règle WAF, limitation de débit. | `aws-waf` | `block-source-ip`, `unblock-source-ip`, `rate-limit-source` |
-| ModSecurity | Blocage / déblocage d'IP, règle applicative. | `modsecurity` | `block-source-ip`, `unblock-source-ip` |
-| Nginx local | Blocage / déblocage d'IP sur le reverse-proxy du tenant. | `nginx-local` | `block-source-ip`, `unblock-source-ip` |
-| EDR | Quarantaine d'artefact, isolation d'hôte. | Non nommé au §7 | `quarantine-artifact`, `isolate-host` |
-| IAM / Vault | Révocation de session, rotation de secret. | Non nommé au §7 | `revoke-session`, `rotate-secret` |
-| Ticketing | Ouverture et fermeture de ticket. | Non nommé au §7 (`ticket` cité comme canal de `audit.notify`) | `open-ticket`, `notify` |
+| Cloudflare | Blocage / déblocage d'IP, règle WAF, limitation de débit en périphérie. | `cloudflare` — **pilote natif livré** (§4 bis) | `block-source-ip`, `unblock-source-ip`, `rate-limit-source`, `remove-rate-limit` |
+| AWS WAF | Blocage / déblocage d'IP, règle WAF, limitation de débit. | `aws-waf` — **pilote natif livré** (blocage/déblocage d'IPSet ; pas de limitation de débit) | `block-source-ip`, `unblock-source-ip` |
+| ModSecurity | Blocage / déblocage d'IP, règle applicative. | `modsecurity` — non livré | `block-source-ip`, `unblock-source-ip` |
+| Nginx local | Blocage / déblocage d'IP sur le reverse-proxy du tenant. | `nginx-local` — pilote natif livré | `block-source-ip`, `unblock-source-ip` |
+| EDR | Quarantaine d'artefact, isolation d'hôte. | Non nommé au §7 — non livré | `quarantine-artifact`, `isolate-host` |
+| IAM / Vault | Révocation de session, rotation de secret. | Non nommé au §7 — non livré | `revoke-session`, `rotate-secret` |
+| Ticketing | Ouverture et fermeture de ticket. | Non nommé au §7 (`ticket` cité comme canal de `audit.notify`) — **pilote GitHub Issues livré** (§4 bis) | `open-ticket`, `close-ticket`, `patch-dependency`, `notify` |
+| Notification | Message dans un canal opérationnel, avec démenti au rollback. | Non nommé au §7 — **pilote Slack livré** (§4 bis) | `notify-webhook` |
 | Mode simulé | Aucun appel externe : retourne un `rollback_token` et journalise `simulated: true`. | `null` (aussi appelé `simulation`) | tous |
 
 ### 4.1 Credentials : ce qu'il faut, génériquement
@@ -174,6 +178,145 @@ Un connecteur est l'adaptateur qui traduit une étape `execute`/`rollback` en ap
 
 ---
 
+## 4 bis. Connecteurs natifs livrés : Cloudflare, AWS WAF, Slack, GitHub Issues
+
+> **Rectification d'une affirmation devenue fausse.** Une version antérieure de cette page indiquait que « Cloudflare, AWS WAF et les EDR passent par la passerelle `http-webhook` **en attendant des connecteurs natifs** ». Ce n'est plus exact, et le README a été corrigé dans le même mouvement : le dépôt livre désormais des connecteurs natifs pour **Cloudflare** (IP Access Rules et limitations de débit), **AWS WAF v2** (IPSet), **Slack** (webhook entrant) et **GitHub Issues**. La passerelle `http-webhook` reste utile, mais elle n'est plus la seule voie pour ces quatre technologies — et elle reste la bonne réponse pour les EDR, Teams/Mattermost, Jira/GLPI et vos outils maison.
+
+Ces connecteurs appliquent des contre-mesures **sur votre propre infrastructure** (bloquer une adresse attaquante dans votre WAF, ralentir un client abusif, tracer l'incident). Aucune requête n'est adressée à une cible tierce : rien ici n'est offensif.
+
+### 4 bis.1 Playbooks qui gagnent un effet réel
+
+| Playbook | Nom logique | Pilote natif possible | Effet réel obtenu |
+|---|---|---|---|
+| `block-source-ip` | `waf` | `cloudflare`, `aws-waf` | Blocage effectif de l'adresse dans votre périphérie. |
+| `unblock-source-ip` | `waf` | `cloudflare`, `aws-waf` | Levée effective du blocage (par identifiant de règle côté Cloudflare). |
+| `rate-limit-source` | `ratelimit` | `cloudflare` | Limitation de débit réelle (ruleset de phase `http_ratelimit`). |
+| `remove-rate-limit` | `ratelimit` | `cloudflare` | Retrait de la limitation. |
+| `notify-webhook` | `notify` | `slack` | Notification réelle dans un canal, avec message de correction au rollback. |
+| `open-ticket` / `close-ticket` | `ticketing` | `github-issues` | Issue GitHub réellement ouverte, réellement fermée. |
+| `patch-dependency` | `ticketing` | `github-issues` | La demande de mise à jour est tracée dans une issue (le connecteur GitHub ne remplace pas `ci.patch_dependency`, voir §4 bis.6). |
+
+Restent **sans pilote natif** (donc en `simulation` ou derrière `http-webhook`) : `isolate-host` / `unisolate-host` (EDR ou contrôleur réseau), `revoke-session` et `rotate-secret` (fournisseur d'identité, coffre), `harden-endpoint` (gestionnaire de configuration), `quarantine-artifact` (réel via `local-quarantine`), `ci.patch_dependency` (forge). Ces briques sont spécifiques à chaque client : l'équipe qui les branche écrit un adaptateur, et le mode simulé reste le repli sûr.
+
+### 4 bis.2 Matrice pilote ↔ opérations ↔ rollback
+
+| Pilote | Opérations réelles | `rollback_token` rendu | Opération de rollback | Si le jeton est perdu |
+|---|---|---|---|---|
+| `cloudflare` | `block_ip`, `unblock_ip` | identifiant de règle IP Access Rule | `unblock_ip` → `DELETE /accounts/{account_id}/firewall/access_rules/rules/{rule_id}` | Repli : recherche par valeur (`GET …/rules?configuration.value=<ip>`), puis suppression des règles trouvées. **Moins fiable** : voir §4 bis.5. |
+| `cloudflare` | `rate_limit`, `remove_rate_limit` | `<ruleset_id>/<rule_id>` | `remove_rate_limit` → `DELETE /zones/{zone_id}/rulesets/{ruleset_id}/rules/{rule_id}` | Repli : lecture du ruleset de phase et retrait des règles dont l'expression vise l'adresse. |
+| `aws-waf` | `block_ip`, `unblock_ip` | `wafv2:<scope>:<ip_set_id>:<adresse>` | `unblock_ip` → `GetIPSet` puis `UpdateIPSet` sans l'adresse | Il suffit de connaître l'adresse : `unblock_ip` avec `target`. L'IPSet est la source de vérité. |
+| `slack` | `notify` | empreinte de corrélation du message | `notify` avec un message de correction (`correction_of`) | Rien à annuler côté Slack : une notification ne se « supprime » pas par API. Le playbook `notify-webhook` émet le démenti. |
+| `github-issues` | `open_ticket`, `close_ticket` | numéro d'issue | `close_ticket` → `PATCH /repos/{owner}/{repo}/issues/{number}` (`state: closed`) | Recherche visuelle par titre/étiquette dans le dépôt : le numéro est la seule clé fiable, conservez la trace d'audit. |
+
+Deux propriétés valent d'être soulignées :
+
+* **`aws-waf` n'ajoute pas d'entrée « au nom de » quelqu'un** : `block_ip` relit l'IPSet et écrit la liste complète avec le `LockToken` obtenu ; `unblock_ip` fait l'inverse. Aucun état local n'est nécessaire, ce qui rend le rollback vrai même après une restauration de base.
+* **`cloudflare` sait supprimer par identifiant**, ce qui garantit que l'annulation retire exactement la règle posée par Thot Secure (§4 bis.5) — **à condition que le jeton lui parvienne**. L'étape de rollback du playbook livré `block-source-ip` transmet l'**adresse** au connecteur WAF (elle réserve `${params.rollback_token}` à la clôture du ticket, qui a besoin du numéro du ticket) : dans ce flux, la levée de blocage passe donc par la recherche par valeur — repli documenté, explicitement signalé dans le résultat de l'action. Pour obtenir la suppression par identifiant côté WAF, transmettez `${params.rollback_token}` dans l'étape de rollback du connecteur `waf` : la résolution de ce placeholder est garantie par le moteur et vérifiée par `tests/test_shipped_playbooks_e2e.py`.
+
+### 4 bis.3 Prérequis de sécurité, credential par credential
+
+| Pilote | Credential | Portée minimale exigée |
+|---|---|---|
+| `cloudflare` | Jeton d'API (en-tête `Authorization: Bearer`) | **Account → Firewall Access Rules : Edit** (création/suppression des IP Access Rules) et **Zone → WAF : Edit** (rulesets, nécessaire à la limitation de débit). Aucun autre droit : ni DNS, ni cache, ni Workers. |
+| `aws-waf` | Clé d'accès dédiée (ou rôle, avec `session_token` STS) | `wafv2:GetIPSet` et `wafv2:UpdateIPSet`, **sur l'ARN de l'IPSet exact** (politique ci-dessous). Pas de `wafv2:*`, pas de `wafv2:DeleteIPSet`, pas d'accès aux WebACL. |
+| `slack` | URL de webhook entrant dédiée | Un webhook = un canal. L'URL **est** un secret : elle ne doit jamais être collée dans un ticket, un journal de CI ou un fichier versionné. |
+| `github-issues` | Jeton « fine-grained » | Permission **Issues : write** sur **un seul dépôt** (+ lecture des métadonnées). Pas de jeton classique à portée `repo` complète, pas de `workflow`, pas de `admin`. |
+
+Politique IAM minimale pour AWS WAF v2 (remplacez la région, le compte et l'ARN de l'IPSet par les vôtres — l'ARN est rendu par `GetIPSet` ou visible dans la console) :
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ThotSecureReadIpSet",
+      "Effect": "Allow",
+      "Action": "wafv2:GetIPSet",
+      "Resource": "arn:aws:wafv2:eu-west-3:111122223333:regional/ipset/thotsecure-blocklist/a1b2c3d4-1111-2222-3333-444455556666"
+    },
+    {
+      "Sid": "ThotSecureUpdateIpSet",
+      "Effect": "Allow",
+      "Action": "wafv2:UpdateIPSet",
+      "Resource": "arn:aws:wafv2:eu-west-3:111122223333:regional/ipset/thotsecure-blocklist/a1b2c3d4-1111-2222-3333-444455556666"
+    }
+  ]
+}
+```
+
+Deux remarques utiles :
+
+* pour la portée `CLOUDFRONT`, l'IPSet est global et vit en `us-east-1` : l'ARN prend la forme `arn:aws:wafv2:us-east-1:<compte>:global/ipset/<nom>/<id>` — le connecteur force d'ailleurs la région à `us-east-1` lorsqu'il détecte `scope: CLOUDFRONT` ;
+* si votre politique d'entreprise refuse les permissions au niveau de la ressource, n'élargissez pas à `wafv2:*` : élargissez à `wafv2:GetIPSet`/`wafv2:UpdateIPSet` sur `"Resource": "*"` **en conservant une condition** `"Condition": {"StringEquals": {"aws:RequestedRegion": "eu-west-3"}}`. Le moindre privilège se juge sur l'ensemble des actions, pas seulement sur la ressource.
+
+Règles générales, déjà énoncées §4.1 et non négociables : un credential dédié par usage et par tenant, jamais partagé avec un humain ; une rotation planifiée ; aucun secret dans le dépôt (§9 : ces credentials ne sont pas des variables `THOT_*`, ils vivent dans `config/connectors.yaml`, fichier protégé `chmod 600` et ignoré par Git) ; `verify_tls: false` **n'est pas** une option de production — le connecteur journalise un avertissement à chaque instanciation, précisément pour que ce choix reste visible.
+
+### 4 bis.4 Procédure de test en simulation avant activation
+
+On n'active jamais un pilote natif sans avoir déroulé le playbook en simulation. La séquence recommandée, dans l'ordre :
+
+1. **Laisser `THOT_DRY_RUN=true`** et tous les noms logiques en `simulation` (§5). Vérifier l'état du produit : `thotsecure doctor`, puis `thotsecure playbooks list` — la section « Connecteurs configurés » affiche, pour chaque nom logique, le pilote réellement retenu (`simulation` au départ).
+2. **Dérouler le cycle complet sans effet** : planifier (`thotsecure actions plan --finding <id> --playbook block-source-ip`), approuver si le tenant est en mode supervisé, exécuter, puis annuler (`thotsecure actions rollback <id>`). Contrôler que chaque `result` porte `"simulated": true` : c'est la preuve qu'aucun appel n'est parti.
+3. **Préparer le credential** à portée minimale (§4 bis.3) et l'écrire dans `config/connectors.yaml` (jamais dans le dépôt ; `cp config/connectors.example.yaml config/connectors.yaml` puis `chmod 600`).
+4. **Activer un seul nom logique**, le plus souvent `waf`, en conservant `THOT_DRY_RUN=true` : le dry-run global reste prioritaire, vous vérifiez d'abord que le connecteur est bien instancié (`thotsecure playbooks list` doit montrer `waf → cloudflare`).
+5. **Premier essai réel sur une adresse bénigne** : choisissez une adresse de documentation (`192.0.2.0/24`, `198.51.100.0/24`, `203.0.113.0/24`) ou une adresse de test que vous possédez. Une règle visant `192.0.2.7` ne peut bloquer aucun client réel : c'est le seul essai « à blanc » qui teste vraiment le chemin d'écriture.
+6. **Vérifier l'effet chez le fournisseur** (console Cloudflare → Security → WAF → Tools, ou console AWS WAF → IPSet), puis **vérifier le rollback** (§4 bis.5) avant d'activer le nom logique suivant.
+7. Passer `THOT_DRY_RUN=false` **uniquement** après ces vérifications, et de préférence en mode `supervised` (approbation humaine) pour les premiers jours.
+
+!!! warning "Point de vigilance vérifié : le contexte de rendu doit couvrir les placeholders du playbook"
+    Les playbooks livrés référencent `${finding.title}`, `${finding.severity}`, `${finding.remediation}` et `${action.id}` pour rédiger le ticket. Un placeholder non résolu fait **échouer** l'étape — choix assumé (§2) : mieux vaut un échec net et audité qu'un ticket contenant littéralement `${finding.remediation}`.
+
+    **Défaut trouvé lors de la revue, puis corrigé** : le contexte d'exécution du moteur fournissait `finding.id`, `rule_id`, `severity`, `risk_score`, `title`, `host` et `action.*`, mais **pas** `finding.remediation`. Les playbooks livrés `block-source-ip` et `isolate-host` le référencent : ils échouaient donc **en entier**, y compris l'étape de ticketing marquée `optional: true` (un placeholder non résolu lève *avant* que le caractère optionnel soit examiné). Le symptôme était silencieux : aucun ticket, aucune notification, une action en `failed`.
+
+    Le champ est désormais fourni par le moteur, et une régression est impossible sans casser un test : `tests/test_shipped_playbooks_e2e.py` exécute le playbook **livré** et vérifie que le ticket sur disque contient bien le texte de remédiation. Ce fichier couvre aussi `${params.rollback_token}`, qui n'était jamais résolu (la priorité de fusion du contexte écrasait le jeton injecté) : le test lit la clôture du ticket après annulation, donc il échoue si le jeton ne circule plus.
+
+### 4 bis.5 Procédure de rollback, vérifiable de bout en bout
+
+Le rollback se demande par l'API ou la CLI, comme pour tout playbook (§6) :
+
+```bash
+thotsecure actions rollback <action_id>        # équivalent REST : POST /api/v1/actions/{id}/rollback
+thotsecure actions list --json                 # contrôle : statut rolled_back, rollback.performed_at renseigné
+```
+
+Puis on **vérifie l'état réel** — un rollback déclaré n'est pas un rollback prouvé :
+
+| Pilote | Vérification côté fournisseur |
+|---|---|
+| `cloudflare` (blocage) | `GET /client/v4/accounts/{account_id}/firewall/access_rules/rules/{rule_id}` doit renvoyer `404`, et la règle doit avoir disparu de la liste filtrée sur l'adresse. |
+| `cloudflare` (limitation) | `GET /client/v4/zones/{zone_id}/rulesets/phases/http_ratelimit/entrypoint` : l'expression `(ip.src eq <adresse>)` ne doit plus apparaître. |
+| `aws-waf` | `GetIPSet` : l'adresse (`<ip>/32`) ne doit plus figurer dans `Addresses`. |
+| `slack` | Le message de correction apparaît dans le canal, rattaché au message initial (`Annule`). Aucune suppression rétroactive n'est possible via un webhook entrant : c'est une propriété de Slack, pas un défaut du connecteur. |
+| `github-issues` | L'issue est en `state: closed` (`GET /repos/{owner}/{repo}/issues/{number}`). |
+
+**Pourquoi la suppression d'une règle Cloudflare par identifiant est plus fiable qu'une recherche par valeur.** Le connecteur enregistre l'identifiant rendu par l'API et s'en sert au rollback. Une recherche par valeur, elle, est ambiguë sur quatre plans au moins :
+
+1. **la forme de la valeur n'est pas normalisée** : `203.0.113.9` et `203.0.113.9/32` peuvent coexister selon qui a créé la règle (console, autre outil, playbook) — une égalité de chaîne manque alors la règle qu'on voulait lever ;
+2. **elle peut toucher la règle de quelqu'un d'autre** : si un administrateur a bloqué la même adresse à la main, une suppression par valeur lève *aussi* son blocage, sans que personne ne l'ait demandé ;
+3. **elle est paginée** : au-delà de la première page de résultats, la règle n'est plus trouvée et le rollback échoue silencieusement en « aucune règle correspondante » ;
+4. **elle n'est pas atomique** : entre la lecture et la suppression, une autre règle peut apparaître sur la même adresse.
+
+L'identifiant, lui, désigne **une** règle, celle que Thot Secure a créée et auditée. C'est la raison pour laquelle `rollback_token` est systématiquement rendu par `block_ip` et par `rate_limit`. Le repli par valeur existe (jeton perdu : base restaurée, action purgée par la rétention, jeton non transmis), il fonctionne, mais il est signalé comme moins fiable dans `result.data` (`match: configuration.value`, avec un avertissement explicite).
+
+Pour employer réellement la suppression par identifiant, deux conditions : que l'étape de rollback du playbook transmette le jeton (`rollback_token: "${params.rollback_token}"`), et que ce jeton soit bien celui du connecteur WAF. Le moteur injecte dans `${params.rollback_token}` le jeton de la **dernière étape appliquée** — qui peut appartenir à un autre connecteur (le ticket, par exemple). Le connecteur ne fait donc pas confiance aveuglément à ce qu'il reçoit : il vérifie la **forme** du jeton (identifiant de règle Cloudflare, ou couple `<ruleset_id>/<rule_id>`) et, si elle ne correspond pas, journalise un avertissement puis annule par la valeur connue. Envoyer une requête absurde (`DELETE …/rules/simulation%3Aopen_ticket`) ne lèverait aucun blocage : mieux vaut une annulation réelle, signalée comme moins précise, qu'un respect littéral du jeton.
+
+Même logique côté AWS WAF : il n'existe pas d'« identifiant de règle » par adresse, mais l'IPSet est la source de vérité. Le jeton `wafv2:<scope>:<ip_set_id>:<adresse>` porte donc tout ce qu'il faut pour retrouver l'adresse, et le rollback réussit même si l'état local de Thot Secure a été perdu — il suffit que l'adresse soit encore dans l'IPSet.
+
+!!! danger "Un jeton perdu et un effet qui persiste"
+    Si le `rollback_token` est perdu **et** que la contre-mesure n'est plus retrouvable automatiquement, l'effet persiste : une IP Access Rule Cloudflare **n'expire pas** côté Cloudflare (le TTL demandé est inscrit dans les `notes`, pas appliqué par l'API), et une adresse laissée dans un IPSet AWS y reste indéfiniment. Dans ce cas, la levée est **manuelle**, en s'appuyant sur la trace d'audit (`thotsecure audit tail`, `thotsecure actions list --json`) : les `notes` Cloudflare contiennent l'identifiant d'action Thot Secure, la durée demandée et l'horodatage d'expiration prévu, ce qui permet de retrouver la règle à la main sans ambiguïté.
+
+### 4 bis.6 Ce qui reste explicitement hors périmètre
+
+* **`ci.patch_dependency`** n'a pas de pilote natif : ouvrir une pull request suppose des opérations Git (créer une branche, committer, pousser) que l'API REST de GitHub ne couvre pas sans un clone local. Le connecteur `github-issues` couvre la partie traçabilité (`ticketing`), et la passerelle `http-webhook` reste la voie pour déclencher votre CI.
+* **EDR, fournisseur d'identité, coffre de secrets, gestionnaire de configuration** : aucun pilote natif, car chaque éditeur a sa propre API et son propre modèle de permissions. Écrire un connecteur natif suppose un accès réel à l'API pour le tester — et un connecteur non testé est plus dangereux qu'une passerelle.
+* **ModSecurity** : identifiant cité par le §7 du contrat, non livré ; le pilote `nginx-local` couvre le cas du reverse-proxy Nginx, et `http-webhook` celui d'un ModSecurity piloté à distance.
+* **Opérations volontairement non implémentées par les pilotes natifs** — un connecteur qui « réussit » sans produire d'effet est pire qu'un connecteur absent :
+    * `cloudflare` n'expose pas `notify` : Cloudflare n'a pas d'API d'envoi de message ad hoc (son API d'alerting gère des politiques, pas un texte libre). Gardez `notify` sur `slack` ou `http-webhook` ;
+    * `aws-waf` n'expose pas `rate_limit` : limiter un débit sur AWS WAF v2 impose de modifier une `RateBasedStatement` dans une **WebACL** — c'est-à-dire l'objet qui décide de tout le filtrage du client. Une erreur y coupe le service et l'état exact n'est pas reconstruisible de façon sûre ; la riposte graduée se fait donc ailleurs (Cloudflare, reverse-proxy local, ou une WebACL dédiée que vous gérez) ;
+    * `slack` et `github-issues` n'exposent que `notify` / `open_ticket`+`close_ticket` : ils ne prétendent pas bloquer quoi que ce soit. Les nommer sur `waf` produirait un échec explicite (« opération non supportée »), pas un faux succès.
+
+---
+
 ## 5. Mode simulation : le comportement par défaut du MVP
 
 > Un connecteur non configuré fonctionne en **mode simulé** (`null` / `simulation`) : il retourne un `rollback_token` et journalise `simulated: true`. **C'est le comportement par défaut du MVP** : Thot Secure est sûr à brancher avant d'avoir des credentials. *(§7)*
@@ -195,6 +338,10 @@ Ce mode se combine avec les deux protections globales :
 | Connecteur `null` / `simulation` | Par playbook / par connecteur | actif tant qu'aucun credential n'est configuré | aucun effet réel, `rollback_token` retourné, `simulated: true` journalisé |
 | `THOT_DRY_RUN` (§9) | Global, toute la plateforme | `true` | **Sécurité** : aucune action réelle n'est exécutée |
 | Garde-fou `dry_run` de décision (§6) | Global, prioritaire sur toute politique | hérite de `THOT_DRY_RUN` | Une politique ne peut pas le désactiver : elle ne peut que demander une simulation supplémentaire |
+
+Le dry-run est **structurellement** respecté par les connecteurs natifs : le mode simulation est traité par la classe de base du contrat de connecteur, et un pilote natif n'a aucun moyen de l'ignorer. Concrètement, en `dry_run`, Cloudflare, AWS WAF, Slack et GitHub ne reçoivent **aucune** requête — propriété vérifiée par un test dédié qui compte les appels reçus par un serveur local (`tests/test_connectors_native.py`). Autrement dit : le mode sûr ne repose pas sur la discipline de chaque connecteur, mais sur la structure du contrat.
+
+Symétriquement, un connecteur natif **sans credential ne produit pas de faux succès** : il retourne un échec explicite (`connecteur non configuré : paramètre 'api_token' absent…`), qui sera audité comme un échec. Un connecteur mal configuré ne peut donc pas laisser croire qu'une attaque a été traitée.
 
 !!! tip "Brancher Thot Secure sans risque"
     Démarrage recommandé : laisser `THOT_DRY_RUN=true` **et** les connecteurs non configurés. Vous obtenez alors des détections réelles, des décisions réelles, des actions planifiées et des rollbacks exerçables — sans aucun effet sur la production. C'est le mode à utiliser pour dérouler [`../quickstart.md`](../quickstart.md) et comprendre vos volumes avant d'ouvrir quoi que ce soit.
@@ -511,8 +658,9 @@ Un journal cassé est un incident de sécurité à part entière : voir [`../ope
     Non disponibles en v0.1.0 (MVP) :
 
     * **orchestration multi-playbooks en parallèle** : une `Action` exécute **un** playbook ; enchaîner plusieurs playbooks sur un même finding (ou les exécuter en parallèle) n'est pas pris en charge. Utilisez plusieurs politiques et plusieurs actions distinctes ;
-    * **connecteurs supplémentaires** : seuls les connecteurs rattachés aux playbooks livrés (§7) sont prévus. L'ajout d'un connecteur passe par l'écriture d'un playbook + adaptateur, et le mode simulé (`null`) reste le repli sûr ;
-    * **bac à sable de répétition** : rejouer un playbook « pour de vrai » sur une cible de test n'existe pas ; l'équivalent disponible est le mode simulé (§5) et `THOT_DRY_RUN=true` ;
+    * **connecteurs supplémentaires** : Cloudflare, AWS WAF, Slack et GitHub Issues sont désormais livrés en natif (§4 bis) ; restent à écrire les pilotes **EDR**, **fournisseur d'identité / coffre de secrets**, **gestionnaire de configuration / forge CI** et **ModSecurity**. L'ajout d'un pilote suit toujours le même chemin : un adaptateur qui respecte le contrat de connecteur (mode simulation, `rollback_token`, aucune exception propagée), un playbook, et le mode simulé (`null`) comme repli sûr ;
+    * **disponibilité du mode simulé par pilote** : le basculement se fait nom logique par nom logique, ce qui permet d'être réel sur `waf` et simulé sur `notify` ; il n'existe pas encore de « mode simulé forcé » par règle de politique ;
+    * **bac à sable de répétition** : rejouer un playbook « pour de vrai » sur une cible de test n'existe pas ; l'équivalent disponible est le mode simulé (§5), `THOT_DRY_RUN=true` et, pour les pilotes WAF, une adresse de documentation non routable en guise de cible bénigne (§4 bis.4) ;
     * **rollback planifié par l'opérateur** : le retour arrière est manuel (`POST .../rollback`) ou automatique via `rollback.auto_after_seconds` d'une politique ; il n'existe pas de fenêtre de replanification interactive.
 
     Voir [`../roadmap.md`](../roadmap.md) pour l'ordre de livraison prévu et [`../changelog.md`](../changelog.md) pour l'historique.

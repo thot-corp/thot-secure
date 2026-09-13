@@ -15,7 +15,7 @@ import contextlib
 
 from ..core.logging_setup import get_logger
 from ..core.models import Event
-from ..storage.store import Store
+from ..storage import StoreProtocol
 from .base import DEFAULT_QUEUE_SIZE, EventBus
 
 log = get_logger("bus.sqlite")
@@ -28,7 +28,7 @@ class SqliteBus(EventBus):
 
     def __init__(
         self,
-        store: Store,
+        store: StoreProtocol,
         *,
         queue_size: int = DEFAULT_QUEUE_SIZE,
         poll_interval: float = 2.0,

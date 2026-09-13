@@ -474,7 +474,9 @@ Codes de sortie : `0` succès, `1` erreur, `2` usage, `3` vérification négativ
 | `THOT_SECRET_KEY` | *persistée dans `data/secret.key`, sinon éphémère + avertissement* | Poivre des clés API + signature des sessions. **Doit être partagée entre processus.** |
 | `THOT_BOOTSTRAP_API_KEY` | `ao_dev_local_change_me` | Clé admin initiale (⚠️ à changer) |
 | `THOT_SESSION_TTL_SECONDS` | `28800` | Durée de vie d'une session de console |
-| `THOT_DB_URL` | `sqlite:///./data/thotsecure.db` | `sqlite://` (MVP) ; PostgreSQL/TimescaleDB documenté |
+| `THOT_DB_URL` | `sqlite:///./data/thotsecure.db` | `sqlite://` (aucune dépendance) ou `postgresql://` / `postgresql+psycopg://` (extra `postgres`, pilote `psycopg` 3 ou `psycopg2`) |
+| `THOT_DB_SSLMODE` | *(vide = automatique : `prefer` hors prod, `require` en `prod`)* | `disable` \| `allow` \| `prefer` \| `require` \| `verify-ca` \| `verify-full` — PostgreSQL uniquement |
+| `THOT_DB_POOL_MAX_SIZE` | `8` | Taille maximale du pool de connexions PostgreSQL |
 | `THOT_DATA_DIR` | `./data` | Données locales (base, quarantaine, état des collecteurs, tickets) |
 | `THOT_RULES_DIR` | `./rules` | Bibliothèque de règles |
 | `THOT_POLICIES_DIR` | `./policies` | Politiques |
@@ -492,6 +494,15 @@ Codes de sortie : `0` succès, `1` erreur, `2` usage, `3` vérification négativ
 | `THOT_MAX_ACTIONS_PER_HOUR` | `20` | Plafond global (par tenant : `max_actions_per_hour`) |
 | `THOT_DEFAULT_COOLDOWN_SECONDS` | `300` | Anti-rafale par `(tenant, playbook, cible)` |
 | `THOT_APPROVE_TTL_SECONDS` | `3600` | Délai au-delà duquel une approbation en attente expire |
+| `THOT_ANOMALY_ENABLED` | `false` | Détecteur statistique (EWMA + z-score). **Additif et opt-in** : désactivé, aucun comportement ne change par rapport à la 0.1.0 initiale |
+| `THOT_ANOMALY_BUCKET_SECONDS` | `60` | Intervalle d'agrégation du détecteur |
+| `THOT_ANOMALY_WARMUP_SAMPLES` | `30` | Intervalles observés avant d'émettre (protection anti-faux-positifs au démarrage) |
+| `THOT_ANOMALY_ZSCORE_THRESHOLD` | `4.0` | Écart type minimal (seuil par défaut, surchargeable par règle) |
+| `THOT_ANOMALY_MIN_OBSERVED` | `20` | Volume minimal dans l'intervalle pour conclure |
+| `THOT_ANOMALY_ENTITY_FIELDS` | `["labels.src_ip"]` | Chemins servant d'identité de suivi (volume, cardinalité, première vue) |
+| `THOT_ANOMALY_MAX_ENTITIES` | `20000` | Plafond de compteurs suivis (borne mémoire) |
+| `THOT_ANOMALY_ENTITY_TTL_SECONDS` | `86400` | Oubli d'une entité silencieuse (`0` = illimité) |
+| `THOT_ANOMALY_DETECT_NEW_SOURCES` | `true` | Signale la première apparition d'une entité |
 | `THOT_COLLECTORS_ENABLED` | `false` | Planification automatique des collecteurs |
 | `THOT_COLLECTOR_INTERVAL_SECONDS` | `300` | Intervalle par défaut du planificateur |
 | `THOT_HTTP_PROBE_TIMEOUT_SECONDS` | `8` | Délai par requête de l'audit de surface |

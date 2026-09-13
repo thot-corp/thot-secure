@@ -11,8 +11,9 @@ Ce qu'il fait
 1. **Récupère les findings ouverts** : ``GET /api/v1/findings?status=open`` (§4.4), en suivant le
    ``cursor`` jusqu'à épuisement (et, avec ``--include-acked``, les findings acquittés — ils
    apparaîtront en ``suppressions`` dans le SARIF, sans bloquer la construction).
-2. **Construit un SARIF 2.1.0 agrégé** : un seul ``run``, un ``tool.driver``, des règles dédupliquées
-   par ``rule_id`` et des résultats enrichis (sévérité, ``risk_score``, tags, MITRE, ``finding_id``).
+2. **Construit un SARIF 2.1.0 agrégé** : un seul ``run``, un ``tool.driver``, des règles
+   dédupliquées par ``rule_id`` et des résultats enrichis (sévérité, ``risk_score``, tags,
+   MITRE, ``finding_id``).
    Deux stratégies, choisies par ``--sarif-source`` :
 
    * ``auto`` (défaut) : demande d'abord le SARIF au serveur
@@ -56,7 +57,7 @@ Exemples
     python sarif_gate.py --out thotsecure.sarif --github-annotations --step-summary
 
     # 3. Démonstration hors ligne : SARIF construit localement, à partir d'un export JSONL
-    python sarif_gate.py --from-file findings.jsonl --sarif-source local --out demo.sarif --warn-only
+    python sarif_gate.py --from-file findings.jsonl --sarif-source local --warn-only
 
 Codes de sortie
 ---------------
@@ -72,6 +73,20 @@ Codes de sortie
 from __future__ import annotations
 import contextlib as _contextlib
 import sys as _sys
+
+import argparse
+import json
+import os
+import re
+import sys
+from collections import Counter
+from collections.abc import Mapping, Sequence
+from pathlib import Path
+from typing import Any
+from urllib import error as urlerror
+from urllib import parse as urlparse
+from urllib import request as urlrequest
+
 # --- Sortie Unicode sûre ---------------------------------------------------------------
 # Sous Windows, une console en page de code cp1252 ne peut pas encoder « ✖ », « ✔ » ou « ─ » :
 # `print()` lève alors UnicodeEncodeError et le script sort en code 1 alors que le travail a
@@ -88,18 +103,6 @@ def _configure_safe_output() -> None:
 _configure_safe_output()
 # ----------------------------------------------------------------------------------------
 
-import argparse
-import json
-import os
-import re
-import sys
-from collections import Counter
-from collections.abc import Mapping, Sequence
-from pathlib import Path
-from typing import Any
-from urllib import error as urlerror
-from urllib import parse as urlparse
-from urllib import request as urlrequest
 
 __all__ = ["main", "build_sarif", "evaluate_gate", "finding_to_result", "severity_level"]
 

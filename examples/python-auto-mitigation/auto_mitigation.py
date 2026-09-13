@@ -88,6 +88,21 @@ Codes de sortie
 from __future__ import annotations
 import contextlib as _contextlib
 import sys as _sys
+
+import argparse
+import json
+import os
+import re
+import sys
+import time
+from collections.abc import Mapping, Sequence
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+from urllib import error as urlerror
+from urllib import parse as urlparse
+from urllib import request as urlrequest
+
 # --- Sortie Unicode sûre ---------------------------------------------------------------
 # Sous Windows, une console en page de code cp1252 ne peut pas encoder « ✖ », « ✔ » ou « ─ » :
 # `print()` lève alors UnicodeEncodeError et le script sort en code 1 alors que le travail a
@@ -104,19 +119,6 @@ def _configure_safe_output() -> None:
 _configure_safe_output()
 # ----------------------------------------------------------------------------------------
 
-import argparse
-import json
-import os
-import re
-import sys
-import time
-from collections.abc import Mapping, Sequence
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any
-from urllib import error as urlerror
-from urllib import parse as urlparse
-from urllib import request as urlrequest
 
 __all__ = ["main", "HttpApi", "SdkApi", "build_api", "describe_safety_state"]
 

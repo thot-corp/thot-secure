@@ -40,6 +40,17 @@ jobs:
     name: Scorecard analysis
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # Scorecard est un SIGNAL, pas un portail de publication.
+    #
+    # Constaté sur le premier tag : l'action échoue à l'étape « Pull
+    # gcr.io/openssf/scorecard-action » lorsque le registre d'images est momentanément
+    # injoignable depuis le runner. Résultat : un dépôt neuf affichait une croix rouge pour
+    # un problème d'infrastructure, sans aucun lien avec la qualité du code — et une croix
+    # rouge qu'on apprend à ignorer est pire que pas de contrôle du tout.
+    #
+    # Le rapport reste produit et publié quand l'action fonctionne (SARIF + résultats dans
+    # l'onglet Security). Ce qui change : son indisponibilité ne bloque plus la CI.
+    continue-on-error: true
     permissions:
       actions: read
       contents: read

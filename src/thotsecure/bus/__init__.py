@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from ..core.config import Settings
 from ..core.logging_setup import get_logger
-from ..storage.store import Store
+from ..storage import StoreProtocol
 from .base import DEFAULT_QUEUE_SIZE, EventBus
 from .memory import MemoryBus
 from .nats import NatsBus
@@ -13,7 +13,7 @@ from .sqlite_bus import SqliteBus
 log = get_logger("bus.factory")
 
 
-def create_bus(settings: Settings, store: Store | None = None) -> EventBus:
+def create_bus(settings: Settings, store: StoreProtocol | None = None) -> EventBus:
     """Instancie le bus configuré.
 
     Le repli est explicite : si un bus durable est demandé sans les moyens de l'obtenir, on

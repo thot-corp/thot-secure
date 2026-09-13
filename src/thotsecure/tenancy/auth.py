@@ -32,7 +32,7 @@ from ..core.errors import AuthenticationError, NotFoundError
 from ..core.logging_setup import get_logger
 from ..core.models import ApiKeyInfo, ApiKeyRecord, Principal, Role, Tenant
 from ..core.util import iso_z, new_id, parse_dt, token, utcnow
-from ..storage.store import Store
+from ..storage import StoreProtocol
 from .rbac import build_principal
 
 log = get_logger("tenancy.auth")
@@ -59,7 +59,9 @@ class _CacheEntry:
 class ApiKeyService:
     """Gestion des clés API et des sessions."""
 
-    def __init__(self, store: Store, settings: Settings, audit: AuditChain | None = None) -> None:
+    def __init__(
+        self, store: StoreProtocol, settings: Settings, audit: AuditChain | None = None
+    ) -> None:
         self.store = store
         self.settings = settings
         self.audit = audit

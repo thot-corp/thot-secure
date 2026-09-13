@@ -201,15 +201,15 @@ thotsecure audit export --tenant acme --format cef -o audit.cef             # SI
 thot-secure/
 ├── src/thotsecure/
 │   ├── core/            modèles, configuration, utilitaires (stdlib + pydantic uniquement)
-│   ├── storage/         SQLite (MVP) + DDL PostgreSQL/TimescaleDB (production)
+│   ├── storage/         SQLite (défaut, zéro dépendance) + PostgreSQL/TimescaleDB (extra `postgres`)
 │   ├── bus/             bus d'événements : memory | sqlite | nats (client stdlib, sans dépendance)
 │   ├── audit/           journal chaîné par hash + export CEF
 │   ├── scope.py         périmètre déclaré : le garde-fou anti-abus
 │   ├── collectors/      web_probe, log_tail, dependency_scan, tls_cert, config_audit, syslog
-│   ├── detection/       moteur de règles YAML (opérateurs, seuils, Sigma-lite)
+│   ├── detection/       moteur de règles YAML (opérateurs, seuils, Sigma-lite) + anomalies (EWMA/z-score)
 │   ├── scoring/         score de risque explicable et monotone
 │   ├── decision/        policy-as-code + garde-fous + adaptateur OPA/Rego
-│   ├── actions/         playbooks, connecteurs (simulation, nginx-local, quarantaine, webhook…)
+│   ├── actions/         playbooks, connecteurs (simulation, nginx-local, Cloudflare, AWS WAF, Slack, GitHub…)
 │   ├── tenancy/         tenants, clés API hachées (scrypt), RBAC
 │   ├── reports/         Markdown · HTML · JSON · SARIF · CEF
 │   ├── api/             FastAPI v1, WebSocket, métriques Prometheus
@@ -299,25 +299,41 @@ playbooks, exemples de configuration).
 
 Nous préférons les écrire que les laisser découvrir en production :
 
-- **Persistance** : SQLite par défaut. Adapté à un MSP ou à un site, pas encore à plusieurs
-  centaines de milliers d'événements par heure — la variante PostgreSQL/TimescaleDB est
-  documentée et son DDL est livré, l'adaptateur n'est pas encore écrit.
-- **Connecteurs** : seuls `nginx-local`, `local-quarantine` et `local-ticket` produisent un
-  effet **réel** ; Cloudflare, AWS WAF et les EDR passent par la passerelle `http-webhook`
-  (générique et signée) en attendant des connecteurs natifs.
-- **Détection** : règles déterministes uniquement. Pas encore de détection d'anomalie par
-  apprentissage (prévue en 0.3).
+- **Persistance** : SQLite par défaut, aucune dépendance à installer. La variante
+  **PostgreSQL/TimescaleDB** dispose désormais d'un **adaptateur écrit**, exercé en CI contre un
+  vrai serveur TimescaleDB avec **la même suite de conformité que SQLite** ; elle n'a pas encore
+  été exploitée à l'échelle de production ni mesurée en charge. Installez-la par
+  `pip install -e ".[postgres]"` et basculez avec `THOT_DB_URL=postgresql://…`.
+- **Connecteurs** : `nginx-local`, `local-quarantine`, `local-ticket` agissent localement ;
+  **Cloudflare** (IP Access Rules, ruleset de limitation de débit) et **AWS WAF** (IPSet WAFv2,
+  signature SigV4 implémentée en bibliothèque standard) sont désormais **natifs**, ainsi que
+  **Slack** et **GitHub Issues** pour la notification et le ticket. Les EDR et le reste passent
+  toujours par la passerelle `http-webhook` signée. **Aucun connecteur natif n'a été validé
+  contre un compte réel** — c'est l'étape obligatoire avant de les activer en production
+  (procédure, permissions minimales et méthode de test en simulation sont documentées dans
+  `docs/actions/playbooks.md`).
+- **Détection** : règles déterministes **et** détecteur statistique (EWMA + z-score : volume par
+  entité, cardinalité des sources, première observation), activable par `THOT_ANOMALY_ENABLED`.
+  Il est **désactivé par défaut**, analyse une entité à la fois — pas encore de corrélation
+  multi-signaux — et demande 3 à 7 jours de réglage sur votre trafic avant d'être utile.
+  Aucun apprentissage automatique : c'est un choix, un détecteur statistique s'explique.
 - **Compatibilité Sigma** : sous-ensemble documenté, avec refus explicite de ce qui ne peut pas
   être traduit fidèlement — un faux négatif silencieux serait pire qu'un refus visible.
+- **Authentification** : clés API uniquement (rôles `viewer`/`analyst`/`responder`/`admin`) ;
+  pas encore de SSO OIDC ni de comptes nominatifs.
 - **Bandeau de simulation** : le produit est utilisable en production, mais ses défauts sont
-  volontairement conservateurs (rien ne s'exécute sans décision explicite).
+  volontairement conservateurs (rien ne s'exécute sans décision explicite). Aucune
+  documentation de connecteur natif ne remplace un test réel chez vous : commencez par
+  `THOT_DRY_RUN=true` et lisez ce que le produit aurait fait.
 
 ## 🗺️ Feuille de route
 
-`ROADMAP.md` détaille les jalons. En résumé : **0.2** — adaptateur TimescaleDB, connecteurs
-natifs Cloudflare/AWS WAF, SSO OIDC, API GraphQL. **0.3** — marketplace de plugins, détection
-d'anomalie, corrélation multi-étapes, OpenSearch. **1.0** — durcissement audité, dossier SOC 2,
-SLA et offre de support.
+`ROADMAP.md` détaille les jalons et leurs critères d'acceptation. En résumé : **0.2** —
+l'adaptateur TimescaleDB et les connecteurs natifs Cloudflare / AWS WAF sont **livrés dans
+cette version** ; restent SSO OIDC, évaluation OPA embarquée, versionnement signé des packs de
+règles et banc d'essai d'ingestion en CI. **0.3** — marketplace de plugins, corrélation
+multi-étapes, OpenSearch, round-trip Sigma. **1.0** — durcissement audité, dossier SOC 2, SLA
+et offre de support.
 
 ## 🤝 Contribuer
 

@@ -61,6 +61,100 @@ is safe to plug in and observe before it is allowed to act.
 
 ### Added
 
+#### PostgreSQL / TimescaleDB persistence backend
+
+SQLite remains the default because it needs no dependency and no service. What was
+missing was a **credible production target**: `THOT_DB_URL=postgresql://…` now selects a
+complete adapter instead of raising.
+
+- **`src/thotsecure/storage/postgres.py`** — the full storage contract (51 methods), with
+  the driver imported lazily (`psycopg` 3, falling back to `psycopg2`) so that
+  `import thotsecure` still pulls in no database driver, and `pip install -e ".[postgres]"`
+  is only needed when PostgreSQL is actually chosen.
+- **One factory, `create_store(settings)`**, decides the backend from the URL. Every caller
+  goes through it — service, CLI and tests — so a PostgreSQL deployment can no longer end up
+  with a stray SQLite store in a corner.
+- **A shared conformance suite** (`tests/test_storage_conformance.py`) runs the same
+  assertions against either backend; CI replays it against a real TimescaleDB service
+  container, **twice**: once with `psycopg2`, once with `psycopg` 3 (different batch paths).
+- **`StoreProtocol`** (`src/thotsecure/storage/base.py`) makes the contract explicit, and the
+  type annotations across the codebase now say `StoreProtocol` rather than the SQLite class —
+  the previous annotations were simply wrong on PostgreSQL.
+- **`pg_advisory_xact_lock` on the audit chain**: the lock is taken *before* reading the last
+  link, then `nextval('audit_log_seq')`, then a single `INSERT`. `FOR UPDATE` was rejected
+  and the reason is written down: it protects neither an empty log nor a new last link.
+- **Hypertable, compression, continuous aggregate and native retention** DDL split into
+  idempotent sections, each in its own transaction; retention falls back to bounded batched
+  `DELETE` when TimescaleDB is absent.
+- **`THOT_DB_SSLMODE`** (automatic by default: `prefer` outside production, `require` in
+  production — never `disable`) and **`THOT_DB_POOL_MAX_SIZE`**.
+- DSN password is **never logged**: `mask_dsn()` and `redact_dsn_in_text()` are applied to
+  driver error messages too, since a psycopg error routinely echoes the connection string.
+- **`thotsecure doctor` and `GET /readyz` are backend-aware**: they report the real store
+  location (file path, or masked DSN for PostgreSQL) and a `backend` field, instead of a
+  SQLite path that does not exist.
+
+#### Native connectors: Cloudflare, AWS WAF, Slack, GitHub Issues
+
+The five limitations listed in the 0.1.0 README included "only the local connectors have a
+real effect". Four native drivers now close most of that gap — in the standard library only
+(`urllib`, `hmac`, `hashlib`, `json`, `ssl`), with no vendor SDK to trust or to audit.
+
+- **Cloudflare** — `block_ip` / `unblock_ip` through IP Access Rules, plus `rate_limit` /
+  `remove_rate_limit` through the `http_ratelimit` ruleset phase. The created `rule_id` is the
+  rollback token, so the rollback deletes the exact rule it created; a lost token degrades to
+  a value lookup, and the difference is visible in the result.
+- **AWS WAF** — `GetIPSet` → `UpdateIPSet` with a hand-written SigV4 signer, verified against
+  **the official AWS test vectors** and against an independent reimplementation, including a
+  `POST` with a body. `WAFOptimisticLockException` is retried **exactly once** with a fresh
+  `LockToken`, then reported; a missing lock token prevents any write at all.
+- **Slack** and **GitHub Issues** — structured notification with a correction message for
+  rollback, and issue creation/closing. The Slack webhook URL **is** the secret and is never
+  logged; the GitHub token appears in no result.
+- **`DEFAULT_CONNECTORS` is unchanged: everything stays `simulation`** except the harmless
+  local quarantine and local ticketing. Switching one logical name to a native driver is a
+  per-tenant, per-name decision documented in `config/connectors.example.yaml`, with the
+  minimal IAM policy and token scopes written out.
+- **Deliberate omissions**, because a connector that "succeeds" without effect is worse than
+  an absent one: no `notify` on Cloudflare (no ad-hoc message API) and no `rate_limit` on
+  AWS WAF (it would mean editing a `RateBasedStatement`, whose reversibility cannot be
+  guaranteed).
+- **A shared HTTP client** centralises three guarantees: TLS verified by default (disabling
+  it logs a warning), no exception ever escapes a connector, and no header, body or secret is
+  ever logged. Plain HTTP to a remote host is refused.
+
+#### Statistical anomaly detection — the complement to deterministic rules
+
+A rule answers "is this pattern present?". It cannot answer "is this volume *abnormal
+for this asset*", which is exactly the ground covered by slow and distributed attacks.
+The detector ships **disabled by default** (`THOT_ANOMALY_ENABLED=false`): a statistical
+detector with a bad threshold produces noise, and noise in security costs more than no
+detection at all.
+
+- **`src/thotsecure/detection/anomaly.py`** — EWMA + z-score baseline per entity, with a
+  variance floor, a warm-up period, a minimum observed volume and a bounded entity map
+  (a scanning attack must not turn the detector into a memory exhaustion vector).
+- **Three signals**: `rate_anomaly` (volume deviation), `source_cardinality_anomaly`
+  (spike in distinct source addresses — the signature of a distributed attack), and
+  `new_source` (first observation of an entity for a tenant).
+- **Every signal carries its own justification**: observed value, expected value and
+  deviation in standard deviations, stored in the finding and readable without opening
+  the code.
+- **Signals are ordinary events** (`kind: anomaly`, `source.type: baseline`) travelling
+  the same path as any other event: rules → scoring → decision → guard-rails → audit.
+  There is no parallel route, so an anomaly cannot bypass a guard-rail.
+- **Five shipped rules** (`rules/anomaly/`) grading severity by deviation band, plus two
+  decision policies: `approval-volume-anomaly` (rate limiting proposed, human approval)
+  and `notify-distributed-anomaly` (a ticket, never an automatic block — blocking one
+  address does nothing against hundreds, and blocking a range risks cutting legitimate
+  clients).
+- **`anomaly.detected`** audit records, linking each signal to the event that produced it.
+- Detection of an anomaly is never re-analysed as input, so a signal cannot cascade.
+- An **injectable clock** makes interval rollover testable in milliseconds instead of
+  requiring a 60-second test that nobody would run.
+- Documented in [`docs/detection/anomaly.md`](docs/detection/anomaly.md), including the
+  recommended enablement procedure (observe for 3–7 days, then tune).
+
 #### Collectors and normalization
 
 - **Defensive collector framework** (`src/thotsecure/collectors/`) with a common
@@ -342,6 +436,17 @@ is safe to plug in and observe before it is allowed to act.
 - Initial release: no compatibility surface exists yet. Every schema in
   `docs/architecture/api-contract.md` is frozen for the `0.1.x` line, and any
   subsequent change to it is a breaking change for this project.
+- **Store construction goes through one factory.** `thotsecure.storage.create_store(settings)`
+  replaces direct `Store(path)` instantiations in the service layer. The SQLite class is no
+  longer a de-facto singleton: annotations throughout the codebase now read `StoreProtocol`,
+  which is what the code always assumed.
+- **New environment variables**, all additive and optional: `THOT_DB_SSLMODE`,
+  `THOT_DB_POOL_MAX_SIZE`, and the nine `THOT_ANOMALY_*` settings (see
+  [contract §9](docs/architecture/api-contract.md)).
+- **`GET /readyz` gained a `backend` field**, and its `path` field now reports the SQLite file
+  path or the **masked** PostgreSQL DSN. The field names and the SQLite value are unchanged.
+- **`THOT_DB_URL` accepts `postgres`, `postgresql`, `+psycopg` and `+psycopg2`**; asynchronous
+  drivers are refused at configuration time rather than at first use.
 
 ### Deprecated
 
@@ -353,7 +458,95 @@ is safe to plug in and observe before it is allowed to act.
 
 ### Fixed
 
-- Initial release: no fixes carried over from a previous version.
+- **`thotsecure doctor` crashed on a Windows console using the cp1252 code page** —
+  the very first command a new user is told to run ended in a `UnicodeEncodeError`
+  because box-drawing characters could not be encoded. Output encoding is now forced
+  to UTF-8 where possible, with an ASCII fallback for the symbols. A cosmetic problem
+  must never prevent a security diagnostic from being displayed.
+- **The CLI and the server generated different signing keys** when `THOT_SECRET_KEY`
+  was unset, so an API key created with the CLI could not be verified by the server.
+  The key is now persisted in `data/secret.key` (mode 0600) and therefore shared by
+  every process of the same deployment.
+- **`token=...` was not redacted** from logs and reports; the assignment pattern now
+  covers `token`, `pass`, `credential`, `session_id` and related names, with tests
+  asserting both that secrets are masked and that ordinary text is left intact.
+- **Circular import** between the service layer and the API package, which made the
+  package unimportable in some orders. Observability (metrics, rate limiting) moved
+  out of `thotsecure.api` into `thotsecure.observability`.
+- **Nine authoring errors** in the shipped detection library (YAML foldings, a
+  missing parameter type) meant rules were silently rejected at load time — an
+  absent detection, not a harmless formatting mistake. A dedicated test now fails
+  the build when any shipped rule, policy, playbook or example configuration is
+  rejected.
+- **Release workflow failed at its first job**: the `CITATION.cff` version check
+  imported PyYAML without installing it, which fails on a fresh runner. The check
+  now parses the field without any third-party dependency, so the release path
+  installs nothing.
+- **Documentation build failed under `--strict`**: 18 links in `docs/cli.md` carried
+  one `../` too many, 5 links pointed outside `docs/` (unresolvable by MkDocs), and 4
+  anchors were stale. A dependency-free link checker
+  (`scripts/check-docs-links.py`) now runs before the build, suggests close anchors,
+  and is covered by its own test.
+- **Dependabot failed on every scheduled run**: the `docker` ecosystem pointed at
+  `/deploy`, a directory with no Dockerfile.
+- **OpenSSF Scorecard turned the repository red** when the `scorecard-action` image
+  could not be pulled from a registry — an infrastructure problem unrelated to code
+  quality. The job no longer blocks the build; its findings are still published.
+- **The Compose validation step reported a false failure**: `docker-compose.yml`
+  declares its secrets with `${VAR:?message}` (deliberately, so a deployment cannot
+  start with a default signing key), which makes `docker compose config` fail when
+  they are absent. CI now supplies throwaway values for that step, and validates the
+  structure rather than the presence of a real secret.
+- **Auto-labelling never ran**: the label taxonomy workflow was registered but had
+  zero runs, because a workflow added to a repository does not trigger on the push
+  that adds it — so no label existed and every labeler run failed. The path filter
+  now includes the workflow file itself.
+- **Shipped playbooks failed on an unresolved placeholder**: `block-source-ip` and
+  `isolate-host` pass `${finding.remediation}` to their ticket or notification, but the
+  execution context never provided that field. `render_params` raises on an unresolved
+  placeholder — correctly, since sending the literal `${params.target}` to a WAF API would be
+  worse — so the **whole playbook failed**, including the step marked `optional: true`. The
+  visible symptom was silent: no ticket, no notification, an action in `failed`. The field is
+  now part of the finding context, and a test asserts that a shipped ticket actually contains
+  the remediation text.
+- **`${params.rollback_token}` was never resolved**: `_build_context` merged the caller's
+  context *after* the parameter set, so the `params` carried by the context overwrote the
+  rollback token that `rollback()` had just injected. Every block whose rollback transmits
+  `${params.rollback_token}` failed, which is precisely the path used to delete a rule by
+  identifier rather than by value lookup. Precedence is now explicit and documented, with a
+  test that reads the closed ticket back from disk.
+- **A failed rollback is now recorded instead of raised**: a `PlaybookError` during rollback
+  used to escape the engine, leaving the action in its previous state with no audit record of
+  the attempt. It is now audited as a failed `action.rollback`, and — the important part —
+  `rollback.available` and the token are **kept**, so the operator can repair the playbook and
+  retry. An action whose rollback failed is *still applied*; losing the only means of undoing
+  one's own countermeasure would be a self-inflicted outage.
+- **The connector registry resolved relative paths from the process working directory**:
+  `directory`, `quarantine_dir`, `deny_file`, `state_file` and `allowed_roots` are now resolved
+  from `root_dir`, like every other path in the product. Started from a different directory (a
+  systemd unit, a scheduled task, a container with another `WORKDIR`), the product used to
+  write its tickets, quarantine and Nginx deny file somewhere else entirely — silently, and
+  precisely where an operator would not look for evidence.
+- **`thotsecure` could not start at all on PostgreSQL**: `ensure_directories()` created the
+  parent of `db_path`, which raises a `ConfigError` as soon as `THOT_DB_URL` is not SQLite.
+  Directory creation is now conditional on the backend, and the error message of `db_path`
+  points at `store_location()` for the correct way to describe a store.
+- **`THOT_DB_URL` validation contradicted the adapter**: the settings validator accepted
+  `postgresql+asyncpg://`, a driver the synchronous adapter rejects — a URL accepted at
+  configuration time and refused at first use. The validator now accepts exactly what the
+  adapter supports (SQLite, `postgresql`, `+psycopg`, `+psycopg2`) and refuses asynchronous
+  drivers with an explicit message.
+- **A phantom dependency made the whole API unimportable on a clean install**:
+  `python-multipart` is required by FastAPI as soon as `Form(...)` is used, and the embedded
+  console uses it for its login, logout, approval and audit-verification forms. It was
+  installed on the development machine but **absent from `pyproject.toml`**, so on a clean CI
+  checkout `import thotsecure.main` raised at import time, `tests/test_api.py` could not even
+  be collected, and the suite stopped at 76 tests out of 378. It is now a declared runtime
+  dependency, and `tests/test_dependencies_declared.py` compares the package's **real** imports
+  (parsed with `ast`) against what the project declares — it immediately found a second one,
+  `cryptography`, used by the TLS collector's key-strength check. That one is genuinely
+  optional, so it is now a discoverable extra, `pip install "thotsecure[tls]"`, instead of a
+  feature nobody could find.
 
 ### Security
 
@@ -383,15 +576,22 @@ is safe to plug in and observe before it is allowed to act.
 Recorded here so that they are expectations rather than surprises. Each is
 tracked in [`ROADMAP.md`](ROADMAP.md).
 
-- SQLite is the only fully supported datastore; PostgreSQL/TimescaleDB DDL ships
-  but the adapter is not production-ready.
-- WAF connectors other than the simulation are implemented against documented
-  APIs but have not been validated against live Cloudflare or AWS WAF accounts.
-- Rego evaluation requires an external OPA binary; there is no embedded
-  evaluator.
-- Authentication is API-key only — no SSO/OIDC, no per-user accounts.
-- `mypy` runs in CI in non-blocking mode while type coverage improves.
-- The React dashboard in `web/` is optional and not required for the embedded
+- **PostgreSQL/TimescaleDB**: the adapter is written and exercised by the shared
+  storage conformance suite, which CI runs against a real TimescaleDB service
+  container. It has **not** yet been operated at production scale by the
+  maintainers, and no migration of a large SQLite database has been measured.
+- **WAF connectors**: Cloudflare and AWS WAF connectors are implemented against the
+  documented APIs, with signature and payload verification covered offline. They
+  have **not** been validated against live accounts, which is a required step
+  before enabling them in production (the procedure is documented).
+- **Anomaly detection** is statistical (EWMA + z-score), not machine learning, and
+  it analyses one entity at a time: no multi-signal correlation yet. It is
+  disabled by default and needs 3–7 days of tuning on the target environment.
+- **Rego evaluation requires an external OPA binary**; there is no embedded
+  evaluator. The YAML engine remains the default and the fallback.
+- **Authentication is API-key only** — no SSO/OIDC, no per-user accounts.
+- **`mypy` runs in CI in non-blocking mode** while type coverage improves.
+- **The React dashboard in `web/` is optional** and not required for the embedded
   console, which is fully functional without a Node toolchain.
 
 [Unreleased]: https://github.com/thot-corp/thot-secure/compare/v0.1.0...HEAD

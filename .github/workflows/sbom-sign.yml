@@ -170,6 +170,20 @@ jobs:
         run: |
           set -euo pipefail
           tag="${GITHUB_REF_NAME}"
+
+          # La Release est créée par le workflow `release.yml`, qui peut être encore en file
+          # d'attente quand celui-ci se termine. Tenter `gh release upload` sur une Release
+          # inexistante faisait échouer ce workflow (constaté sur le tag v0.1.0) alors que les
+          # SBOM et leurs signatures étaient, eux, correctement produits et signés.
+          #
+          # On tente donc l'attachement, et on se contente d'un avis explicite si la Release
+          # n'existe pas encore : les artefacts restent téléchargeables depuis l'exécution du
+          # workflow, et la signature est déjà publiée dans le journal de transparence Rekor.
+          if ! gh release view "${tag}" >/dev/null 2>&1; then
+            echo "::notice::La release ${tag} n'existe pas encore (elle est créée par release.yml). SBOM et signatures conservés en artefacts de workflow ; relancez ce workflow après la release pour les y attacher."
+            exit 0
+          fi
+
           # --clobber so that a re-run of this workflow replaces assets instead of
           # failing on the second attempt.
           gh release upload "${tag}" \

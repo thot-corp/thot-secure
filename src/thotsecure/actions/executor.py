@@ -263,10 +263,18 @@ class PlaybookExecutor:
 
 
 def _build_context(params: dict[str, Any], context: dict[str, Any] | None) -> dict[str, Any]:
+    """Construit le contexte de résolution des ``${...}``.
+
+    ``params`` est appliqué **en dernier**, volontairement : c'est le jeu de paramètres de
+    *ce* passage de rendu. Dans l'ordre inverse, le ``params`` porté par le contexte
+    écraserait le ``rollback_token`` que :meth:`PlaybookExecutor.rollback` vient d'injecter,
+    et ``${params.rollback_token}`` ne serait jamais résolu — l'annulation échouerait alors
+    précisément sur les playbooks qui savent annuler par identifiant.
+    """
     base = dict(context or {})
     return {
-        "params": params,
         **base,
+        "params": params,
         "now": iso_z(utcnow()),
     }
 

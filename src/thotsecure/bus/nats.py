@@ -22,7 +22,7 @@ from urllib.parse import urlparse
 from ..core.errors import ConfigError
 from ..core.logging_setup import get_logger
 from ..core.models import Event
-from ..storage.store import Store
+from ..storage import StoreProtocol
 from .base import DEFAULT_QUEUE_SIZE, EventBus
 from .memory import MemoryBus
 
@@ -42,7 +42,7 @@ class NatsBus(EventBus):
         url: str,
         *,
         subject: str = _DEFAULT_SUBJECT,
-        store: Store | None = None,
+        store: StoreProtocol | None = None,
         queue_size: int = DEFAULT_QUEUE_SIZE,
         connect_timeout: float = 5.0,
         max_reconnect_attempts: int = 10,

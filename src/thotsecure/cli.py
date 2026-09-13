@@ -40,6 +40,7 @@ from .core.util import iso_z
 from .reports import render as render_report
 from .scoring.risk import risk_band
 from .service import Service, build_service
+from .storage import store_location
 
 log = get_logger("cli")
 
@@ -531,7 +532,7 @@ def _cmd_funding(out: Output) -> int:
 def _cmd_init_db(args: argparse.Namespace, service: Service, out: Output) -> int:
     tenant = service.keys.bootstrap()
     payload = {
-        "database": str(service.settings.db_path),
+        "database": store_location(service.store),
         "initialized": True,
         "bootstrap_tenant": tenant.tenant_id if tenant else None,
         "bootstrap_key_hint": (
@@ -540,7 +541,7 @@ def _cmd_init_db(args: argparse.Namespace, service: Service, out: Output) -> int
             else "base déjà initialisée : aucun tenant d'amorçage créé"
         ),
     }
-    out.emit(payload, text=f"base initialisée : {service.settings.db_path}")
+    out.emit(payload, text=f"base initialisée : {store_location(service.store)}")
     if tenant and not out.as_json:
         out.warn(
             "la clé d'amorçage est publique : créez une clé dédiée puis révoquez-la "
@@ -562,8 +563,18 @@ def _cmd_doctor(args: argparse.Namespace, service: Service, out: Output) -> int:
             critical_failures += 1
 
     add("python", sys.version_info >= (3, 11), f"Python {sys.version.split()[0]} (≥ 3.11 requis)", critical=True)
-    add("base de données", service.store.health(), str(settings.db_path), critical=True)
-    add("schéma", settings.db_path.exists(), "fichier de base présent" if settings.db_path.exists() else "absent (lancez init-db)")
+    add("base de données", service.store.health(), store_location(service.store), critical=True)
+    # Le contrôle « fichier présent » n'a de sens qu'en SQLite : sur PostgreSQL, la base est
+    # distante et `settings.db_path` lève une erreur. On décrit donc ce que l'on sait vraiment.
+    if service.store.backend_name == "sqlite":
+        present = Path(str(store_location(service.store))).exists()
+        add("schéma", present, "fichier de base présent" if present else "absent (lancez init-db)")
+    else:
+        add(
+            "schéma",
+            service.store.health(),
+            f"base distante ({service.store.backend_name}) : schéma appliqué par init-db",
+        )
 
     rules = len(service.rules)
     add("règles de détection", rules > 0, f"{rules} règle(s) chargée(s), {len(service.rule_diagnostics)} rejetée(s)", critical=rules == 0)
@@ -603,7 +614,7 @@ def _cmd_doctor(args: argparse.Namespace, service: Service, out: Output) -> int:
         "checks": checks,
         "critical_failures": critical_failures,
         "warnings": settings.safety_warnings(),
-        "database": str(settings.db_path),
+        "database": store_location(service.store),
         "root": str(settings.root_path),
     }
     if out.as_json:

@@ -15,9 +15,19 @@
 #   local-quarantine — mise en quarantaine de fichier (déplacement + SHA-256 + manifeste)
 #   local-ticket     — un ticket Markdown par incident, sans outil tiers
 #   http-webhook     — passerelle HTTP signée (Worker Cloudflare, Lambda, n8n, pfSense…)
+#   cloudflare       — API Cloudflare native : IP Access Rules (blocage) et ruleset
+#                      http_ratelimit (limitation de débit)
+#   aws-waf          — AWS WAFv2 natif : mise à jour d'un IPSet (GetIPSet/UpdateIPSet, SigV4)
+#   slack            — webhook entrant Slack : notification structurée + message de correction
+#   github-issues    — API GitHub : ouverture et fermeture d'issue (ticketing, patch-dependency)
 #
-# Ce fichier peut contenir un secret de signature : gardez-le hors du dépôt Git (il est déjà
-# dans .gitignore) et protégez-le (chmod 600).
+# Les pilotes natifs (cloudflare, aws-waf, slack, github-issues) sont documentés en commentaire
+# seulement : **aucun n'est actif dans ce fichier**. C'est la garantie de sûreté du produit —
+# on observe d'abord en simulation, puis on active un nom logique à la fois.
+#
+# Ce fichier peut contenir des secrets (jeton Cloudflare, clé AWS, jeton GitHub, URL de webhook
+# Slack) : copiez-le en config/connectors.yaml, gardez-le hors du dépôt Git (il est déjà dans
+# .gitignore) et protégez-le (chmod 600, propriétaire = compte de service).
 
 version: 1
 
@@ -31,6 +41,38 @@ connectors:
     #   deny_file: /etc/nginx/conf.d/thotsecure-deny.conf
     #   state_file: /var/lib/thotsecure/nginx-state.json
     #   reload_command: ["nginx", "-s", "reload"]   # laisser vide pour ne PAS recharger
+    #
+    # Pour Cloudflare, en natif (playbooks : block-source-ip, unblock-source-ip) :
+    # driver: cloudflare
+    # settings:
+    #   api_token: "changeme-jeton-cloudflare-portee-minimale"  # Account Firewall Access
+    #                                                           # Rules: Edit (+ Zone WAF: Edit
+    #                                                           # pour la limitation de débit)
+    #   account_id: "changeme-identifiant-de-compte"            # Portée des IP Access Rules
+    #   zone_id: "changeme-identifiant-de-zone"                 # Requis par ratelimit uniquement
+    #   timeout_seconds: 10
+    #   verify_tls: true              # ne passer à false qu'en connaissance de cause : c'est
+    #                                 # journalisé en avertissement à chaque démarrage
+    #   # api_base: "https://api.cloudflare.com/client/v4"    # à ne changer que pour un proxy
+    #   # allow_insecure_http: false  # jamais en production
+    #
+    # Pour AWS WAF v2, en natif (playbook : block-source-ip, unblock-source-ip) :
+    # driver: aws-waf
+    # settings:
+    #   ip_set_id: "changeme-identifiant-de-ipset-wafv2"
+    #   ip_set_name: "thotsecure-blocklist"
+    #   scope: REGIONAL               # REGIONAL | CLOUDFRONT (CLOUDFRONT impose us-east-1)
+    #   region: eu-west-3
+    #   access_key_id: "changeme-cle-acces-aws"
+    #   secret_access_key: "changeme-cle-secrete-aws"
+    #   # session_token: ""          # uniquement pour des identifiants temporaires (STS)
+    #   # endpoint_url: ""           # réservé aux tests locaux et points de terminaison privés
+    #   timeout_seconds: 10
+    #   verify_tls: true
+    #
+    # Le rollback ne dépend pas d'une URL : il est porté par le connecteur natif, qui rend un
+    # `rollback_token` (identifiant de règle Cloudflare, ou adresse normalisée côté AWS WAF).
+    # `rollback_url` ne concerne que le pilote http-webhook.
     #
     # Pour une passerelle (Cloudflare Worker, AWS Lambda, pfSense, n8n) :
     # driver: http-webhook
@@ -49,6 +91,18 @@ connectors:
     # settings:
     #   deny_file: /etc/nginx/conf.d/thotsecure-ratelimit.conf
     #   reload_command: ["nginx", "-s", "reload"]
+    #
+    # Pour Cloudflare, en natif (playbooks : rate-limit-source, remove-rate-limit) :
+    # driver: cloudflare
+    # settings:
+    #   api_token: "changeme-jeton-cloudflare-portee-minimale"  # Zone WAF: Edit / Rulesets: Edit
+    #   zone_id: "changeme-identifiant-de-zone"                 # le ruleset est au niveau zone
+    #   timeout_seconds: 10
+    #   verify_tls: true
+    # Le débit déclaré par le playbook (« 10r/s », « 30r/m », « 600r/h ») est traduit en
+    # `requests_per_period` / `period` Cloudflare. Attention : la limitation de débit est une
+    # fonctionnalité payante selon l'offre — l'API refuse la règle sur un plan qui ne l'inclut
+    # pas, et Thot Secure remonte alors l'erreur Cloudflare telle quelle (aucun faux succès).
 
   network:
     driver: simulation
@@ -106,7 +160,19 @@ connectors:
     driver: local-ticket
     settings:
       directory: /var/lib/thotsecure/tickets
-    # Pour Jira / GLPI / GitHub, utilisez la passerelle webhook :
+    # Pour GitHub Issues, en natif (playbooks : open-ticket, close-ticket, patch-dependency) :
+    # driver: github-issues
+    # settings:
+    #   token: "changeme-jeton-github-fine-grained"   # permission « Issues: write » sur le
+    #                                                 # seul dépôt concerné — jamais un jeton
+    #                                                 # classique à portée `repo` complète
+    #   repository: "changeme-proprietaire/depot"
+    #   labels: [securite, thotsecure]                # étiquettes ajoutées aux issues créées
+    #   # api_url: "https://api.github.com"           # GitHub Enterprise : autre base d'API
+    #   timeout_seconds: 10
+    #   verify_tls: true
+    #
+    # Pour Jira / GLPI ou une passerelle maison, utilisez le pilote webhook :
     # driver: http-webhook
     # settings:
     #   url: "https://tickets.interne/api/thotsecure"
@@ -114,8 +180,38 @@ connectors:
 
   notify:
     driver: simulation
+    # Pour Slack, en natif (playbook : notify-webhook) :
+    # driver: slack
+    # settings:
+    #   webhook_url: "https://hooks.slack.com/services/changeme-canaux/changeme/webhook"
+    #   timeout_seconds: 10
+    #   verify_tls: true
+    # L'URL du webhook EST un secret (elle porte le jeton du canal) : elle n'apparaît jamais
+    # dans un journal, un résultat d'action ou un rapport. Créez un webhook dédié à Thot Secure
+    # plutôt que de réutiliser celui d'un humain, et révoquez-le si le fichier fuite.
+    #
+    # Pour Teams, Mattermost, n8n ou un script maison :
     # driver: http-webhook
     # settings:
     #   url: "https://hooks.slack.com/services/XXX/YYY/ZZZ"
     #   secret: ""            # Slack n'exige pas de signature HMAC entrante
     #   verify_tls: true
+
+# ---------------------------------------------------------------------------------------
+# Passer de la simulation au réel, sans se tromper
+# ---------------------------------------------------------------------------------------
+#
+# 1. Laisser tout en `simulation` et dérouler un playbook : `thotsecure playbooks list`
+#    affiche, pour chaque nom logique, le pilote retenu (section « Connecteurs configurés »).
+# 2. Préparer un credential **dédié** et à portée minimale : jeton Cloudflare limité aux
+#    règles IP et au ruleset de la zone, clé AWS autorisée aux seules actions
+#    `wafv2:GetIPSet` et `wafv2:UpdateIPSet` sur l'IPSet exact, jeton GitHub « Issues: write »
+#    sur un seul dépôt, webhook Slack dédié.
+# 3. Activer **un seul nom logique** (le plus souvent `waf`), exécuter une action réelle sur
+#    une adresse de test, puis vérifier le rollback (`thotsecure actions rollback <id>`) et
+#    l'état réel côté fournisseur avant d'activer le nom suivant.
+# 4. Ne jamais laisser `THOT_DRY_RUN=false` et un pilote natif actifs sans avoir vérifié au
+#    moins une fois le couple exécution/rollback sur une cible bénigne.
+#
+# Référence : docs/actions/playbooks.md (matrice pilote ↔ opérations, politique IAM minimale,
+# procédure de test en simulation et procédure de rollback vérifiable).

@@ -1,0 +1,22 @@
+# Dépendances de construction de la documentation (hors paquet applicatif).
+#
+# Pourquoi un fichier séparé plutôt qu'une installation en ligne de commande dans le workflow :
+#
+#   1. **Reproductibilité** — la CI et le poste du contributeur installent exactement la même
+#      version de MkDocs et de ses plugins. Sans cela, le site peut se construire en local et
+#      échouer en CI (ou l'inverse), et le temps perdu à chercher pourquoi est du temps perdu
+#      sur la sécurité.
+#   2. **Cause d'échec réelle évitée** — `mkdocs.yml` déclare le plugin `minify`, qui ne fait
+#      PAS partie de `mkdocs-material` : il exige ce paquet. Sur le premier tag, `docs.yml`
+#      n'installait que `mkdocs-material==9.*` et `mkdocs build --strict` échouait.
+#   3. **Traçabilité** — Dependabot (écosystème `pip`, répertoire `/`) surveille ce fichier et
+#      ouvre une Pull Request à chaque mise à jour, comme pour les autres dépendances.
+#
+# Installation :  python -m pip install -r requirements-docs.txt
+
+# Thème et extensions (fournit aussi les plugins `search` et `tags` utilisés par mkdocs.yml).
+mkdocs-material==9.5.*
+
+# Minification des pages générées (`plugins: minify` dans mkdocs.yml).
+# Requis explicitement : ce plugin n'est pas fourni par mkdocs-material.
+mkdocs-minify-plugin==0.8.*

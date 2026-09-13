@@ -8,7 +8,7 @@ from typing import Any
 from ..core.logging_setup import get_logger
 from ..core.models import AuditRecord, AuditVerifyResult
 from ..core.util import iso_z, parse_dt, utcnow
-from ..storage.store import Store
+from ..storage import StoreProtocol
 from .hashchain import GENESIS_HASH, to_cef, verify_record
 
 log = get_logger("audit.chain")
@@ -35,6 +35,7 @@ AUDIT_ACTIONS: dict[str, str] = {
     "action.fail": "Échec d'une action",
     "rules.reload": "Rechargement de la bibliothèque de règles",
     "policies.reload": "Rechargement des politiques",
+    "anomaly.detected": "Anomalie statistique détectée (volume, cardinalité, source nouvelle)",
     "collector.run": "Exécution d'un collecteur",
     "auth.failure": "Échec d'authentification",
     "auth.success": "Authentification réussie",
@@ -51,7 +52,7 @@ class AuditChain:
     Toute action sensible passe par ici : jamais d'écriture directe dans ``audit_log``.
     """
 
-    def __init__(self, store: Store) -> None:
+    def __init__(self, store: StoreProtocol) -> None:
         self.store = store
 
     # ----------------------------------------------------------------------------------

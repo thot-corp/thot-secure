@@ -54,7 +54,7 @@ from ..core.models import (
 from ..core.util import expiry_from_now, iso_z, new_id, safe_int, utcnow
 from ..decision.engine import extract_targets, resolve_param_target
 from ..scope import TargetRegistry
-from ..storage.store import Store
+from ..storage import StoreProtocol
 from .executor import ExecutionOutcome, PlaybookExecutor
 from .registry import ConnectorRegistry
 
@@ -87,7 +87,7 @@ class ActionEngine:
 
     def __init__(
         self,
-        store: Store,
+        store: StoreProtocol,
         audit: AuditChain,
         playbooks: dict[str, Playbook],
         executor: PlaybookExecutor,
@@ -453,12 +453,20 @@ class ActionEngine:
             )
 
         playbook = self.playbooks.get(action.playbook)
-        outcome = self.executor.rollback(
-            playbook,
-            action.rollback.token,
-            context=self._execution_context(tenant, action),
-            dry_run=action.dry_run,
-        )
+        try:
+            outcome = self.executor.rollback(
+                playbook,
+                action.rollback.token,
+                context=self._execution_context(tenant, action),
+                dry_run=action.dry_run,
+            )
+        except PlaybookError as exc:
+            # Un playbook de rollback dont un placeholder ne se résout pas ne doit **pas** faire
+            # disparaître l'annulation ni remonter une erreur d'API : la contre-mesure est
+            # toujours en place, et l'opérateur doit pouvoir réessayer après correction.
+            # On enregistre donc l'échec, on conserve le jeton et `available`, et l'action
+            # reste dans un état depuis lequel `rollback` est autorisé.
+            return self._mark_rollback_failed(action, actor, actor_role, str(exc))
         result = outcome.to_dict()
         before = {"status": action.status, "rollback": action.rollback.model_dump(mode="json")}
         action.rollback.performed_at = utcnow()
@@ -658,6 +666,10 @@ class ActionEngine:
                 "risk_score": finding.risk_score if finding else 0.0,
                 "title": finding.title if finding else "",
                 "host": asset_host or "",
+                # `remediation` est **référencé par des playbooks livrés** (block-source-ip,
+                # isolate-host, qui le transmettent au ticket ou à la notification). L'omettre
+                # faisait échouer ces playbooks à l'exécution, sur un placeholder non résolu.
+                "remediation": finding.remediation if finding else "",
             },
             "action": {
                 "id": action.action_id,
@@ -720,6 +732,54 @@ class ActionEngine:
             extra={"tenant_id": action.tenant_id, "action_id": action.action_id, "error": error[:300]},
         )
         return action
+
+    def _mark_rollback_failed(
+        self, action: Action, actor: str, actor_role: str, error: str
+    ) -> Action:
+        """Enregistre une annulation **tentée et échouée**, sans perdre la capacité d'annuler.
+
+        Sémantique assumée, et c'est le point important : l'échec du rollback ne signifie pas
+        que l'action a échoué — la contre-mesure est **toujours appliquée**. Le statut passe
+        donc à ``failed`` (état depuis lequel une nouvelle annulation est autorisée), mais
+        ``rollback.available`` et le jeton sont **conservés** : sans cela, un placeholder mal
+        écrit dans un playbook de rollback priverait définitivement l'opérateur du seul moyen
+        de lever le blocage qu'il a lui-même posé.
+        """
+        result = {
+            "ok": False,
+            "error": error,
+            "steps": [],
+            "simulated": bool(action.dry_run),
+            "playbook": action.playbook,
+            "rollback_retryable": True,
+        }
+        before = {"status": action.status, "rollback": action.rollback.model_dump(mode="json")}
+        action.result = {**(action.result or {}), "rollback": result}
+        action.rollback.performed_at = utcnow()
+        action.rollback.result = result
+        action.rollback.available = True  # le jeton reste utilisable : l'annulation est à rejouer
+        action.reason = f"{action.reason} | rollback en échec: {error}"[:500]
+        log.error(
+            "annulation en échec, jeton conservé",
+            extra={
+                "tenant_id": action.tenant_id,
+                "action_id": action.action_id,
+                "error": error[:300],
+            },
+        )
+        return self._set_status(
+            action,
+            "failed",
+            actor=actor,
+            actor_role=actor_role,
+            audit_action="action.rollback",
+            before=before,
+            extra={
+                "rollback_result": result,
+                "rollback_performed_at": action.rollback.performed_at,
+            },
+            context={"rollback_failed": True, "error": error[:500]},
+        )
 
     def _notify(self, action: Action, event: str) -> None:
         if self.on_change is None:

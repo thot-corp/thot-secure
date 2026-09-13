@@ -9,6 +9,7 @@ from fastapi import APIRouter, Response
 
 from ... import __license__, __version__
 from ...core.util import iso_z, utcnow
+from ...storage import store_location
 from ..deps import PrincipalDep, ServiceDep
 from ...observability.metrics import METRICS_CATALOG
 from ...tenancy.rbac import ROLE_DESCRIPTIONS, capabilities_for, role_matrix
@@ -36,7 +37,13 @@ def readyz(service: ServiceDep, response: Response) -> dict[str, Any]:
     """
     checks: dict[str, Any] = {}
 
-    checks["database"] = {"ok": service.store.health(), "path": str(service.settings.db_path)}
+    # `path` reste le chemin du fichier en SQLite (comportement inchangé) et devient le DSN
+    # **masqué** sur PostgreSQL : un mot de passe ne doit jamais sortir par une sonde publique.
+    checks["database"] = {
+        "ok": service.store.health(),
+        "path": store_location(service.store),
+        "backend": service.store.backend_name,
+    }
     checks["bus"] = {"ok": True, "backend": service.bus.name, "started": service.bus.started}
     checks["rules"] = {
         "ok": bool(service.rules),

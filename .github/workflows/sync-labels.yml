@@ -36,13 +36,21 @@
 name: Sync labels
 
 on:
-  # A merged change to the taxonomy applies itself. The paths filter means an
-  # edit to this workflow alone does not trigger a sync.
+  # A merged change to the taxonomy applies itself.
+  #
+  # Le filtre inclut AUSSI ce fichier de workflow, et ce n'est pas un détail : un workflow
+  # ajouté au dépôt ne se déclenche pas pour le push qui l'ajoute. Constaté sur le premier
+  # push — « Sync labels » était enregistré et actif, mais avec **0 exécution**, donc aucun
+  # label n'existait. Conséquence en cascade : l'action de labellisation automatique échouait
+  # sur chaque Pull Request, faute de labels à appliquer.
+  # En incluant ce fichier, la modification du déclencheur provoque elle-même la première
+  # synchronisation — et toute modification ultérieure la rejoue (l'action est idempotente).
   push:
     branches:
       - main
     paths:
       - ".github/labels.yml"
+      - ".github/workflows/sync-labels.yml"
   workflow_dispatch:
     inputs:
       dry_run:

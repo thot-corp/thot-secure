@@ -80,21 +80,6 @@ Codes de sortie
 from __future__ import annotations
 import contextlib as _contextlib
 import sys as _sys
-# --- Sortie Unicode sûre ---------------------------------------------------------------
-# Sous Windows, une console en page de code cp1252 ne peut pas encoder « ✖ », « ✔ » ou « ─ » :
-# `print()` lève alors UnicodeEncodeError et le script sort en code 1 alors que le travail a
-# réussi. On force UTF-8 avec repli, sans jamais lever.
-def _configure_safe_output() -> None:
-    """Réglage d'encodage des flux standard (idempotent, sans effet hors Windows)."""
-    for stream in (_sys.stdout, _sys.stderr):
-        reconfigure = getattr(stream, "reconfigure", None)
-        if reconfigure is not None:
-            with _contextlib.suppress(Exception):
-                reconfigure(encoding="utf-8", errors="replace")
-
-
-_configure_safe_output()
-# ----------------------------------------------------------------------------------------
 
 import argparse
 import hashlib
@@ -116,6 +101,23 @@ from pathlib import Path
 from typing import Any
 from urllib import error as urlerror
 from urllib import request as urlrequest
+
+# --- Sortie Unicode sûre ---------------------------------------------------------------
+# Sous Windows, une console en page de code cp1252 ne peut pas encoder « ✖ », « ✔ » ou « ─ » :
+# `print()` lève alors UnicodeEncodeError et le script sort en code 1 alors que le travail a
+# réussi. On force UTF-8 avec repli, sans jamais lever.
+def _configure_safe_output() -> None:
+    """Réglage d'encodage des flux standard (idempotent, sans effet hors Windows)."""
+    for stream in (_sys.stdout, _sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            with _contextlib.suppress(Exception):
+                reconfigure(encoding="utf-8", errors="replace")
+
+
+_configure_safe_output()
+# ----------------------------------------------------------------------------------------
+
 
 __all__ = [
     "main",

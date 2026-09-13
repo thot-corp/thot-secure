@@ -130,8 +130,17 @@ thotsecure doctor
 |---|---|
 | Mode éditable | Le paquet `src/thotsecure` est installé par référence : vos modifications du code source sont prises en compte sans réinstallation. |
 | Point d'entrée | La commande `thotsecure` est créée dans le `venv` (`thotsecure = thotsecure.cli:main`). |
-| Dépendances | `pydantic`, `pydantic-settings`, `PyYAML`, `fastapi`, `uvicorn`, `Jinja2` sont installées depuis `pyproject.toml`. |
+| Dépendances | `pydantic`, `pydantic-settings`, `PyYAML`, `fastapi`, `uvicorn`, `Jinja2` et `python-multipart` sont installées depuis `pyproject.toml`. Cette dernière n'est pas un confort : les formulaires de la console embarquée utilisent `Form(...)`, et sans elle `import thotsecure.main` échoue — donc toute l'API avec. |
 | Données embarquées | Modèles de la console, CSS/JS et données livrées sont inclus dans le paquet (`package-data`). |
+
+**Extras facultatifs** — rien de ce qui suit n'est nécessaire au fonctionnement de base :
+
+| Extra | Commande | Ce qu'il apporte | Ce qui se passe sans lui |
+|---|---|---|---|
+| `postgres` | `pip install -e ".[postgres]"` | Adaptateur PostgreSQL/TimescaleDB (`psycopg` 3) | `THOT_DB_URL=postgresql://…` échoue avec un message indiquant la commande exacte ; SQLite reste pleinement fonctionnel |
+| `postgres-psycopg2` | `pip install -e ".[postgres-psycopg2]"` | Le même adaptateur avec `psycopg2`, disponible sur la plupart des distributions | idem |
+| `tls` | `pip install -e ".[tls]"` | Contrôle de la **taille de clé** des certificats (`cryptography`) | Le collecteur `tls_cert` contrôle toujours expiration, protocoles obsolètes et chaîne de certification, mais **n'évalue pas la force de la clé** — un contrôle en moins, silencieusement |
+| `dev` | `pip install -e ".[dev]"` | Tests, lint, typage (`pytest`, `ruff`, `mypy`, `httpx`) | Les tests ne sont pas exécutables |
 
 ### 3.4 Vérifier l'installation
 
