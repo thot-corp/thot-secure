@@ -22,6 +22,8 @@ from thotsecure import FUNDING_ADDRESSES
 from thotsecure.cli import EXIT_NEGATIVE, EXIT_OK, main
 from thotsecure.core.config import DEV_BOOTSTRAP_KEY, Settings
 from thotsecure.core.errors import ConfigError
+from thotsecure.storage.store import Store
+from thotsecure.tenancy.auth import ApiKeyService
 
 from .support import build_stack
 
@@ -72,6 +74,46 @@ class SettingsDefaultsTest(unittest.TestCase):
                 secret_key="x" * 40,
             )
 
+    def test_a_bootstrap_key_out_of_format_is_refused_at_configuration(self) -> None:
+        """Régression : un défaut hors format était enregistré puis refusé en 401 à chaque appel.
+
+        L'authentification découpe la clé en ``thot_<identifiant>_<secret>`` : une valeur d'un
+        autre format ne peut pas s'authentifier. Le refus doit donc arriver **ici**, avec le
+        format attendu, et non au premier appel d'API sous la forme d'un « format de clé
+        invalide » qui parle de la clé envoyée et jamais de celle qui est configurée.
+        """
+        for invalid in (
+            "ao_dev_local_change_me",  # l'ancien défaut public
+            "thot_BOOTSTRAP_court",  # secret trop court
+            "thot_a_b_c",  # trois soulignés
+            "sansprefixe_aaaaaaaaaaaaaaaaaaaa",
+        ):
+            with self.subTest(key=invalid), self.assertRaises(ConfigError):
+                Settings(root_dir=str(self._tmp), bootstrap_api_key=invalid, secret_key="x" * 40)
+
+    def test_the_shipped_default_bootstrap_key_is_in_a_usable_format(self) -> None:
+        """Le défaut public doit au moins pouvoir s'authentifier, sinon la démonstration casse."""
+        settings = self._settings()
+        self.assertEqual(DEV_BOOTSTRAP_KEY, settings.bootstrap_api_key)
+        split = ApiKeyService.split_key(settings.bootstrap_api_key)
+        self.assertIsNotNone(
+            split, "le défaut public n'a pas le format attendu : aucun appel d'API ne marcherait"
+        )
+        self.assertEqual("BOOTSTRAP", split[0])
+
+    def test_a_valid_custom_bootstrap_key_authenticates(self) -> None:
+        """Bout en bout : la clé d'amorçage configurée doit réellement ouvrir une session."""
+        key = "thot_BOOTSTRAP_unSecretDeSeizeCaracteres"
+        settings = self._settings(bootstrap_api_key=key)
+        store = Store(settings.db_path)
+        self.addCleanup(store.close)
+        store.init_schema()
+        service = ApiKeyService(store, settings)
+        service.bootstrap()
+        principal = service.authenticate(key)
+        self.assertEqual("admin", principal.role)
+        self.assertEqual(settings.demo_tenant, principal.tenant_id)
+
     def test_secret_key_is_persisted_and_shared_between_instances(self) -> None:
         """Sans persistance, chaque processus génère sa propre clé : les clés API créées en
         CLI deviendraient invérifiables par le serveur."""
@@ -98,11 +140,14 @@ class SettingsDefaultsTest(unittest.TestCase):
         self.assertEqual(Path("/tmp/absolu/thot.db").resolve(), absolute.db_path)
 
     def test_public_summary_never_leaks_secrets(self) -> None:
-        settings = self._settings(bootstrap_api_key="cle-secrete-de-test-abcdefghijkl")
+        # Clé volontairement distincte du défaut public, mais **au bon format** : une clé
+        # d'amorçage hors format est refusée à la configuration (elle ne pourrait de toute
+        # façon pas s'authentifier).
+        settings = self._settings(bootstrap_api_key="thot_TEST_cleSecreteDeTest123456")
         summary = settings.public_summary()
         rendered = str(summary)
         self.assertNotIn(settings.secret_key, rendered)
-        self.assertNotIn("cle-secrete-de-test", rendered)
+        self.assertNotIn("cleSecreteDeTest", rendered)
         self.assertIn("dry_run", summary)
         self.assertIn("unsafe_defaults", summary)
 

@@ -46,7 +46,7 @@ l'injection par l'orchestrateur ou un coffre de secrets.
 | `THOT_ENV` | `dev` | `dev` \| `prod` (durcit les défauts, masque les erreurs) |
 | `THOT_HOST` / `THOT_PORT` | `0.0.0.0` / `8080` | Écoute de `serve` |
 | `THOT_SECRET_KEY` | *généré + avertissement* | Pepper des clés API + signature |
-| `THOT_BOOTSTRAP_API_KEY` | `ao_dev_local_change_me` | Clé admin initiale — **à changer** |
+| `THOT_BOOTSTRAP_API_KEY` | `thot_BOOTSTRAP_changemebeforefirstuse` | Clé admin initiale — **à changer** |
 | `THOT_DB_URL` | `sqlite:///./data/thotsecure.db` | Persistance (SQLite en MVP) |
 | `THOT_RULES_DIR` | `./rules` | Bibliothèque de règles |
 | `THOT_POLICIES_DIR` | `./policies` | Politiques de décision |

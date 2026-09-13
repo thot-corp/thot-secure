@@ -49,7 +49,7 @@ Liste exhaustive et rôle détaillé : [`configuration.md`](configuration.md) et
 |---|---|---|
 | `THOT_ENV` | `dev` | Passez à `prod` : durcit les défauts et masque les erreurs. |
 | `THOT_SECRET_KEY` | *généré + avertissement* | **Définissez-la explicitement** en production (pepper des clés API + signature). |
-| `THOT_BOOTSTRAP_API_KEY` | `ao_dev_local_change_me` | ⚠️ Valeur publique : **à changer** avant toute exposition. |
+| `THOT_BOOTSTRAP_API_KEY` | `thot_BOOTSTRAP_changemebeforefirstuse` | ⚠️ Valeur publique : **à changer** avant toute exposition. |
 | `THOT_DRY_RUN` | `true` | Sécurité : aucune action réelle si `true`. |
 | `THOT_AUTONOMY` | `supervised` | `manual` \| `supervised` \| `auto` (défaut global, surchargeable par tenant). |
 | `THOT_DB_URL` | `sqlite:///./data/thotsecure.db` | Chemin **relatif au répertoire de travail**. |
@@ -526,7 +526,7 @@ kubectl -n thotsecure create secret generic thotsecure-secrets `
   --from-literal=THOT_SECRET_KEY="<clé-aléatoire-longue-générée-localement>"
 ```
 
-Changez également `THOT_BOOTSTRAP_API_KEY` (valeur par défaut publique `ao_dev_local_change_me`) et créez des clés nominatives : `thotsecure key create --tenant acme --role responder --label ci`.
+Changez également `THOT_BOOTSTRAP_API_KEY` (valeur par défaut publique `thot_BOOTSTRAP_changemebeforefirstuse`) et créez des clés nominatives : `thotsecure key create --tenant acme --role responder --label ci`.
 
 ### 8.3 Sondes
 
@@ -1020,7 +1020,7 @@ Remove-Item -Recurse -Force .\venv
 | Le port 8080 est déjà utilisé | Autre service (proxy, autre instance) | Linux : `ss -ltnp \| grep :8080` ; Windows : `netstat -ano \| findstr :8080` puis `Get-Process -Id <PID>`. Ou démarrez sur un autre port : `THOT_PORT=8081 thotsecure serve` / en PowerShell `$env:THOT_PORT="8081"; thotsecure serve`. |
 | `401 unauthenticated` | En-tête `X-API-Key` absent ou clé inconnue | Envoyez `X-API-Key: ao_…` ; recréez une clé si nécessaire (`thotsecure key create --tenant acme --role responder --label ci`). |
 | `403 forbidden` | Rôle sans la capacité requise | Vérifiez le rôle (`viewer` < `analyst` < `responder` < `admin`, contrat §4) ; créez une clé au bon rôle. |
-| Clé API par défaut encore active | `THOT_BOOTSTRAP_API_KEY=ao_dev_local_change_me` (valeur publique) | **Changez-la immédiatement**, créez des clés nominatives, révoquez l'ancienne (`thotsecure key revoke --key-id <id>`). |
+| Clé API par défaut encore active | `THOT_BOOTSTRAP_API_KEY=thot_BOOTSTRAP_changemebeforefirstuse` (valeur publique) | **Changez-la immédiatement**, créez des clés nominatives, révoquez l'ancienne (`thotsecure key revoke --key-id <id>`). |
 | Base non initialisée / erreurs de stockage | `thotsecure init-db` jamais exécuté, ou `data/` non inscriptible | `thotsecure init-db` ; vérifiez les droits du répertoire `data/` et la valeur de `THOT_DB_URL`. |
 | `/readyz` renvoie **503** | Échec d'un des trois contrôles : **DB**, **bus** ou **règles** | Vérifiez `thotsecure init-db` (DB), `THOT_BUS`/`THOT_NATS_URL` (bus), `THOT_RULES_DIR` et `thotsecure rules validate --path rules` (règles). |
 | Une action ne produit aucun effet | `THOT_DRY_RUN=true` (défaut) ou audit `simulated: true` | **Comportement attendu et voulu** (invariant 1). Le connecteur non configuré fonctionne en mode simulé. Ne désactivez le *dry-run* qu'après validation. |

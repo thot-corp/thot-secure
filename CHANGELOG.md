@@ -594,6 +594,15 @@ detection at all.
   `false-positive` and `type/security`), `dependencies` is declared, and
   `tests/test_github_metadata.py` cross-checks every consumer of a label against
   `.github/labels.yml` so the next mismatch fails the build instead of disappearing.
+- **The bootstrap API key could not authenticate, so the first documented journey did not
+  work.** Authentication splits a presented key into `thot_<key_id>_<secret>` to find the
+  record, but the shipped default was `ao_dev_local_change_me`: it was stored at bootstrap and
+  then rejected on **every** call with `401 format de clé API invalide`. The error message
+  talked about the key that was sent, never about the one that had been configured, so the
+  cause was invisible. The default is now `thot_BOOTSTRAP_changemebeforefirstuse`, the format is
+  **validated at configuration time** with the expected shape in the message, and two tests
+  cover it: an out-of-format key is refused at startup, and a valid custom key really does open
+  a session end to end.
 
 ### Security
 

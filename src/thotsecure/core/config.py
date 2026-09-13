@@ -28,7 +28,14 @@ BusBackend = Literal["memory", "sqlite", "nats"]
 LogFormat = Literal["json", "console"]
 
 #: Clé d'amorçage documentée : **développement uniquement**. Elle est refusée en prod.
-DEV_BOOTSTRAP_KEY = "ao_dev_local_change_me"
+#:
+#: Le format n'est pas décoratif : l'authentification découpe la clé en
+#: ``thot_<identifiant>_<secret>`` (exactement trois segments séparés par ``_``, secret d'au
+#: moins 16 caractères) pour retrouver l'enregistrement par identifiant. La valeur précédente,
+#: ``ao_dev_local_change_me``, ne respectait pas ce format : elle était donc stockée à
+#: l'amorçage puis **systématiquement refusée** en 401 « format de clé API invalide ». Le
+#: premier parcours documenté (créer un tenant, appeler l'API) ne fonctionnait pas.
+DEV_BOOTSTRAP_KEY = "thot_BOOTSTRAP_changemebeforefirstuse"
 
 DEFAULT_TENANT_SETTINGS: dict[str, Any] = {
     "mode": "supervised",
@@ -233,6 +240,34 @@ class Settings(BaseSettings):
             "'postgresql://' (backend PostgreSQL/TimescaleDB, extra 'postgres')"
             + (f" — reçu : '{rest[:24]}'" if rest else "")
         )
+
+    @field_validator("bootstrap_api_key")
+    @classmethod
+    def _validate_bootstrap_key(cls, value: str) -> str:
+        """Refuse ici une clé d'amorçage qui ne pourrait pas s'authentifier.
+
+        L'authentification découpe la clé présentée en ``thot_<identifiant>_<secret>`` pour
+        retrouver l'enregistrement : exactement trois segments, et un secret d'au moins 16
+        caractères. Une clé d'amorçage d'un autre format est stockée à l'initialisation puis
+        refusée en 401 à chaque appel — l'exploitant voit un « format de clé API invalide »
+        alors que la valeur vient de sa propre configuration.
+
+        Mieux vaut un refus au démarrage, avec le format attendu, qu'un 401 inexplicable au
+        premier appel.
+        """
+        parts = (value or "").split("_")
+        if len(parts) != 3 or parts[0] != "thot":
+            raise ConfigError(
+                "THOT_BOOTSTRAP_API_KEY doit être au format 'thot_<identifiant>_<secret>' "
+                "(exactement deux caractères de soulignement), p. ex. "
+                "'thot_BOOTSTRAP_unSecretDeSeizeCaracteres'"
+            )
+        if len(parts[2]) < 16:
+            raise ConfigError(
+                "THOT_BOOTSTRAP_API_KEY : le secret doit faire au moins 16 caractères "
+                "(contrainte du format de clé API)"
+            )
+        return value
 
     @field_validator("db_sslmode")
     @classmethod

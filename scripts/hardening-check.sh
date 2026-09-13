@@ -66,7 +66,7 @@ readonly SERVICE_GROUP="thotsecure"
 readonly EXIT_USAGE=2
 readonly EXIT_VERIFY=3
 #: Clé d'amorçage publique livrée en développement : présente en production = alerte.
-readonly DEV_BOOTSTRAP_KEY="ao_dev_local_change_me"
+readonly DEV_BOOTSTRAP_KEY="thot_BOOTSTRAP_changemebeforefirstuse"
 
 # -----------------------------------------------------------------------------
 # 3. Options

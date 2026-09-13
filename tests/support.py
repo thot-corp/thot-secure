@@ -616,7 +616,7 @@ def build_stack(
         dry_run=dry_run,
         autonomy=tenant_mode,  # type: ignore[arg-type]
         secret_key="test-secret-key-not-for-production-use-only-0123456789",
-        bootstrap_api_key="ao_dev_local_change_me",
+        bootstrap_api_key="thot_BOOTSTRAP_changemebeforefirstuse",
         bus="memory",
         log_level="WARNING",
         log_format="console",

@@ -472,7 +472,7 @@ Codes de sortie : `0` succès, `1` erreur, `2` usage, `3` vérification négativ
 | `THOT_ROOT_DIR` | `.` | Racine de résolution des chemins relatifs (jamais le CWD du processus) |
 | `THOT_HOST` / `THOT_PORT` | `0.0.0.0` / `8080` | Écoute |
 | `THOT_SECRET_KEY` | *persistée dans `data/secret.key`, sinon éphémère + avertissement* | Poivre des clés API + signature des sessions. **Doit être partagée entre processus.** |
-| `THOT_BOOTSTRAP_API_KEY` | `ao_dev_local_change_me` | Clé admin initiale (⚠️ à changer) |
+| `THOT_BOOTSTRAP_API_KEY` | `thot_BOOTSTRAP_changemebeforefirstuse` | Clé admin initiale (⚠️ à changer) |
 | `THOT_SESSION_TTL_SECONDS` | `28800` | Durée de vie d'une session de console |
 | `THOT_DB_URL` | `sqlite:///./data/thotsecure.db` | `sqlite://` (aucune dépendance) ou `postgresql://` / `postgresql+psycopg://` (extra `postgres`, pilote `psycopg` 3 ou `psycopg2`) |
 | `THOT_DB_SSLMODE` | *(vide = automatique : `prefer` hors prod, `require` en `prod`)* | `disable` \| `allow` \| `prefer` \| `require` \| `verify-ca` \| `verify-full` — PostgreSQL uniquement |

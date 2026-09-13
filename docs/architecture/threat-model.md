@@ -149,7 +149,7 @@ flowchart TB
 | Acteur | Motivation | Capacité | Menaces principales |
 |---|---|---|---|
 | **Attaquant externe** | Intrusion, déni de service | Requêtes HTTP, payloads malveillants, éventuellement compte volé | Poisoning de détection, XSS stocké, saturation d'ingestion, déclenchement de blocages |
-| **Attaquant opportuniste** | Scan, recherche de faiblesse | Connaît les défauts d'installation (`ao_dev_local_change_me`, `0.0.0.0`) | Prise de contrôle administrative, actions arbitraires |
+| **Attaquant opportuniste** | Scan, recherche de faiblesse | Connaît les défauts d'installation (`thot_BOOTSTRAP_changemebeforefirstuse`, `0.0.0.0`) | Prise de contrôle administrative, actions arbitraires |
 | **Initié malveillant** | Sabotage, dissimulation, vengeance | Compte valide à faible privilège, parfois lecture des fichiers | Suppression de règle, suppression de trace, approbation abusive |
 | **Opérateur négligent** | Gagner du temps | Accès légitime complet | `DRY_RUN=false` prématuré, `AUTONOMY=auto` sans revue, périmètre élargi, secrets committés |
 | **Source de logs non maîtrisée** | — | Émet du contenu qu'elle contrôle (User-Agent, chemin, corps) | Injection de contenu affiché, ReDoS, saturation |

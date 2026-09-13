@@ -531,7 +531,7 @@ Ce sont **deux procédures distinctes**, à ne pas confondre.
 
 ### 5.2 `THOT_BOOTSTRAP_API_KEY`
 
-Le défaut `ao_dev_local_change_me` (§9) est **public** : il doit être remplacé avant toute exposition réseau. Créez ensuite des clés nominatives par usage et par personne ; révoquez la clé d'amorçage dès que les clés nominatives sont en place.
+Le défaut `thot_BOOTSTRAP_changemebeforefirstuse` (§9) est **public** : il doit être remplacé avant toute exposition réseau. Créez ensuite des clés nominatives par usage et par personne ; révoquez la clé d'amorçage dès que les clés nominatives sont en place.
 
 ### 5.3 Rotation de `THOT_SECRET_KEY` : procédure prudente
 
@@ -736,7 +736,7 @@ Pour chaque alerte, la conduite à tenir est décrite dans [`runbook.md`](runboo
 - [ ] `THOT_ENV=prod` (durcit les défauts, masque les erreurs)
 - [ ] `THOT_DRY_RUN=true` **au départ** — levée explicite, tenant par tenant, après validation
 - [ ] `THOT_AUTONOMY=supervised` (jamais `auto` dès le premier jour)
-- [ ] `THOT_BOOTSTRAP_API_KEY` remplacée (le défaut `ao_dev_local_change_me` est public)
+- [ ] `THOT_BOOTSTRAP_API_KEY` remplacée (le défaut `thot_BOOTSTRAP_changemebeforefirstuse` est public)
 - [ ] `THOT_SECRET_KEY` définie (générée) **et** sauvegardée dans un coffre séparé de la base
 - [ ] TLS actif : `THOT_TLS_ENABLED=true` ou terminaison par un reverse-proxy
 - [ ] `/metrics` restreint au réseau interne

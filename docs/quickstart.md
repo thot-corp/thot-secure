@@ -121,7 +121,7 @@ Conservez la valeur `ao_…` retournée. Rôles disponibles : `viewer`, `analyst
 
 !!! tip "Différence entre clé de démarrage et clé de travail"
 
-    `THOT_BOOTSTRAP_API_KEY` (défaut : `ao_dev_local_change_me`) est une clé
+    `THOT_BOOTSTRAP_API_KEY` (défaut : `thot_BOOTSTRAP_changemebeforefirstuse`) est une clé
     d'amorçage destinée au tout premier accès. **Changez-la** et utilisez des clés
     nominatives par usage, avec le rôle minimal nécessaire.
 

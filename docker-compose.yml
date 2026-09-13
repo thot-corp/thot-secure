@@ -70,7 +70,7 @@ services:
       # Obligatoire : Compose échoue avec un message explicite si absent.
       THOT_SECRET_KEY: "${THOT_SECRET_KEY:?THOT_SECRET_KEY est obligatoire (openssl rand -hex 32). Voir l'en-tete de docker-compose.yml.}"
       # Clé admin initiale : à créer puis à faire tourner immédiatement.
-      THOT_BOOTSTRAP_API_KEY: "${THOT_BOOTSTRAP_API_KEY:?THOT_BOOTSTRAP_API_KEY est obligatoire et ne doit jamais rester 'ao_dev_local_change_me'.}"
+      THOT_BOOTSTRAP_API_KEY: "${THOT_BOOTSTRAP_API_KEY:?THOT_BOOTSTRAP_API_KEY est obligatoire et ne doit jamais rester 'thot_BOOTSTRAP_changemebeforefirstuse'.}"
       # --- Persistance SQLite (stdlib sqlite3, aucun SGBD externe) -----------
       THOT_DB_URL: "sqlite:////var/lib/thotsecure/thotsecure.db"
       THOT_RETENTION_DAYS: "${THOT_RETENTION_DAYS:-30}"

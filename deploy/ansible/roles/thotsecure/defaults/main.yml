@@ -107,7 +107,7 @@ thotsecure_generate_secret_key: true
 
 # Clé d'amorçage de l'API (rôle bootstrap). Laissez vide : le rôle génère une
 # valeur aléatoire ao_<48 hex> au premier passage plutôt que d'utiliser le
-# défaut de développement « ao_dev_local_change_me ». Une valeur non vide ici
+# défaut de développement « thot_BOOTSTRAP_changemebeforefirstuse ». Une valeur non vide ici
 # doit provenir d'un vault.
 thotsecure_bootstrap_api_key: ""
 thotsecure_generate_bootstrap_api_key: true

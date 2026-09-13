@@ -56,7 +56,7 @@ sûreté » indique ce qu'une erreur de réglage peut coûter.
 | `THOT_HOST` | `0.0.0.0` | adresse IP | Interface d'écoute | **Élevé** — `0.0.0.0` expose le service sur **toutes** les interfaces. Derrière un reverse-proxy, préférez `127.0.0.1` ou une interface interne |
 | `THOT_PORT` | `8080` | entier | Port d'écoute | Faible — purement fonctionnel, à aligner avec le pare-feu et le proxy |
 | `THOT_SECRET_KEY` | *généré, avec avertissement* | chaîne secrète | **Pepper des clés API** et matériel de signature | **Critique** — s'il est généré au démarrage, les clés API deviennent invalides à chaque redémarrage ; s'il fuite, un attaquant peut tenter de retrouver des clés API hachées. **À définir explicitement en production, à stocker dans un coffre, à sauvegarder séparément de la base** |
-| `THOT_BOOTSTRAP_API_KEY` | `ao_dev_local_change_me` | chaîne secrète | Clé administrateur initiale | **Critique** — une valeur publique par défaut. À changer **avant** toute exposition réseau, sous peine de compromission immédiate |
+| `THOT_BOOTSTRAP_API_KEY` | `thot_BOOTSTRAP_changemebeforefirstuse` | chaîne secrète | Clé administrateur initiale | **Critique** — une valeur publique par défaut. À changer **avant** toute exposition réseau, sous peine de compromission immédiate |
 | `THOT_DB_URL` | `sqlite:///./data/thotsecure.db` | URL | Base de données : `sqlite://` (défaut, aucune dépendance) ou `postgresql://…` (extra `postgres`) | **Élevé** — la base contient les événements, les findings et le journal d'audit : elle doit être sur un disque chiffré, avec des droits restreints. En PostgreSQL, `sslmode=require` est appliqué par défaut en `prod` |
 | `THOT_DB_SSLMODE` | *(vide = automatique)* | `disable` \| `allow` \| `prefer` \| `require` \| `verify-ca` \| `verify-full` | Chiffrement de la liaison à PostgreSQL | **Critique** — `disable` fait circuler en clair des journaux d'audit et des findings ; `require` chiffre sans vérifier le certificat serveur ; seul `verify-full` protège aussi contre une interception active. *Sans objet en SQLite* |
 | `THOT_DB_POOL_MAX_SIZE` | `8` | entier | Nombre maximal de connexions PostgreSQL | **Moyen** — un pool trop large ne rend pas le service plus rapide : il sature le serveur de base, qui est le vrai goulot. *Sans objet en SQLite* |
@@ -77,10 +77,28 @@ sûreté » indique ce qu'une erreur de réglage peut coûter.
 
 !!! warning "Une variable oubliée n'est pas anodine"
 
-    Le défaut `THOT_BOOTSTRAP_API_KEY=ao_dev_local_change_me` et le défaut
+    Le défaut `THOT_BOOTSTRAP_API_KEY=thot_BOOTSTRAP_changemebeforefirstuse` et le défaut
     `THOT_HOST=0.0.0.0` se cumulent dangereusement : un service exposé avec la clé
     d'amorçage publique est une compromission, pas un risque. **La première action après
     l'installation est de changer cette clé.**
+
+!!! danger "Le format de `THOT_BOOTSTRAP_API_KEY` est contraint, et c'est vérifié au démarrage"
+
+    L'authentification découpe la clé présentée en `thot_<identifiant>_<secret>` pour retrouver
+    l'enregistrement : **exactement deux caractères de soulignement**, et un secret d'au moins
+    16 caractères. Une valeur hors format est refusée à la configuration, avec le format
+    attendu dans le message.
+
+    ```bash
+    THOT_BOOTSTRAP_API_KEY=thot_BOOTSTRAP_unSecretDeSeizeCaracteres   # correct
+    ```
+
+    Pourquoi ce contrôle existe : le défaut livré auparavant (`ao_dev_local_change_me`) ne
+    respectait pas ce format. Il était donc bien enregistré à l'initialisation, puis
+    **systématiquement refusé** en `401 format de clé API invalide` — le tout premier parcours
+    documenté (créer un tenant, appeler l'API, ingérer un événement) ne fonctionnait pas, et le
+    message d'erreur parlait du format de la clé envoyée, jamais de celle qui avait été
+    configurée.
 
 ### Détection d'anomalie statistique (désactivée par défaut)
 
@@ -259,7 +277,8 @@ THOT_PORT=8080
 
 # --- Secrets (à sortir d'ici et à mettre dans un coffre si possible) --------
 THOT_SECRET_KEY=remplacez-par-une-valeur-aleatoire-de-32-octets-minimum
-THOT_BOOTSTRAP_API_KEY=remplacez-egalement-cette-valeur
+# Format obligatoire : thot_<identifiant>_<secret de 16 caractères minimum>.
+THOT_BOOTSTRAP_API_KEY=thot_BOOTSTRAP_remplacezCeSecretParLeVotre
 
 # --- Données ---------------------------------------------------------------
 THOT_DB_URL=sqlite:///./data/thotsecure.db

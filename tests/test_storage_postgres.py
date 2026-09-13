@@ -74,7 +74,7 @@ def make_settings(root: Path, **overrides: Any) -> Settings:
     base: dict[str, Any] = {
         "root_dir": str(root),
         "secret_key": "cle-de-test-uniquement-0123456789abcdefghijklmnop",
-        "bootstrap_api_key": "ao_test_key_not_the_public_default",
+        "bootstrap_api_key": "thot_TEST_notThePublicDefault1234",
         "log_level": "WARNING",
         "log_format": "console",
     }
