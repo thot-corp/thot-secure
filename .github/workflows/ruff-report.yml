@@ -1,0 +1,53 @@
+# Workflow TEMPORAIRE — à supprimer après usage.
+#
+# Objet : vérifier `ruff check` et `ruff format --check` sans pouvoir installer ruff sur la
+# machine de développement (aucun accès à PyPI). Ce workflow ne modifie RIEN : il lit, il
+# compte, il imprime la liste exacte des diagnostics restants. C'est un rapport, pas une
+# réécriture — un workflow qui réécrit du code sans revue n'a rien à faire dans un produit de
+# sécurité.
+
+name: Ruff report (temporary)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  report:
+    name: Report remaining ruff diagnostics
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install ruff
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install ruff
+          ruff --version
+
+      - name: ruff check --statistics
+        run: |
+          echo "=====BEGIN-STATS====="
+          ruff check --statistics . || true
+          echo "=====END-STATS====="
+
+      - name: ruff check (concise)
+        run: |
+          echo "=====BEGIN-CHECK====="
+          ruff check --output-format=concise . || true
+          echo "=====END-CHECK====="
+
+      - name: ruff format --check
+        run: |
+          echo "=====BEGIN-FORMAT====="
+          ruff format --check .
+          echo "=====END-FORMAT====="
