@@ -25,7 +25,7 @@ from .core.models import Action, Decision, Event, Finding, IngestResult, Tenant
 from .core.util import iso_z, utcnow
 from .decision.engine import DecisionContext, DecisionEngine, extract_targets
 from .detection.engine import DetectionEngine
-from .storage.store import Store
+from .storage import StoreProtocol
 
 log = get_logger("pipeline")
 
@@ -59,7 +59,7 @@ class Pipeline:
 
     def __init__(
         self,
-        store: Store,
+        store: StoreProtocol,
         audit: AuditChain,
         engine: DetectionEngine,
         decision_engine: DecisionEngine,
@@ -67,6 +67,7 @@ class Pipeline:
         *,
         settings: Settings,
         bus: EventBus | None = None,
+        anomaly: Any | None = None,
     ) -> None:
         self.store = store
         self.audit = audit
@@ -75,10 +76,13 @@ class Pipeline:
         self.action_engine = action_engine
         self.settings = settings
         self.bus = bus
+        #: Détecteur d'anomalie statistique, ou ``None`` s'il est désactivé (défaut).
+        self.anomaly = anomaly
         self.processed_events = 0
         self.created_findings = 0
         self.updated_findings = 0
         self.triggered_actions = 0
+        self.anomaly_events = 0
         self.errors = 0
         self._worker_task: asyncio.Task[None] | None = None
 
@@ -192,7 +196,12 @@ class Pipeline:
     # ----------------------------------------------------------------------------------
 
     def process_event(self, event: Event) -> ProcessResult:
-        """Détecte, score, décide et agit pour un événement."""
+        """Détecte, score, décide et agit pour un événement.
+
+        Ordre volontaire : les règles déterministes d'abord, l'analyse statistique ensuite.
+        Une détection certaine (motif d'attaque identifié) ne doit pas attendre un calcul de
+        moyenne mobile, et un signal d'anomalie ne doit jamais retarder une règle.
+        """
         result = ProcessResult(event_id=event.event_id)
         bind_context(tenant_id=event.tenant_id, event_id=event.event_id)
         try:
@@ -201,22 +210,8 @@ class Pipeline:
                 result.error = f"tenant inconnu: {event.tenant_id}"
                 return result
 
-            matches = self.engine.evaluate(event)
-            for match in matches:
-                finding = self._upsert_finding(match, tenant)
-                result.findings.append(finding)
-
-                decision = self._decide(finding, tenant)
-                result.decisions.append(decision)
-
-                action = self.action_engine.from_decision(
-                    tenant=tenant,
-                    finding=finding,
-                    decision=decision,
-                )
-                if action is not None:
-                    result.actions.append(action)
-                    self.triggered_actions += 1
+            self._react_to(event, tenant, result)
+            self._process_anomalies(event, tenant, result)
 
             self.processed_events += 1
             self.store.mark_events_processed([event.event_id])
@@ -229,6 +224,68 @@ class Pipeline:
                 exc_info=True,
             )
         return result
+
+    def _react_to(self, event: Event, tenant: Tenant, result: ProcessResult) -> None:
+        """Applique le moteur de règles à un événement, puis décide et agit.
+
+        Cette méthode est partagée entre l'événement d'origine et les événements d'anomalie :
+        un signal statistique suit donc **exactement** le même chemin (règle → scoring →
+        décision → garde-fous → audit) qu'un événement de journal. Aucune voie parallèle,
+        aucun garde-fou contourné.
+        """
+        for match in self.engine.evaluate(event):
+            finding = self._upsert_finding(match, tenant)
+            result.findings.append(finding)
+
+            decision = self._decide(finding, tenant)
+            result.decisions.append(decision)
+
+            action = self.action_engine.from_decision(
+                tenant=tenant,
+                finding=finding,
+                decision=decision,
+            )
+            if action is not None:
+                result.actions.append(action)
+                self.triggered_actions += 1
+
+    def _process_anomalies(self, event: Event, tenant: Tenant, result: ProcessResult) -> None:
+        """Analyse statistique de l'événement et traitement des signaux produits.
+
+        Le détecteur est optionnel (désactivé par défaut) et ne lève jamais. Les événements
+        d'anomalie sont **persistés** au même titre que les autres : un signal qui n'existe
+        que dans la mémoire du processus n'est pas une preuve, et l'analyste doit pouvoir
+        reconstituer ce que le détecteur a vu.
+        """
+        if self.anomaly is None:
+            return
+        # Une anomalie ne s'analyse pas elle-même : cela créerait une boucle de rétroaction
+        # (une anomalie de cardinalité en engendrerait d'autres indéfiniment).
+        if event.source.type == "baseline" or event.kind == "anomaly":
+            return
+
+        for signal in self.anomaly.observe(event):
+            anomaly_event = signal.to_event(source_event=event)
+            if not self.store.insert_event(anomaly_event):
+                continue
+            self.anomaly_events += 1
+            self.audit.record(
+                tenant_id=tenant.tenant_id,
+                actor="system:anomaly-detector",
+                actor_role="system",
+                action="anomaly.detected",
+                target={"type": "event", "id": anomaly_event.event_id},
+                after={
+                    "check": signal.check,
+                    "entity": signal.entity,
+                    "observed": round(signal.observed, 3),
+                    "expected": round(signal.expected, 3),
+                    "zscore": round(signal.zscore, 3),
+                    "severity_hint": signal.severity_hint,
+                },
+                context={"source_event_id": event.event_id, "method": "ewma_zscore"},
+            )
+            self._react_to(anomaly_event, tenant, result)
 
     def _upsert_finding(self, match: Any, tenant: Tenant) -> Finding:
         """Crée ou rafraîchit le finding correspondant à une correspondance de règle."""
@@ -408,9 +465,11 @@ class Pipeline:
             "created_findings": self.created_findings,
             "updated_findings": self.updated_findings,
             "triggered_actions": self.triggered_actions,
+            "anomaly_events": self.anomaly_events,
             "errors": self.errors,
             "detection": self.engine.stats(),
             "decision": self.decision_engine.stats(),
+            "anomaly": self.anomaly.stats() if self.anomaly is not None else {"enabled": False},
             "max_batch": MAX_BATCH,
         }
 

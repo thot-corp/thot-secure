@@ -1,0 +1,49 @@
+id: AO-ANO-004
+title: Pic du nombre de sources distinctes (signature d'une attaque distribuée)
+description: >-
+  Le nombre d'adresses distinctes observées en une minute dépasse nettement l'habitude du
+  tenant. C'est la signature d'une attaque répartie (bourrage d'identifiants distribué,
+  aspiration de contenu, déni de service applicatif) — et un schéma qu'aucune règle fondée sur
+  une adresse unique ne peut détecter.
+status: stable
+severity: high
+confidence: 0.65
+enabled: true
+tags: [anomaly, distributed-attack, statistique, mitre:T1498]
+source_types: [baseline]
+kinds: [anomaly]
+match:
+  all:
+    - field: labels.check
+      op: eq
+      value: source_cardinality_anomaly
+    - field: labels.zscore
+      op: gte
+      value: 8
+    - field: labels.zscore
+      op: lt
+      value: 20
+  # Pas de seuil de répétition : le signal porte sur un intervalle entier (cf. AO-ANO-001).
+dedup:
+  key: [labels.host]
+  ttl_seconds: 3600
+risk:
+  base: 60
+false_positives:
+  - >-
+    Événement à forte audience (campagne, publication virale, passage dans un média) : le
+    nombre de sources explose légitimement. La corrélation avec les codes de réponse et les
+    chemins demandés permet de distinguer une audience d'une attaque.
+  - >-
+    Déploiement d'un nouveau service, changement de DNS ou bascule de CDN : la population de
+    sources change d'un coup, sans attaque.
+  - >-
+    Sortie d'un robot d'indexation qui répartit ses requêtes sur de nombreuses adresses.
+remediation: >-
+  Vérifier la répartition des codes de réponse (un pic de 401/403 sur une route
+  d'authentification évoque un bourrage d'identifiants ; un pic de 200 sur des pages de
+  contenu évoque une aspiration), puis appliquer une limitation de débit **globale** plutôt
+  que par adresse — bloquer une seule source d'une attaque distribuée ne sert à rien.
+  Vérifier simultanément l'état des ressources (CPU, base de données, latence applicative).
+references:
+  - https://attack.mitre.org/techniques/T1498/

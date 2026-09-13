@@ -1,0 +1,22 @@
+version: 1
+id: notify-distributed-anomaly
+priority: 175
+description: >-
+  Anomalie de cardinalité (attaque distribuée probable) : Thot Secure **ne bloque pas** de
+  lui-même. Bloquer une adresse unique face à des centaines de sources serait inutile, et
+  bloquer une plage entière risquerait de couper des clients légitimes (les attaques réparties
+  utilisent souvent des adresses compromises). La bonne réponse est humaine et globale :
+  l'outil ouvre un ticket avec les éléments de décision.
+when:
+  finding.tags_any: [distributed-attack]
+then:
+  decision: notify_only
+  playbook: open-ticket
+  params:
+    title: "Anomalie de cardinalité : ${finding.title}"
+    severity: high
+    description: "${finding.remediation}"
+    remediation: >-
+      Vérifier la répartition des codes de réponse et des chemins, activer une limitation de
+      débit globale, contrôler la disponibilité des dépendances, puis décider d'une réponse
+      réseau éventuelle.

@@ -1,7 +1,16 @@
-"""Moteur de détection : règles YAML, opérateurs, seuils, compatibilité Sigma-lite."""
+"""Moteur de détection : règles YAML, opérateurs, seuils, compatibilité Sigma-lite,
+et détection d'anomalie statistique (EWMA + z-score)."""
 
 from __future__ import annotations
 
+from .anomaly import (
+    CHECK_CARDINALITY,
+    CHECK_NEW_SOURCE,
+    CHECK_RATE,
+    AnomalyDetector,
+    AnomalySignal,
+    build_detector,
+)
 from .engine import CompiledRule, DetectionEngine, MatchResult
 from .matchers import (
     RegexTooComplexError,
@@ -22,12 +31,18 @@ from .rule_loader import (
 )
 
 __all__ = [
+    "CHECK_CARDINALITY",
+    "CHECK_NEW_SOURCE",
+    "CHECK_RATE",
     "RULE_SUFFIXES",
+    "AnomalyDetector",
+    "AnomalySignal",
     "CompiledRule",
     "DetectionEngine",
     "MatchResult",
     "RegexTooComplexError",
     "RuleLoadError",
+    "build_detector",
     "compile_regex",
     "condition_is_coherent",
     "dump_rule",

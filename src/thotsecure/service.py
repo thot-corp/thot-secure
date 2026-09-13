@@ -38,10 +38,11 @@ from .decision.engine import DecisionEngine
 from .decision.opa import OpaEvaluator
 from .decision.policy_loader import load_policies_from_dir
 from .detection.engine import DetectionEngine
+from .detection.anomaly import build_detector
 from .detection.rule_loader import load_rules_from_dir
 from .pipeline import Pipeline
 from .scope import TargetRegistry
-from .storage.store import Store
+from .storage import StoreProtocol, create_store
 from .tenancy.auth import ApiKeyService
 
 log = get_logger("service")
@@ -55,7 +56,7 @@ class Service:
     """Conteneur de services applicatifs."""
 
     settings: Settings
-    store: Store
+    store: StoreProtocol
     audit: AuditChain
     targets: TargetRegistry
     connectors: ConnectorRegistry
@@ -387,11 +388,16 @@ def build_service(settings: Settings | None = None) -> Service:
     configure_logging(settings.log_level, settings.log_format)
     settings.ensure_directories()
 
-    store = Store(settings.db_path)
-    store.init_schema()
+    # Le magasin est choisi par la fabrique, d'après `THOT_DB_URL` : SQLite par défaut,
+    # PostgreSQL/TimescaleDB si l'URL le demande. Le schéma est appliqué par `create_store`
+    # (idempotent) : il n'y a donc **aucun** endroit où un déploiement PostgreSQL pourrait se
+    # retrouver silencieusement avec un magasin SQLite.
+    store = create_store(settings)
     audit = AuditChain(store)
     targets = TargetRegistry.from_file(settings.targets_path)
-    connectors = ConnectorRegistry.from_file(settings.connectors_path, dry_run=settings.dry_run)
+    connectors = ConnectorRegistry.from_file(
+        settings.connectors_path, dry_run=settings.dry_run, root_dir=settings.root_path
+    )
 
     rules, rule_diagnostics = load_rules_from_dir(settings.rules_path)
     playbooks, playbook_diagnostics = load_playbooks_from_dir(settings.playbooks_path)
@@ -402,6 +408,20 @@ def build_service(settings: Settings | None = None) -> Service:
         log.error("élément de configuration rejeté", extra={"path": diagnostic.path, "error": diagnostic.error})
 
     detection = DetectionEngine(rules)
+    #: Détecteur d'anomalie statistique : construit uniquement s'il est activé. Il complète
+    #: les règles déterministes (motifs connus) par la détection d'écarts de volume, de
+    #: sources nouvelles et d'attaques distribuées — sans changer le chemin de traitement.
+    anomaly = build_detector(settings)
+    if anomaly is not None:
+        log.info(
+            "détection d'anomalie activée",
+            extra={
+                "bucket_seconds": anomaly.bucket_seconds,
+                "warmup_samples": anomaly.warmup_samples,
+                "zscore_threshold": anomaly.zscore_threshold,
+                "entity_fields": anomaly.entity_fields,
+            },
+        )
     decision = DecisionEngine(store, policies, settings=settings, registry=targets)
     executor = PlaybookExecutor(connectors, dry_run=settings.dry_run)
     actions = ActionEngine(
@@ -415,7 +435,16 @@ def build_service(settings: Settings | None = None) -> Service:
     )
     keys = ApiKeyService(store, settings, audit)
     bus = create_bus(settings, store)
-    pipeline = Pipeline(store, audit, detection, decision, actions, settings=settings, bus=bus)
+    pipeline = Pipeline(
+        store,
+        audit,
+        detection,
+        decision,
+        actions,
+        settings=settings,
+        bus=bus,
+        anomaly=anomaly,
+    )
 
     metrics = MetricsRegistry()
     register_catalog(metrics)

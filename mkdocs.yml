@@ -191,6 +191,7 @@ nav:
   - Détection:
       - Écrire une règle: detection/rules.md
       - Compatibilité Sigma-lite: detection/sigma.md
+      - Détection d'anomalie statistique: detection/anomaly.md
   - Décision:
       - Politiques (policy-as-code): decision/policies.md
   - Réponse (SOAR):

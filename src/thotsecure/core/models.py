@@ -49,6 +49,7 @@ EventKind = Literal[
     "dependency",
     "config.audit",
     "syslog",
+    "anomaly",
     "generic",
 ]
 SourceType = Literal[
@@ -59,6 +60,7 @@ SourceType = Literal[
     "syslog",
     "tls_cert",
     "config_audit",
+    "baseline",
     "manual",
     "demo",
 ]

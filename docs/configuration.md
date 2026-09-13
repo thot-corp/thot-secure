@@ -43,8 +43,12 @@ Kubernetes se relit en revue, se versionne et se compare entre environnements.
 
 ## Tableau exhaustif des variables `THOT_*`
 
-Les vingt variables du contrat d'interface (section 9). La colonne « impact sûreté » indique
-ce qu'une erreur de réglage peut coûter.
+Les variables les plus courantes, celles dont une erreur de réglage se paie en production. La
+liste **exhaustive et faisant foi** est la
+[section 9 du contrat d'interface](architecture/api-contract.md#9-variables-denvironnement) ;
+les variables avancées (détection d'anomalie, bus, rétention séparée, TLS direct…) y sont
+détaillées et reprises plus bas quand leur réglage a un impact sûreté. La colonne « impact
+sûreté » indique ce qu'une erreur de réglage peut coûter.
 
 | Variable | Défaut | Type | Rôle | Impact sûreté |
 |---|---|---|---|---|
@@ -53,7 +57,9 @@ ce qu'une erreur de réglage peut coûter.
 | `THOT_PORT` | `8080` | entier | Port d'écoute | Faible — purement fonctionnel, à aligner avec le pare-feu et le proxy |
 | `THOT_SECRET_KEY` | *généré, avec avertissement* | chaîne secrète | **Pepper des clés API** et matériel de signature | **Critique** — s'il est généré au démarrage, les clés API deviennent invalides à chaque redémarrage ; s'il fuite, un attaquant peut tenter de retrouver des clés API hachées. **À définir explicitement en production, à stocker dans un coffre, à sauvegarder séparément de la base** |
 | `THOT_BOOTSTRAP_API_KEY` | `ao_dev_local_change_me` | chaîne secrète | Clé administrateur initiale | **Critique** — une valeur publique par défaut. À changer **avant** toute exposition réseau, sous peine de compromission immédiate |
-| `THOT_DB_URL` | `sqlite:///./data/thotsecure.db` | URL | Base de données (`sqlite://` pour le MVP ; PostgreSQL/TimescaleDB documenté) | **Élevé** — la base contient les événements, les findings et le journal d'audit : elle doit être sur un disque chiffré, avec des droits restreints |
+| `THOT_DB_URL` | `sqlite:///./data/thotsecure.db` | URL | Base de données : `sqlite://` (défaut, aucune dépendance) ou `postgresql://…` (extra `postgres`) | **Élevé** — la base contient les événements, les findings et le journal d'audit : elle doit être sur un disque chiffré, avec des droits restreints. En PostgreSQL, `sslmode=require` est appliqué par défaut en `prod` |
+| `THOT_DB_SSLMODE` | *(vide = automatique)* | `disable` \| `allow` \| `prefer` \| `require` \| `verify-ca` \| `verify-full` | Chiffrement de la liaison à PostgreSQL | **Critique** — `disable` fait circuler en clair des journaux d'audit et des findings ; `require` chiffre sans vérifier le certificat serveur ; seul `verify-full` protège aussi contre une interception active. *Sans objet en SQLite* |
+| `THOT_DB_POOL_MAX_SIZE` | `8` | entier | Nombre maximal de connexions PostgreSQL | **Moyen** — un pool trop large ne rend pas le service plus rapide : il sature le serveur de base, qui est le vrai goulot. *Sans objet en SQLite* |
 | `THOT_RULES_DIR` | `./rules` | chemin | Bibliothèque de règles de détection | **Moyen** — un dossier accessible en écriture par un tiers permet d'injecter des règles (voir [modèle de menaces](architecture/threat-model.md)) |
 | `THOT_POLICIES_DIR` | `./policies` | chemin | Politiques de décision | **Élevé** — c'est ici que se décide « automatique ou pas » : écriture = pouvoir d'exécution |
 | `THOT_PLAYBOOKS_DIR` | `./playbooks` | chemin | Playbooks (action + rollback) | **Élevé** — même raison : un playbook modifié change ce que fait une action |
@@ -75,6 +81,34 @@ ce qu'une erreur de réglage peut coûter.
     `THOT_HOST=0.0.0.0` se cumulent dangereusement : un service exposé avec la clé
     d'amorçage publique est une compromission, pas un risque. **La première action après
     l'installation est de changer cette clé.**
+
+### Détection d'anomalie statistique (désactivée par défaut)
+
+Ces variables pilotent le détecteur statistique (EWMA + z-score) décrit dans
+[`docs/detection/anomaly.md`](detection/anomaly.md). Il est **opt-in** : tant que
+`THOT_ANOMALY_ENABLED` vaut `false`, il ne consomme ni mémoire ni CPU et n'émet aucun
+événement. Activé, il ne fait qu'**émettre des signaux** qui traversent la même chaîne
+(règles → score → politique → garde-fous) : il ne déclenche jamais d'action directement.
+
+| Variable | Défaut | Type | Rôle | Impact sûreté |
+|---|---|---|---|---|
+| `THOT_ANOMALY_ENABLED` | `false` | booléen | Active le détecteur statistique | **Moyen** — activé trop tôt (trafic non stationnaire, campagne marketing, bot légitime), il produit des signaux bruyants qui **consomment votre budget d'attention** : c'est le vrai coût d'un faux positif |
+| `THOT_ANOMALY_BUCKET_SECONDS` | `60` | entier (secondes) | Largeur de l'intervalle d'agrégation | **Moyen** — trop court : chaque intervalle contient trop peu d'événements, la variance explose et le détecteur crie au loup ; trop long : une rafale de 30 s est noyée dans la moyenne |
+| `THOT_ANOMALY_WARMUP_SAMPLES` | `30` | entier | Nombre d'intervalles observés avant d'émettre | **Élevé** — c'est la protection contre les faux positifs du démarrage. Trop bas, la « normale » est celle du premier pic, et la vraie attaque devient l'écart |
+| `THOT_ANOMALY_ZSCORE_THRESHOLD` | `4.0` | réel | Écart type minimal pour signaler | **Élevé** — trop bas : bruit permanent ; trop haut : silence sur une attaque lente. À ajuster **par règle**, après observation |
+| `THOT_ANOMALY_MIN_OBSERVED` | `20` | entier | Volume minimal d'un intervalle pour conclure | **Élevé** — sans plancher, « 1 puis 3 événements » est une anomalie ×3. C'est le garde-fou qui évite le ridicule en production |
+| `THOT_ANOMALY_ENTITY_FIELDS` | `["labels.src_ip"]` | liste de chemins | Champs suivis individuellement | **Moyen** — suivre un champ à très forte cardinalité (un identifiant de requête, un `user-agent` complet) crée autant de compteurs que de valeurs : mémoire et bruit |
+| `THOT_ANOMALY_MAX_ENTITIES` | `20000` | entier | Plafond de compteurs par entité | **Élevé** — borne la mémoire. Au-delà du plafond, les nouvelles entités ne sont **plus suivies** : une attaque distribuée depuis des sources inédites n'est alors détectée que par le signal de cardinalité |
+| `THOT_ANOMALY_ENTITY_TTL_SECONDS` | `86400` | entier (secondes) | Oubli d'une entité inactive | **Faible** — au-delà du délai, le compteur est libéré ; une entité revue plus tard repasse par la phase d'observation |
+| `THOT_ANOMALY_DETECT_NEW_SOURCES` | `true` | booléen | Signale une source jamais vue | **Moyen** — très utile sur un service fermé, très bruyant sur un service public (Internet entier = nouvelles sources en continu). À désactiver dans ce cas |
+
+!!! tip "La bonne façon de l'activer"
+
+    En `THOT_DRY_RUN=true`, laissez tourner **au moins une semaine** représentative, puis lisez
+    les signaux produits. Vous cherchez un régime où chaque signal correspond à quelque chose
+    que vous savez expliquer. Ce n'est qu'ensuite que vous montez les seuils et envisagez
+    l'automatisation — voir la procédure détaillée dans
+    [`docs/detection/anomaly.md`](detection/anomaly.md).
 
 ## Ordre de précédence
 

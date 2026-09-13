@@ -1,0 +1,52 @@
+id: AO-ANO-001
+title: Écart de volume modéré pour une source (anomalie statistique)
+description: >-
+  Le nombre d'événements émis par cette source dépasse nettement sa moyenne historique
+  (écart de 4 à 12 écarts-types, moyenne mobile exponentielle). Un tel écart accompagne
+  souvent une phase de reconnaissance ou un script mal écrit côté client — pas encore une
+  attaque caractérisée, mais un changement de comportement qui mérite une vérification.
+status: stable
+severity: medium
+confidence: 0.6
+enabled: true
+tags: [anomaly, volume-anomaly, statistique, mitre:T1595]
+source_types: [baseline]
+kinds: [anomaly]
+match:
+  all:
+    - field: labels.check
+      op: eq
+      value: rate_anomaly
+    - field: labels.zscore
+      op: gte
+      value: 4
+    - field: labels.zscore
+      op: lt
+      value: 12
+  # Aucun `threshold` ici, volontairement : un signal d'anomalie résume DÉJÀ un intervalle
+  # complet (tous les événements de la fenêtre). Exiger plusieurs signaux reviendrait à
+  # attendre un second intervalle avant d'alerter — soit retarder la détection d'une minute
+  # entière pour un gain de précision nul.
+dedup:
+  key: [labels.src_ip, labels.host]
+  ttl_seconds: 3600
+risk:
+  base: 35
+false_positives:
+  - >-
+    Campagne marketing, pic d'audience légitime ou job de synchronisation nocturne : le
+    volume change sans qu'il y ait d'attaque. La preuve fournie (observé contre attendu)
+    permet de trancher en quelques secondes.
+  - >-
+    Nouvelle source légitime (nouveau partenaire, nouvel utilisateur) pendant la période de
+    chauffe du détecteur : la moyenne n'est pas encore représentative.
+  - >-
+    Le seuil est atteint après un changement d'infrastructure (nouveau CDN, mise en cache
+    désactivée) : toute modification de la topologie invalide temporairement la base.
+remediation: >-
+  Comparer le volume observé des dernières minutes à celui de la veille à la même heure, puis
+  vérifier s'il correspond à un événement métier connu. Si l'origine est inconnue, examiner
+  les chemins demandés et les codes de réponse : un pic d'erreurs 404 ou 403 sur des chemins
+  variés est une recherche de surface, un pic de 200 sur une seule route est un usage intensif.
+references:
+  - https://attack.mitre.org/techniques/T1595/

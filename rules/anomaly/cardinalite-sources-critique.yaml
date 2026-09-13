@@ -1,0 +1,39 @@
+id: AO-ANO-005
+title: Explosion du nombre de sources distinctes (attaque distribuée probable)
+description: >-
+  Le nombre de sources distinctes dépasse son historique de plus de 20 écarts-types en une
+  minute. À ce niveau, l'hypothèse d'un trafic légitime devient très improbable : il s'agit
+  d'une attaque répartie en cours, ou d'une fuite d'infrastructure qui expose soudainement le
+  service.
+status: stable
+severity: critical
+confidence: 0.75
+enabled: true
+tags: [anomaly, distributed-attack, urgent, mitre:T1498]
+source_types: [baseline]
+kinds: [anomaly]
+match:
+  all:
+    - field: labels.check
+      op: eq
+      value: source_cardinality_anomaly
+    - field: labels.zscore
+      op: gte
+      value: 20
+dedup:
+  key: [labels.host]
+  ttl_seconds: 900
+risk:
+  base: 78
+false_positives:
+  - >-
+    Bascule DNS mal maîtrisée ou configuration de répartition de charge erronée : l'effet est
+    identique à une attaque du point de vue du service. Vérifiez vos derniers changements
+    d'infrastructure avant de conclure à une attaque.
+remediation: >-
+  Traiter comme un incident : activer la limitation de débit globale, vérifier la
+  disponibilité des dépendances (base de données, cache, API tierces), prévenir l'astreinte et
+  relever un échantillon d'adresses pour analyse. Ne jamais bloquer une plage entière sans
+  certitude : une attaque distribuée utilise souvent des adresses légitimes compromises.
+references:
+  - https://attack.mitre.org/techniques/T1498/

@@ -1,0 +1,41 @@
+id: AO-ANO-002
+title: Écart de volume majeur pour une source (anomalie statistique)
+description: >-
+  Le volume d'événements d'une source dépasse son historique de plus de 12 écarts-types.
+  À ce niveau d'écart, l'explication « activité humaine normale » devient improbable : il
+  s'agit d'un script, d'un outil automatisé ou d'une attaque en cours.
+status: stable
+severity: high
+confidence: 0.7
+enabled: true
+tags: [anomaly, volume-anomaly, statistique, mitre:T1498]
+source_types: [baseline]
+kinds: [anomaly]
+match:
+  all:
+    - field: labels.check
+      op: eq
+      value: rate_anomaly
+    - field: labels.zscore
+      op: gte
+      value: 12
+  # Pas de seuil de répétition : le signal couvre déjà un intervalle complet (cf. AO-ANO-001).
+dedup:
+  key: [labels.src_ip, labels.host]
+  ttl_seconds: 1800
+risk:
+  base: 55
+false_positives:
+  - >-
+    Test de charge planifié ou injection de trafic de démonstration : l'écart est réel, mais
+    l'origine est légitime et connue. Créez une exception de bruit datée pour la fenêtre du test.
+  - >-
+    Reprise après panne : un collecteur redémarre et rejoue son tampon, ce qui produit un pic
+    parfaitement artificiel. Vérifiez l'état des collecteurs avant de conclure.
+remediation: >-
+  Identifier immédiatement la source (adresse, agent utilisateur) et les ressources visées.
+  Comparer le rythme observé à une capacité humaine plausible : au-delà de plusieurs dizaines
+  de requêtes par seconde provenant d'une même adresse, il s'agit d'une automatisation.
+  Décider ensuite d'une limitation de débit (proportionnée) ou d'un blocage temporaire.
+references:
+  - https://attack.mitre.org/techniques/T1498/

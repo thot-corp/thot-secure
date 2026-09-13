@@ -1,0 +1,23 @@
+version: 1
+id: approval-volume-anomaly
+priority: 170
+description: >-
+  Anomalie de volume confirmée pour une source unique : la limitation de débit est la réponse
+  proportionnée (elle ralentit sans couper), mais elle modifie le comportement du service.
+  Validation humaine, avec la moyenne de référence affichée dans le finding pour que
+  l'approbateur puisse juger sur pièces.
+when:
+  finding.tags_any: [volume-anomaly]
+  finding.risk_score: { gte: 50 }
+then:
+  decision: require_approval
+  playbook: rate-limit-source
+  params:
+    target: labels.src_ip
+    rate: "10r/s"
+    duration_seconds: 1800
+    reason: "Thot Secure — écart de volume statistiquement anormal (limitation temporaire)"
+  cooldown_seconds: 1800
+rollback:
+  playbook: remove-rate-limit
+  auto_after_seconds: 1800

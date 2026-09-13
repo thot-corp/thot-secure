@@ -1,0 +1,39 @@
+id: AO-ANO-003
+title: Première observation d'une source pour ce tenant
+description: >-
+  Cette adresse source n'avait jamais été observée pour ce tenant. Ce n'est pas une alerte en
+  soi : c'est un **signal de contexte** qui donne du sens aux autres findings. Le premier
+  contact depuis une adresse inconnue, suivi d'une tentative d'authentification, raconte une
+  histoire très différente de la même tentative depuis une adresse habituelle.
+status: test
+severity: low
+confidence: 0.5
+enabled: true
+tags: [anomaly, contexte, nouvelle-source]
+source_types: [baseline]
+kinds: [anomaly]
+match:
+  all:
+    - field: labels.check
+      op: eq
+      value: new_source
+dedup:
+  key: [labels.src_ip]
+  ttl_seconds: 604800
+risk:
+  base: 15
+false_positives:
+  - >-
+    Tout nouvel utilisateur, tout nouveau partenaire et toute adresse dynamique d'un
+    fournisseur d'accès produit ce signal. C'est attendu : la valeur est dans la corrélation,
+    pas dans le signal isolé.
+  - >-
+    Après réinitialisation de l'état du détecteur (redémarrage), toutes les sources connues
+    redeviennent « nouvelles » jusqu'à la fin de la période de chauffe.
+remediation: >-
+  Aucune action directe. Utiliser ce signal pour qualifier les findings qui suivent : une
+  adresse nouvelle qui déclenche une règle d'attaque justifie une réponse plus ferme qu'une
+  adresse habituelle, et une adresse nouvelle qui se contente de consulter des pages publiques
+  ne mérite rien de plus qu'une observation.
+references:
+  - https://attack.mitre.org/techniques/T1595/

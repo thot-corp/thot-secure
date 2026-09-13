@@ -44,7 +44,17 @@ class ShippedRulesTest(unittest.TestCase):
     def test_collectors_are_covered(self) -> None:
         """Chaque type de source produit par un collecteur doit avoir au moins une règle."""
         covered = {source for rule in self.rules for source in rule.source_types}
-        for expected in ("web_probe", "log_tail", "dependency", "config_audit", "tls_cert", "syslog"):
+        for expected in (
+            "web_probe",
+            "log_tail",
+            "dependency",
+            "config_audit",
+            "tls_cert",
+            "syslog",
+            #: La détection d'anomalie statistique ne vaut que si une règle l'exploite : le
+            #: détecteur produit des événements, ce sont les règles qui décident.
+            "baseline",
+        ):
             self.assertIn(expected, covered, f"aucune règle n'exploite la source '{expected}'")
 
     def test_high_severity_rules_document_their_remediation(self) -> None:
@@ -64,6 +74,8 @@ class ShippedRulesTest(unittest.TestCase):
             "syslog",
             "tls_cert",
             "config_audit",
+            #: Produit par le détecteur d'anomalie du moteur, et non par un collecteur.
+            "baseline",
             "manual",
             "demo",
         }

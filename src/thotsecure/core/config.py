@@ -86,6 +86,14 @@ class Settings(BaseSettings):
     #: et un jeu de règles absent, sans erreur visible.
     root_dir: str = "."
     db_url: str = "sqlite:///./data/thotsecure.db"
+    #: `sslmode` explicite du DSN PostgreSQL. Vide = choix automatique par environnement
+    #: (`prefer` en dev/staging, `require` en prod) : jamais `disable` par défaut, car une
+    #: base qui reçoit des journaux d'audit ne doit pas circuler en clair. `verify-full` est
+    #: la seule valeur qui vérifie aussi le nom d'hôte du certificat serveur.
+    db_sslmode: str = ""
+    #: Taille maximale du pool de connexions PostgreSQL. Un pool trop grand ne rend pas le
+    #: service plus rapide : il sature le serveur de base, qui est le goulot réel.
+    db_pool_max_size: int = 8
 
     # -- Contenus (règles, politiques, playbooks, cibles, connecteurs) ------------------
     rules_dir: str = "./rules"
@@ -111,6 +119,31 @@ class Settings(BaseSettings):
     #: Un finding dont le score atteint ce seuil ne part **jamais** en automatique
     #: sans politique explicite : garde-fou anti-catastrophe.
     critical_score_threshold: float = 85.0
+
+    # -- Détection d'anomalie (statistique) --------------------------------------------
+    #: Désactivée par défaut, volontairement : un détecteur statistique mal réglé produit du
+    #: bruit, et du bruit en sécurité coûte plus cher que pas de détection. La procédure
+    #: recommandée est de l'activer en observation, de relever ses signaux pendant quelques
+    #: jours, puis d'ajuster les seuils avant de la laisser créer des findings.
+    anomaly_enabled: bool = False
+    #: Durée d'un intervalle d'observation (une « case » de la moyenne mobile).
+    anomaly_bucket_seconds: int = 60
+    #: Nombre d'intervalles observés avant d'émettre quoi que ce soit : sans période de
+    #: chauffe, la première minute d'un déploiement serait entièrement « anormale ».
+    anomaly_warmup_samples: int = 30
+    #: Seuil de déclenchement, en écarts-types.
+    anomaly_zscore_threshold: float = 4.0
+    #: Volume minimal dans l'intervalle, pour ne pas signaler un écart statistiquement
+    #: significatif mais opérationnellement insignifiant (3 événements au lieu de 1).
+    anomaly_min_observed: int = 20
+    #: Champs servant d'identité de suivi, par ordre de priorité.
+    anomaly_entity_fields: list[str] = Field(default_factory=lambda: ["labels.src_ip"])
+    #: Borne mémoire : au-delà, les entités les plus anciennes sont évincées.
+    anomaly_max_entities: int = 20_000
+    #: Durée de conservation d'une entité silencieuse (0 = illimité).
+    anomaly_entity_ttl_seconds: int = 86_400
+    #: Signaler la première apparition d'une entité (source, hôte, compte).
+    anomaly_detect_new_sources: bool = True
 
     # -- Collecteurs -------------------------------------------------------------------
     collectors_enabled: bool = False
@@ -176,10 +209,47 @@ class Settings(BaseSettings):
     @field_validator("db_url")
     @classmethod
     def _validate_db_url(cls, value: str) -> str:
-        if not value.startswith(("sqlite://", "postgresql://", "postgresql+asyncpg://")):
+        """Refuse ici ce que l'adaptateur refuserait plus tard, avec un message clair.
+
+        La liste est alignée sur `thotsecure.storage` : SQLite, puis PostgreSQL avec les
+        suffixes de pilote synchrones `+psycopg` / `+psycopg2`. Les pilotes **asynchrones**
+        (`+asyncpg`) sont refusés explicitement : l'adaptateur est synchrone, et un DSN
+        accepté ici pour échouer au premier accès à la base serait un piège.
+        """
+        scheme, _, rest = value.partition("://")
+        if scheme == "sqlite":
+            return value
+        base, _, driver = scheme.partition("+")
+        if base in {"postgresql", "postgres"}:
+            if driver in {"", "psycopg", "psycopg2"}:
+                return value
             raise ValueError(
-                "THOT_DB_URL doit commencer par 'sqlite://' (MVP) ou 'postgresql://' (production)"
+                f"THOT_DB_URL : pilote PostgreSQL '{driver}' non supporté (adaptateur "
+                "synchrone) ; utilisez 'postgresql://', 'postgresql+psycopg://' ou "
+                "'postgresql+psycopg2://'"
             )
+        raise ValueError(
+            "THOT_DB_URL doit commencer par 'sqlite://' (défaut, aucune dépendance) ou "
+            "'postgresql://' (backend PostgreSQL/TimescaleDB, extra 'postgres')"
+            + (f" — reçu : '{rest[:24]}'" if rest else "")
+        )
+
+    @field_validator("db_sslmode")
+    @classmethod
+    def _validate_db_sslmode(cls, value: str) -> str:
+        allowed = {"", "disable", "allow", "prefer", "require", "verify-ca", "verify-full"}
+        if value not in allowed:
+            raise ValueError(
+                "THOT_DB_SSLMODE doit être vide (choix automatique) ou l'une de : "
+                "disable, allow, prefer, require, verify-ca, verify-full"
+            )
+        return value
+
+    @field_validator("db_pool_max_size")
+    @classmethod
+    def _validate_db_pool(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("THOT_DB_POOL_MAX_SIZE doit être strictement positif")
         return value
 
     @field_validator("nats_url")
@@ -234,13 +304,22 @@ class Settings(BaseSettings):
 
     @property
     def db_path(self) -> Path:
-        """Chemin du fichier SQLite (le MVP ne gère que SQLite ; Postgres est la cible prod).
+        """Chemin du fichier SQLite.
+
+        N'a de sens **que** si `THOT_DB_URL` désigne SQLite : sur PostgreSQL, cette propriété
+        lève une `ConfigError`, volontairement, pour qu'aucun code n'utilise un chemin de
+        fichier là où il n'y a pas de fichier. Pour décrire l'emplacement réel du magasin
+        (SQLite ou PostgreSQL), utilisez
+        [`store_location()`][thotsecure.storage.store_location].
 
         Convention SQLAlchemy respectée : ``sqlite:///relatif.db`` est relatif à la racine
         du projet, ``sqlite:////absolu/chemin.db`` est absolu.
         """
         if not self.db_url.startswith("sqlite://"):
-            raise ConfigError("THOT_DB_URL n'est pas SQLite : utilisez un déploiement PostgreSQL.")
+            raise ConfigError(
+                "THOT_DB_URL n'est pas SQLite : utilisez store_location(store) pour décrire "
+                "l'emplacement réel du magasin."
+            )
         raw = self.db_url[len("sqlite://") :]
         if raw.startswith("//"):  # sqlite:////chemin/absolu
             return Path(raw[1:]).expanduser().resolve()
@@ -278,8 +357,15 @@ class Settings(BaseSettings):
         return self.data_path / "quarantine"
 
     def ensure_directories(self) -> None:
-        """Crée les répertoires nécessaires (base, quarantaine, données)."""
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        """Crée les répertoires nécessaires (base SQLite, quarantaine, données).
+
+        Le répertoire de la base n'est créé **que** si `THOT_DB_URL` désigne SQLite : sur
+        PostgreSQL la base est distante, et `db_path` lève volontairement une erreur. Sans ce
+        test, un déploiement PostgreSQL échouerait au démarrage sur la création d'un
+        répertoire sans rapport avec lui.
+        """
+        if self.db_url.startswith("sqlite://"):
+            self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.data_path.mkdir(parents=True, exist_ok=True)
         self.quarantine_path.mkdir(parents=True, exist_ok=True)
 
