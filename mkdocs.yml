@@ -201,6 +201,7 @@ nav:
   - Exploitation:
       - Déploiement: operations/deployment.md
       - Runbook d'incident: operations/runbook.md
+      - Publier une version: operations/publication.md
   - Conformité:
       - RGPD: compliance/rgpd.md
       - SOC 2 / ISO 27001: compliance/soc2-iso27001.md
