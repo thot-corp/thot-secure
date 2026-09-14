@@ -12,9 +12,8 @@
         (la CSP `font-src 'self' data:` du reverse-proxy l'interdit de toute façon).
    ========================================================================== */
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@config "../tailwind.config.ts";
 
 /* -------------------------------------------------------------------------- */
 /* Base                                                                        */
