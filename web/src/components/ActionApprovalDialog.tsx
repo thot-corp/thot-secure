@@ -119,13 +119,22 @@ export function ActionApprovalDialog(props: ActionApprovalDialogProps): JSX.Elem
 
   // Toute ouverture repart de l'étape 1 : aucune confirmation ne peut être
   // « rejouée » depuis une opération précédente (même cible, même action).
-  useEffect(() => {
-    if (!open) return;
-    setStep('review');
-    setComment('');
-    setAcknowledged(false);
-    setTokenInput('');
-  }, [open, actionId, operation]);
+  //
+  // Ajustement **pendant le rendu**, et non dans un effet : remettre l'état à zéro depuis un
+  // effet provoque un second rendu en cascade pour rien, et la règle
+  // `react-hooks/set-state-in-effect` du compilateur React le refuse. Comparer la clé
+  // courante à la précédente est la façon documentée d'ajuster un état quand une prop change.
+  const [resetKey, setResetKey] = useState<string | null>(null);
+  const currentResetKey = open ? `${actionId}|${operation}` : null;
+  if (currentResetKey !== resetKey) {
+    setResetKey(currentResetKey);
+    if (currentResetKey !== null) {
+      setStep('review');
+      setComment('');
+      setAcknowledged(false);
+      setTokenInput('');
+    }
+  }
 
   useEffect(() => {
     if (!open) return;

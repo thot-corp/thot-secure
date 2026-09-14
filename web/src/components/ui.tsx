@@ -578,12 +578,20 @@ export function ConfirmDialog(props: ConfirmDialogProps): JSX.Element | null {
 
   // Toute ouverture (ou changement de cible) repart d'un état vierge : aucune
   // confirmation ne peut être « réutilisée » d'une opération précédente.
-  useEffect(() => {
-    if (!open) return;
-    setComment('');
-    setTokenInput('');
-    setAcknowledged(false);
-  }, [open, confirmToken]);
+  //
+  // Ajustement pendant le rendu plutôt que dans un effet : voir le commentaire équivalent dans
+  // `ActionApprovalDialog` — c'est le patron documenté par React pour « ajuster un état quand
+  // une prop change », et c'est ce que la règle `react-hooks/set-state-in-effect` attend.
+  const [resetKey, setResetKey] = useState<string | null>(null);
+  const currentResetKey = open ? `open|${confirmToken}` : null;
+  if (currentResetKey !== resetKey) {
+    setResetKey(currentResetKey);
+    if (currentResetKey !== null) {
+      setComment('');
+      setTokenInput('');
+      setAcknowledged(false);
+    }
+  }
 
   useEffect(() => {
     if (!open) return;

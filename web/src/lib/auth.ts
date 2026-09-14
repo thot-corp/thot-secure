@@ -135,13 +135,23 @@ export function AuthProvider(props: AuthProviderProps): ReactElement {
   const [viewTenantId, setViewTenantIdState] = useState<string | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
 
-  useEffect(() => {
+  // Sans clé API, l'état d'authentification est **déduit**, pas synchronisé : la remise à
+  // zéro se fait donc pendant le rendu (patron « ajuster un état quand une prop change »), et
+  // seul l'appel au client — un système externe — reste dans l'effet.
+  const [lastApiKey, setLastApiKey] = useState(apiKey);
+  if (apiKey !== lastApiKey) {
+    setLastApiKey(apiKey);
     if (!apiKey) {
-      client.setCredentials(null, null);
       setWhoami(null);
       setError(null);
       setViewTenantIdState(null);
       setStatus('anonymous');
+    }
+  }
+
+  useEffect(() => {
+    if (!apiKey) {
+      client.setCredentials(null, null);
       return;
     }
 

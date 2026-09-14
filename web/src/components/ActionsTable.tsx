@@ -20,7 +20,7 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import clsx from 'clsx';
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import type { JSX } from 'react';
 
 import { ActionApprovalDialog } from './ActionApprovalDialog';
@@ -58,6 +58,25 @@ export interface ActionsTableProps {
   className?: string;
 }
 
+/**
+ * Horloge de rendu, mise à jour par intervalle.
+ *
+ * `Date.now()` **pendant le rendu** est impur : le résultat change sans qu'aucune prop ni aucun
+ * état n'ait bougé, donc React ne peut ni mémoïser ni comparer deux rendus de façon fiable —
+ * c'est ce que la règle `react-hooks/purity` du compilateur React refuse, à juste titre.
+ *
+ * Conséquence secondaire agréable : la mention « expiré » se rafraîchit toute seule, au lieu de
+ * rester figée jusqu'au prochain chargement de la liste.
+ */
+function useNow(intervalMs = 30_000): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), intervalMs);
+    return () => window.clearInterval(timer);
+  }, [intervalMs]);
+  return now;
+}
+
 export function ActionsTable(props: ActionsTableProps): JSX.Element {
   const { className } = props;
   const { client, queryScope, dryRun, can } = useAuth();
@@ -93,6 +112,7 @@ export function ActionsTable(props: ActionsTableProps): JSX.Element {
   // Tableau stable entre deux rendus : sans ce `useMemo`, le repli `[]`
   // construirait un nouveau tableau à chaque rendu, et les `useMemo` qui en dépendent
   // se recalculeraient tous autant de fois.
+  const now = useNow();
   const items = useMemo(() => query.data?.items ?? [], [query.data]);
   const nextCursor = query.data?.next_cursor ?? null;
   const hasNext = typeof nextCursor === 'string' && nextCursor !== '';
@@ -273,7 +293,7 @@ export function ActionsTable(props: ActionsTableProps): JSX.Element {
               <tbody>
                 {items.map((action) => {
                   const expired =
-                    action.expires_at !== null && new Date(action.expires_at).getTime() < Date.now();
+                    action.expires_at !== null && new Date(action.expires_at).getTime() < now;
                   const terminal = isActionTerminal(action.status);
                   const showApprove = canApprove && action.status === 'pending_approval';
                   const showExecute = canExecute && (action.status === 'planned' || action.status === 'approved');
