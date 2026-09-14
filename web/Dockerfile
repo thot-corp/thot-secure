@@ -45,7 +45,7 @@ RUN npm run build
 # -----------------------------------------------------------------------------
 # Étape 2 — service statique + reverse proxy
 # -----------------------------------------------------------------------------
-FROM nginx:1.27-alpine AS runtime
+FROM nginx:1.31-alpine AS runtime
 
 LABEL org.opencontainers.image.title="Thot Secure — dashboard" \
       org.opencontainers.image.description="SPA React du dashboard Thot Secure (interface riche optionnelle) servie par nginx, avec proxy /api vers thotsecure:8080 et en-têtes de sécurité." \
