@@ -224,8 +224,22 @@ class TlsCertCollector(Collector):
 
     @staticmethod
     def _verify_chain(host: str, port: int, timeout: float) -> str | None:
-        """Vérification stricte en parallèle : retourne la raison de l'échec, ou ``None``."""
+        """Vérification stricte en parallèle : retourne la raison de l'échec, ou ``None``.
+
+        Le plancher de version est **explicite** : `ssl.create_default_context()` hérite du
+        plancher de la plateforme, qui peut encore accepter TLS 1.0 ou 1.1 selon la distribution
+        et la version d'OpenSSL. Sur une vérification de chaîne de certification, ce n'est pas
+        défendable — un certificat validé au-dessus de TLS 1.1 ne prouve rien de solide.
+
+        Aucun repli pour les runtimes anciens : le projet exige Python 3.11, où
+        `ssl.TLSVersion` et `minimum_version` existent toujours.
+
+        Attention à ne pas confondre ce plancher avec la détection : le collecteur signale par
+        ailleurs les cibles qui **acceptent** les protocoles obsolètes (`LEGACY_PROTOCOLS`).
+        Refuser TLS 1.0 de notre côté ne doit pas nous empêcher de le signaler chez elles.
+        """
         context = ssl.create_default_context()
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
         try:
             with (
                 socket.create_connection((host, port), timeout=timeout) as raw,
