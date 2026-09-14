@@ -1,0 +1,62 @@
+# Workflow TEMPORAIRE — à supprimer après usage.
+#
+# Objet : `web/package-lock.json` est absent du dépôt, donc le job « Web dashboard » fait un
+# `npm install` non reproductible (et non mis en cache). La machine de développement n'a pas
+# accès au registre npm : le verrou est donc calculé ici, sur un runner, et publié sur une
+# branche jetable récupérée par `git fetch`.
+#
+# Le workflow rapporte aussi l'état réel du tableau de bord (typecheck, build, lint) pour la
+# version actuelle des dépendances : c'est la référence à laquelle comparer une migration.
+
+name: Web lockfile (temporary)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lockfile:
+    name: Generate web/package-lock.json
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "20"
+
+      - name: Install (creates the lockfile)
+        working-directory: web
+        run: |
+          npm install --no-audit --no-fund
+          echo "lockfileVersion: $(node -e "console.log(require('./package-lock.json').lockfileVersion)")"
+          echo "paquets verrouilles: $(node -e "console.log(Object.keys(require('./package-lock.json').packages || {}).length)")"
+
+      - name: Report the state of the dashboard
+        working-directory: web
+        run: |
+          echo "=====BEGIN-TYPECHECK====="
+          npm run typecheck || true
+          echo "=====END-TYPECHECK====="
+          echo "=====BEGIN-BUILD====="
+          npm run build || true
+          echo "=====END-BUILD====="
+          echo "=====BEGIN-LINT====="
+          npm run lint || true
+          echo "=====END-LINT====="
+
+      - name: Publish the lockfile on a throwaway branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b chore/web-lockfile
+          git add web/package-lock.json
+          git commit -m "build(web): verrou de dependances (branche jetable)" || echo "aucun changement"
+          git push --force origin chore/web-lockfile
