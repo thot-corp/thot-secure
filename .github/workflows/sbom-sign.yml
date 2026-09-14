@@ -150,7 +150,7 @@ jobs:
 
       # --- Artefacts ---------------------------------------------------------
       - name: Upload SBOMs, signatures and certificates as workflow artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sbom-${{ steps.version.outputs.version }}
           path: |

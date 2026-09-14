@@ -191,7 +191,7 @@ jobs:
 
       - name: Upload coverage artifacts
         if: always() && hashFiles('tests/**') != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-python-${{ matrix.python-version }}
           path: |
@@ -417,7 +417,7 @@ jobs:
 
       - name: Upload build output
         if: always() && hashFiles('web/dist/**') != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: web-dist
           path: web/dist/

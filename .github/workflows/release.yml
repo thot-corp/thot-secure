@@ -279,7 +279,7 @@ jobs:
         run: ls -la dist
 
       - name: Upload distributions
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dist-${{ needs.verify.outputs.version }}
           path: dist/
@@ -382,7 +382,7 @@ jobs:
             dist/thotsecure-${{ needs.verify.outputs.version }}.cdx.json
 
       - name: Upload signed artefacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dist-signed-${{ needs.verify.outputs.version }}
           path: dist/
@@ -503,7 +503,7 @@ jobs:
             --output git-cliff-changelog.md
 
       - name: Upload changelog artefacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: changelog-${{ needs.verify.outputs.version }}
           path: |
