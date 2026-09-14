@@ -603,6 +603,15 @@ detection at all.
   **validated at configuration time** with the expected shape in the message, and two tests
   cover it: an out-of-format key is refused at startup, and a valid custom key really does open
   a session end to end.
+- **An ingestion response listed the same finding once per matching event.** A threshold rule
+  that matches N events evaluates the *same* finding N times, and `outcome.findings` was a
+  concatenation of each event's result: 200 ingested events produced **200 entries for a single
+  finding**, each carrying the `count` of its own instant. A caller reading that list concludes
+  there are 200 findings, and may read an intermediate count — which is exactly the reading that
+  makes a correct count look wrong. The response now keeps **one entry per finding, in its final
+  state**, and exposes `count` on the serialised finding so a client no longer has to guess.
+  The reported symptom itself (`count=7` for 200 events) was **not** reproducible: the stored
+  count was 200 both before and after this change, and the new test asserts it.
 
 ### Security
 

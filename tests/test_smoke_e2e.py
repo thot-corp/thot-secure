@@ -47,6 +47,35 @@ class EndToEndTest(StackTestCase):
         self.assertEqual("high", finding.severity)
         self.assertGreaterEqual(finding.risk_score, 40)
 
+    def test_one_entry_per_finding_however_many_events_match(self) -> None:
+        """Une rafale de N événements ne doit pas produire N copies du même finding.
+
+        Défaut corrigé : `outcome.findings` concaténait le résultat de chaque événement, donc
+        200 événements sur une règle à seuil produisaient 200 entrées pour **un seul** finding,
+        chacune avec le `count` de son instant. Un appelant qui lit cette liste croit à
+        200 findings, et peut lire un `count` intermédiaire — c'est très exactement la lecture
+        qui fait croire à un comptage faux.
+        """
+        outcome = self.stack.pipeline.ingest(self.stack.sqli_burst(count=200))
+
+        self.assertEqual(1, len(outcome.findings), "le même finding ne doit apparaître qu'une fois")
+        self.assertEqual(1, len({finding.finding_id for finding in outcome.findings}))
+        self.assertEqual(
+            200,
+            outcome.findings[0].count,
+            "l'entrée conservée doit porter l'état FINAL, pas celui du premier événement",
+        )
+        self.assertEqual(1, len(outcome.decisions))
+        self.assertEqual(1, len(outcome.result.findings))
+
+        # La réponse d'ingestion expose le compte : un client doit pouvoir le lire sans deviner.
+        self.assertEqual(200, outcome.result.findings[0]["count"])
+
+        # Et la base contient bien un seul finding, avec le bon compte.
+        stored, _cursor = self.stack.store.list_findings(self.stack.tenant.tenant_id)
+        self.assertEqual(1, len(stored))
+        self.assertEqual(200, stored[0].count)
+
     def test_decision_requires_approval_in_supervised_mode(self) -> None:
         outcome = self.stack.pipeline.ingest(self.stack.sqli_burst())
         self.assertEqual(1, len(outcome.decisions))

@@ -155,25 +155,39 @@ class Pipeline:
                 )
 
         if process:
+            # Une règle à seuil qui matche N événements produit N évaluations du **même**
+            # finding : `outcome.findings` en listait donc N copies, avec N `count`
+            # intermédiaires — 200 événements donnaient 200 entrées pour un seul finding.
+            # Un appelant qui lit cette liste croit à 200 findings et peut lire le `count`
+            # d'un état intermédiaire. On garde donc **le dernier état par finding**, dans
+            # l'ordre de première apparition.
+            #
+            # `Decision` ne porte pas d'identifiant de finding : l'appariement se fait par
+            # index, comme dans `_react_to`, qui ajoute un finding et une décision par match.
+            states: dict[str, tuple[Finding, Decision | None]] = {}
             for event in accepted:
                 result = self.process_event(event)
-                outcome.findings.extend(result.findings)
-                outcome.decisions.extend(result.decisions)
-                outcome.actions.extend(result.actions)
                 for index, finding in enumerate(result.findings):
                     decision = result.decisions[index] if index < len(result.decisions) else None
-                    outcome.result.findings.append(
-                        {
-                            "finding_id": finding.finding_id,
-                            "rule_id": finding.rule_id,
-                            "severity": finding.severity,
-                            "risk_score": finding.risk_score,
-                            "status": finding.status,
-                            "decision": decision.decision if decision else None,
-                            "playbook": decision.playbook if decision else None,
-                            "guards": list(decision.guards) if decision else [],
-                        }
-                    )
+                    states[finding.finding_id] = (finding, decision)
+                outcome.actions.extend(result.actions)
+
+            outcome.findings = [finding for finding, _ in states.values()]
+            outcome.decisions = [decision for _, decision in states.values() if decision is not None]
+            for finding, decision in states.values():
+                outcome.result.findings.append(
+                    {
+                        "finding_id": finding.finding_id,
+                        "rule_id": finding.rule_id,
+                        "severity": finding.severity,
+                        "risk_score": finding.risk_score,
+                        "status": finding.status,
+                        "count": finding.count,
+                        "decision": decision.decision if decision else None,
+                        "playbook": decision.playbook if decision else None,
+                        "guards": list(decision.guards) if decision else [],
+                    }
+                )
 
         self._publish(accepted)
         return outcome
