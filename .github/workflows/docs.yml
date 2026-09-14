@@ -81,7 +81,7 @@ jobs:
         # absent. The key is derived from the documents themselves: a docs-only
         # change does not invalidate the installed theme, and a theme bump
         # (requirements-docs.txt) does.
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/pip
           key: pip-docs-${{ runner.os }}-${{ hashFiles('requirements-docs.txt', 'mkdocs.yml') }}
