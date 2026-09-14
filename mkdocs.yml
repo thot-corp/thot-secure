@@ -84,8 +84,9 @@ plugins:
         - fr
         - en
       separator: '[\s\u200b\-,:!=\[\]()"/]+|(?!\b)(?=[A-Z][a-z])|\.(?!\d)|&[lg]t;'
+  # `tags_file` a été déprécié en Material 9.7 : le déclarer fait échouer
+  # `mkdocs build --strict`. Les pages de tags sont désormais générées automatiquement.
   - tags:
-      tags_file: tags.md
   - minify:
       minify_html: true
       minify_css: true

@@ -22,7 +22,9 @@ from urllib.parse import urlparse
 
 #: User-agent identifiant clairement l'outil et son usage : un administrateur qui voit passer
 #: ces requêtes doit pouvoir savoir en trois secondes d'où elles viennent.
-USER_AGENT = "ThotSecure/0.1.0 (+https://thot-corp.github.io/thot-secure/; audit défensif de surface)"
+USER_AGENT = (
+    "ThotSecure/0.1.0 (+https://thot-corp.github.io/thot-secure/; audit défensif de surface)"
+)
 
 DEFAULT_TIMEOUT = 8.0
 MAX_BODY_BYTES = 64 * 1024
