@@ -305,7 +305,7 @@ jobs:
           persist-credentials: false
 
       - name: Download distributions
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: dist-${{ needs.verify.outputs.version }}
           path: dist
@@ -529,13 +529,13 @@ jobs:
           persist-credentials: false
 
       - name: Download signed artefacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: dist-signed-${{ needs.verify.outputs.version }}
           path: dist
 
       - name: Download release notes
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: changelog-${{ needs.verify.outputs.version }}
           path: notes
