@@ -7,7 +7,7 @@ mot_cle_principal: "SOAR défensif open source"
 longueur: "6 min 50 (cible 5–7 min) + version courte 60 s"
 public_cible: "ingénieurs sécurité, SRE/DevOps, RSSI de PME/ETSI, mainteneurs open source, recruteurs techniques"
 produit: "Thot Secure MVP v0.1.0 — SOAR/CSPM défensif, Python/FastAPI, multi-tenant, Apache-2.0"
-source_de_verite: "D:\\niang\\Documents\\thotsecure\\docs\\architecture\\api-contract.md (contrat gelé, 539 lignes)"
+source_de_verite: "docs/architecture/api-contract.md (contrat gelé, 492 lignes)"
 garanties_a_demontrer: ["réversibilité totale", "audit chaîné par hash", "isolation multi-tenant", "dry-run par défaut"]
 statut: "prêt à tourner (script complet, aucune section à rédiger)"
 date_redaction: "2026-02-14"
@@ -171,9 +171,9 @@ montre `78.5` en exemple illustratif (§3.2) — **ordre de grandeur à remplace
 
 ## 5. Politique de démo — `policies/demo-require-approval-web.yaml`
 
-Le tenant filmé est en `supervised` : la politique livrée d'exemple `auto-block-high-web`
-(contrat §6) exige `tenant.mode: [auto]` et ne matcherait donc pas — le moteur retomberait sur
-`notify_only`. Pour démontrer le **gate d'approbation humaine**, on écrit une politique dédiée,
+Le tenant filmé est en `supervised` : la politique livrée d'exemple `auto-block-critical-web-attack`
+(contrat §6) exige `tenant.mode: [auto, supervised]` et reste en `decision: auto` — le moteur retomberait donc sur
+`notify_only` si le dry-run global est actif. Pour démontrer le **gate d'approbation humaine**, on écrit une politique dédiée,
 conforme au schéma §6.
 
 ```yaml
@@ -225,13 +225,13 @@ interdiction absolue d'agir sur une cible de l'`autonomy_allowlist` protégée, 
 | 01:50–02:30 | **Terminal** + incrustation des 7 lignes de `events.jsonl` (3 s) | « Voici sept requêtes HTTP, émises en douze secondes depuis 203.0.113.9 — une plage de documentation, jamais une adresse réelle. Elles visent `/login`. `thotsecure ingest --tenant acme --file events.jsonl`. Chaque ligne devient un événement immuable, normalisé, rattaché au tenant. Le moteur de règles YAML les évalue en flux. La règle AO-WEB-001 cherche des motifs d'injection SQL dans les paramètres de requête. Trois occurrences en soixante secondes suffisent, la déduplication regroupe, et un finding est créé. » | `thotsecure ingest --tenant acme --file events.jsonl` | `03 · INGESTION ET DÉTECTION` · `AO-WEB-001 · threshold 3 / 60 s` |
 | 02:30–03:00 | **Terminal** | « On liste : `thotsecure findings list --tenant acme --severity high --min-risk 70`. Le finding est là. `thotsecure findings show` donne l'évidence : les échantillons, les identifiants d'événements, la remédiation proposée. Mais ce qui décide, ce n'est pas le score. C'est la politique. Quand la sévérité est haute ou critique, le score au-dessus de soixante-dix, le tag web, et le tenant en mode supervisé, la politique répond : require_approval. Approbation humaine obligatoire. » | `thotsecure findings list --tenant acme --severity high --min-risk 70`<br>`thotsecure findings show <finding_id>` | `04 · FINDING ET POLITIQUE` · `decision: require_approval` |
 | 03:00–03:35 | **Terminal**, puis zoom sur le champ `dry_run` de la sortie | « Premier réflexe : ne rien faire. `thotsecure actions plan --finding <id> --playbook block-source-ip` construit un plan et rien d'autre — le contrat précise qu'un plan n'a aucun effet de bord. Regardez le champ dry_run : il vaut vrai, et le dry-run global est actif. `thotsecure actions execute <id>`. L'action est journalisée, marquée simulée, et le pare-feu n'a pas bougé. C'est le comportement par défaut du MVP : brancher un SOAR avant d'avoir les credentials ne doit rien casser. » | `thotsecure actions plan --finding <id> --playbook block-source-ip`<br>`thotsecure actions execute <id>`<br>Zoom 2× sur `dry_run` et sur la mention de simulation | `05 · DRY-RUN PAR DÉFAUT` · `THOT_DRY_RUN=true · aucun effet réel` |
-| 03:35–04:15 | **Terminal** : affichage de la variable, édition de la politique, redémarrage | « Maintenant, on veut agir pour de vrai — consciemment. Deux changements explicites : la variable globale THOT_DRY_RUN passe à faux, et la politique passe dry_run à faux. Redémarrage du service. On approuve : `thotsecure actions approve <id>`. Puis `thotsecure actions execute <id>`. Cette fois dry_run vaut faux. Et notez l'honnêteté du résultat : sans connecteur configuré, l'exécution reste simulée — c'est le connecteur qui le dit, pas nous. Configurez Cloudflare, AWS WAF, ModSecurity ou un nginx local, et le même playbook écrit une vraie règle. » | `$env:THOT_DRY_RUN` (affiche `true`)<br>`$env:THOT_DRY_RUN = "false"`<br>édition visible de `dry_run: true` → `false` dans la politique<br>redémarrage de `thotsecure serve` si vous l'utilisez<br>`thotsecure actions approve <id>`<br>`thotsecure actions execute <id>` | `06 · LEVÉE EXPLICITE DU DRY-RUN` · `2 changements visibles · tracés dans l'audit`<br>puis `connecteur non configuré → simulated: true` |
+| 03:35–04:15 | **Terminal** : affichage de la variable, édition de la politique, redémarrage | « Maintenant, on veut agir pour de vrai — consciemment. Deux changements explicites : la variable globale THOT_DRY_RUN passe à faux, et la politique passe dry_run à faux. Redémarrage du service. On approuve : `thotsecure actions approve <id>`. Puis `thotsecure actions execute <id>`. Cette fois dry_run vaut faux. Et notez l'honnêteté du résultat : sans connecteur configuré, l'exécution reste simulée — c'est le connecteur qui le dit, pas nous. Configurez Cloudflare, AWS WAF, Slack, GitHub Issues ou un nginx local, et le même playbook écrit une vraie règle. » | `$env:THOT_DRY_RUN` (affiche `true`)<br>`$env:THOT_DRY_RUN = "false"`<br>édition visible de `dry_run: true` → `false` dans la politique<br>redémarrage de `thotsecure serve` si vous l'utilisez<br>`thotsecure actions approve <id>`<br>`thotsecure actions execute <id>` | `06 · LEVÉE EXPLICITE DU DRY-RUN` · `2 changements visibles · tracés dans l'audit`<br>puis `connecteur non configuré → simulated: true` |
 | 04:15–04:45 | **Terminal** | « Toute action est réversible. Le playbook déclare son rollback : unblock-source-ip. `thotsecure actions rollback <id>`. L'action passe en rolled_back, le jeton de rollback est consommé, et le déblocage est journalisé avec la même rigueur que le blocage. C'est ça, la réversibilité : une contre-mesure qu'on peut défaire, avec une trace dans les deux sens. Si le rollback a expiré, la commande échoue — elle ne prétend pas avoir réussi. » | `thotsecure actions rollback <id>` | `07 · ROLLBACK` · `status: rolled_back` |
 | 04:45–05:10 | **Terminal** + extrait du schéma `AuditRecord` incrusté 4 s | « Chaque décision et chaque action ont écrit une ligne dans le journal d'audit. Ce journal est append-only, et chaque enregistrement contient le hash du précédent. `thotsecure audit verify`. Code de sortie zéro : la chaîne est intègre. Modifiez une seule ligne à la main, et la vérification renvoie le code trois — vérification négative — en indiquant où la chaîne casse. `thotsecure audit tail` pour suivre en direct. » | `thotsecure audit verify`<br>`thotsecure audit tail`<br>Optionnel : montrer `echo $LASTEXITCODE` après la commande | `08 · AUDIT CHAÎNÉ` · `exit 0 = intègre · exit 3 = chaîne rompue`<br>incrust : `hash = sha256(seq\|ts\|tenant_id\|actor\|…\|prev_hash)` |
 | 05:10–05:40 | **Terminal** puis aperçu du fichier SARIF dans l'éditeur | « Un finding doit sortir de l'outil. `thotsecure report <id> --format sarif` produit un SARIF 2.1.0 — le format que GitHub Code Scanning consomme. Les autres formats : markdown, HTML, JSON, et CEF pour un SIEM. Le rapport est un artefact : il cite la règle, l'évidence, l'action, l'acteur et la séquence d'audit. Il est régénérable depuis la base à tout moment. » | `thotsecure report <finding_id> --format sarif`<br>ouverture du fichier produit dans l'éditeur, 5 s de défilement | `09 · RAPPORT` · `SARIF 2.1.0 · md · html · json · cef` |
-| 05:40–06:10 | **Talking head** (retour visage, fin de la démo) | « Ce que ce MVP n'est pas. L'interface, c'est une console Jinja2 servie par l'API, sans build Node — pas un SPA. La persistance, c'est SQLite ; PostgreSQL et TimescaleDB sont documentés, pas encore le chemin par défaut. Le bus supporte memory, sqlite et nats. L'authentification repose sur des clés API hachées en scrypt, avec quatre rôles : viewer, analyst, responder, admin. Les collecteurs sont volontairement limités à votre propre surface déclarée. Et il n'y a aucune télémétrie : le projet ne renvoie rien nulle part. Les tests sont en unittest, exécutables sans dépendance externe. » | Aucune. Fixe. Possibilité d'incruster 4 lignes de « limites » | `10 · LIMITES ASSUMÉES` · `SQLite par défaut · pas de télémétrie · zéro capacité offensive` |
+| 05:40–06:10 | **Talking head** (retour visage, fin de la démo) | « Ce que ce MVP n'est pas. L'interface principale, c'est une console Jinja2 servie par l'API, sans build Node — pas un SPA ; un tableau de bord React optionnel est livré à côté. La persistance, c'est SQLite par défaut ; l'adaptateur PostgreSQL et TimescaleDB est écrit et tourne en CI, mais il n'a pas été éprouvé à l'échelle de production. Le bus supporte memory, sqlite et nats. L'authentification repose sur des clés API hachées en scrypt, avec quatre rôles : viewer, analyst, responder, admin — pas de SSO, pas de comptes nominatifs. Les collecteurs sont volontairement limités à votre propre surface déclarée. Et il n'y a aucune télémétrie : le projet ne renvoie rien nulle part. Les tests sont en unittest, exécutables sans dépendance externe : 396 tests. » | Aucune. Fixe. Possibilité d'incruster 4 lignes de « limites » | `10 · LIMITES ASSUMÉES` · `SQLite par défaut · pas de télémétrie · zéro capacité offensive` |
 | 06:10–06:40 | **Terminal** sur `rules validate`, puis `ls rules/` | « Si ce fonctionnement vous parle, le plus utile n'est pas une étoile. C'est une règle de détection, un connecteur, un test, une traduction. Une règle, c'est un fichier YAML d'une vingtaine de lignes, et `thotsecure rules validate` vous dit tout de suite si elle est valide — une règle invalide ne casse jamais le chargement, elle est rejetée avec un diagnostic. Il y a aussi les playbooks à écrire et les politiques à durcir. Les playbooks livrés couvrent le blocage d'IP, le rate-limit, la quarantaine d'artefact, la révocation de session, la rotation de secret, l'isolation d'hôte, le patch de dépendance — qui ouvre une pull request et ne merge jamais tout seul — le durcissement d'endpoint, la notification et l'ouverture de ticket. » | `thotsecure rules list`<br>`thotsecure rules validate --path rules`<br>`Get-ChildItem playbooks` | `11 · CONTRIBUER` · `Apache-2.0 · règles YAML · playbooks · tests` |
-| 06:40–06:50 | **Carton final** statique, fond sombre, texte centré. **Dernier plan de la vidéo** (voir §12 pour le contenu exact) | « Thot Secure. Dépôt GitHub, licence Apache-2.0. Le lien du dépôt et les informations de soutien sont en description. » | Aucune commande. Carton statique 10 s | `github.com/<votre-org>/thotsecure` · `Apache-2.0` · `dépôt, licence et soutien : voir la description` |
+| 06:40–06:50 | **Carton final** statique, fond sombre, texte centré. **Dernier plan de la vidéo** (voir §12 pour le contenu exact) | « Thot Secure. Dépôt GitHub, licence Apache-2.0. Le lien du dépôt et les informations de soutien sont en description. » | Aucune commande. Carton statique 10 s | `github.com/thot-corp/thot-secure` · `Apache-2.0` · `dépôt, licence et soutien : voir la description` |
 
 **Durée cumulée : 6 min 50**, dans la cible 5–7 min.
 Si vous devez couper 40 s pour tenir 6 min : fusionner 05:10–05:40 (rapport) dans le plan audit en
@@ -338,8 +338,8 @@ voie qu'il n'y a pas de montage truqué.
    intouchables, `require_approval` imposé hors périmètre déclaré.
 
 Si vous voulez montrer un effet réel (optionnel, et **uniquement sur une infra jetable à vous**) :
-configurez un connecteur listé au contrat §7 parmi `cloudflare`, `aws-waf`, `modsecurity`,
-`nginx-local`, sur une cible déclarée dans le périmètre du tenant. Ne le faites pas en direct sans
+configurez un connecteur listé au contrat §7 parmi `cloudflare`, `aws-waf`, `slack`,
+`github-issues`, `nginx-local`, sur une cible déclarée dans le périmètre du tenant. Ne le faites pas en direct sans
 répétition : c'est le plan qui fait rater une prise.
 
 ---
@@ -377,7 +377,7 @@ Format : vertical 1080×1920 ou carré 1080×1080 selon la plateforme, sous-titr
 | 00:20–00:34 | **Plan clé 3** — le dry-run, en temps réel, non accéléré | « Par défaut, Thot Secure ne touche à rien. Dry-run actif : l'action est journalisée, marquée simulée, le pare-feu n'a pas bougé. La levée du dry-run est un geste explicite, visible, et tracé. » | `$env:THOT_DRY_RUN` → `true`<br>`thotsecure actions execute <id>`<br>puis `$env:THOT_DRY_RUN = "false"` et nouvelle exécution | `dry-run par défaut` puis `levée explicite` |
 | 00:34–00:46 | **Plan incrusté** — extrait du storyboard long : `audit verify` | « Chaque décision est dans un journal chaîné par hash. Vérifiable en une commande : code zéro, chaîne intègre. Code trois, chaîne rompue. » | `thotsecure audit verify` (plan repris du montage long) | `exit 0 = intègre`<br>`exit 3 = chaîne rompue` |
 | 00:46–00:54 | **Plan incrusté** — diagramme, 8 blocs, une seconde chacun | « Collecteurs, normalisation, règles, scoring, décision, approbation humaine, playbook, audit. Linéaire, et volontairement. Zéro capacité offensive. » | Animation du diagramme du §3 | `SOAR défensif · Apache-2.0` |
-| 00:54–01:00 | **Carton de fin** (voir §12 pour le texte exact, dons inclus) | « Thot Secure, open source, Apache-2.0. Règles YAML, playbooks, tests : les contributions les plus utiles sont là. Dépôt et soutien en description. » | Carton statique | `github.com/<votre-org>/thotsecure`<br>`Apache-2.0 · dépôt et soutien : voir la description` |
+| 00:54–01:00 | **Carton de fin** (voir §12 pour le texte exact, dons inclus) | « Thot Secure, open source, Apache-2.0. Règles YAML, playbooks, tests : les contributions les plus utiles sont là. Dépôt et soutien en description. » | Carton statique | `github.com/thot-corp/thot-secure`<br>`Apache-2.0 · dépôt et soutien : voir la description` |
 
 **Les 3 plans clés à ne pas rater** : (1) le dry-run par défaut qui ne touche à rien,
 (2) la levée explicite du dry-run avec approbation humaine, (3) `audit verify` avec les codes de
@@ -436,9 +436,9 @@ Chapitres :
 06:10 Contribuer : règles, connecteurs, playbooks, tests
 06:40 Dépôt, licence et soutien
 
-Dépôt : github.com/<votre-org>/thotsecure
+Dépôt : github.com/thot-corp/thot-secure
 Licence : Apache-2.0
-Documentation : docs/architecture/api-contract.md
+Documentation : docs/architecture/api-contract.md — documentation publiée : https://thot-corp.github.io/thot-secure/
 
 Les valeurs affichées dans la vidéo proviennent de notre propre exécution sur un jeu de données
 de démonstration, avec des adresses de la plage de documentation 203.0.113.0/24. Aucune donnée
@@ -552,13 +552,13 @@ version courte autrement qu'à la dernière seconde.
 
 ```
 Thot Secure — SOAR défensif, open source, Apache-2.0
-Dépôt : github.com/<votre-org>/thotsecure
+Dépôt : github.com/thot-corp/thot-secure
 Le projet ne demande JAMAIS de clé privée ni de phrase de récupération.
 
-Soutien volontaire, sans contrepartie
+Soutien volontaire, sans contrepartie : un don ne donne droit à rien
 Bitcoin (BTC, réseau Bitcoin mainnet) : 33cDzgvVe7m9P4X58pW3rsMKuxrRXFmPBR
 Solana (SOL, réseau Solana mainnet)  : 95s8JxNzLbre9nopbdxakkc4dtNCzkzA2JUTDFQnM7Hi
-Dons volontaires, aucune contrepartie attendue. Vérifiez toujours l'adresse depuis le dépôt officiel.
+Dons volontaires : ni support, ni fonctionnalité, ni priorité. Vérifiez toujours l'adresse depuis le dépôt officiel.
 Seule la source officielle — dépôt Git + site du projet — fait foi.
 ```
 
@@ -567,7 +567,7 @@ Seule la source officielle — dépôt Git + site du projet — fait foi.
 - Bitcoin (BTC, réseau Bitcoin mainnet) : `33cDzgvVe7m9P4X58pW3rsMKuxrRXFmPBR`
 - Solana (SOL, réseau Solana mainnet) : `95s8JxNzLbre9nopbdxakkc4dtNCzkzA2JUTDFQnM7Hi`
 
-> Dons volontaires, aucune contrepartie attendue. Vérifiez toujours l'adresse depuis le dépôt officiel.
+> Dons volontaires : ni support, ni fonctionnalité, ni priorité. Vérifiez toujours l'adresse depuis le dépôt officiel.
 
 Avertissement à afficher avec les adresses : seule la source officielle — dépôt Git + site du
 projet — fait foi ; le projet ne demande jamais de clé privée ni de phrase de récupération.

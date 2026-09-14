@@ -105,7 +105,7 @@ Un connecteur non configuré fonctionne en mode simulé : il retourne un jeton d
 flowchart LR
     A[Collecteurs défensifs<br/>web_probe, log_tail,<br/>dependency_scan, config_audit] --> B[Normalisation<br/>Event]
     B --> C{Bus d'événements<br/>memory / sqlite / nats}
-    C --> D[Moteur de règles YAML<br/>+ compat Sigma-lite]
+    C --> D[Moteur de règles YAML<br/>+ sous-ensemble Sigma documenté]
     D --> E[Finding<br/>+ risk_score 0-100]
     E --> F[Moteur de décision<br/>policy-as-code YAML / Rego]
     F --> G{Decision}
@@ -142,38 +142,44 @@ Voici le parcours complet, sur des données d'exemple utilisant les plages d'adr
 
 ```yaml
 id: AO-WEB-001
-title: SQL injection attempt in query string
-description: Détecte les motifs d'injection SQL dans les paramètres de requête.
+title: Tentative d'injection SQL dans une requête HTTP
+description: >-
+  Détecte les motifs classiques d'injection SQL dans l'URL ou les paramètres : unions
+  injectées, tautologies (or 1=1), temporisations (sleep, benchmark) et commentaires SQL.
 status: stable            # draft | test | stable | deprecated
 severity: high            # info | low | medium | high | critical
-confidence: 0.85          # 0.0 → 1.0
+confidence: 0.8           # 0.0 → 1.0
 enabled: true
-tags: [web, owasp:a03, mitre:T1190]
-source_types: [web_probe, log_tail]
-kinds: [http.request]
+tags: [web, owasp:a03, mitre:T1190, exploit-attempt]
+source_types: [log_tail, web_probe, webhook, syslog]
+kinds: [http.request, http.response, log.line]
 match:
-  all:
+  any:
     - field: labels.path
       op: regex
-      value: "(?i)(union[\\s/*]+select|or\\s+1=1|sleep\\(\\d+\\)|benchmark\\()"
-  any: []
-  not: []
+      value: "(?i)(union[\\s/*]+select|or\\s+1\\s*=\\s*1|'\\s*or\\s*'|sleep\\s*\\(\\s*\\d+|benchmark\\s*\\(|waitfor\\s+delay|information_schema|into\\s+outfile|load_file\\s*\\()"
+    - field: labels.message
+      op: regex
+      value: "(?i)(union[\\s/*]+select|or\\s+1\\s*=\\s*1|sleep\\s*\\(\\s*\\d+\\)|information_schema)"
   threshold:
     count: 3
-    window_seconds: 60
-    group_by: [labels.src_ip, labels.path]
+    window_seconds: 120
+    group_by: [labels.src_ip]
 dedup:
-  key: [rule_id, labels.src_ip]
-  ttl_seconds: 900
+  key: [labels.src_ip]
+  ttl_seconds: 1800
 risk:
-  base: 60
+  base: 55
   asset_criticality: 1.0
 false_positives:
-  - Requêtes contenant le mot "union" dans un champ de recherche libre.
-remediation: Bloquer l'IP source au WAF 1 h, vérifier les logs applicatifs, patcher l'entrée.
+  - Champ de recherche libre contenant le mot « union » suivi de « select » dans un texte légitime.
+  - Documentation technique affichant des exemples de requêtes SQL dans une URL.
+remediation: >-
+  Vérifier l'application visée, corriger la requête côté code (requêtes paramétrées), puis
+  bloquer l'adresse source 1 h au WAF.
 ```
 
-Deux points à noter. Le champ `false_positives` n'est pas décoratif : il documente le bruit attendu, ce qui oblige l'auteur de la règle à y penser. Et `status: draft | test | stable | deprecated` donne un chemin de maturité explicite : une règle sortie d'un dépôt public arrive en `draft`, pas en `stable`.
+Deux points à noter. Le champ `false_positives` n'est pas décoratif : il documente le bruit attendu, ce qui oblige l'auteur de la règle à y penser. Et `status: draft | test | stable | deprecated` donne un chemin de maturité explicite : la bibliothèque livrée compte **26 règles** (dont 5 pour les anomalies), et une règle sortie d'un dépôt public arrive en `draft`, pas en `stable`.
 
 **Étape 2 — l'événement normalisé (JSON).** L'ingestion accepte un événement ou un lot (`{"events": [...]}`, ≤ 500) :
 
@@ -194,14 +200,14 @@ Deux points à noter. Le champ `false_positives` n'est pas décoratif : il docum
 
 L'appel renvoie `202` avec `accepted`, `rejected`, et la liste des findings produits avec leur score et la décision associée — c'est-à-dire que l'ingestion répond déjà « voici ce que j'ai détecté et ce que je compte faire ».
 
-**Étape 3 — le finding.** Le seuil (`count: 3` en 60 s, groupé par `labels.src_ip` et `labels.path`) est atteint : le moteur produit un finding `AO-WEB-001`, `severity: high`, avec un `risk_score` calculé à partir de `risk.base`, de la sévérité, de la confiance et de la criticité de l'actif, borné 0–100. Sept occurrences sont regroupées (`count: 7`) sur une fenêtre de quatre minutes, avec `first_seen` / `last_seen` et les `event_ids` en preuve.
+**Étape 3 — le finding.** Le seuil (`count: 3` en 120 s, groupé par `labels.src_ip`) est atteint : le moteur produit un finding `AO-WEB-001`, `severity: high`, avec un `risk_score` calculé à partir de `risk.base`, de la sévérité, de la confiance et de la criticité de l'actif, borné 0–100. Sept occurrences sont regroupées (`count: 7`) sur une fenêtre de quatre minutes, avec `first_seen` / `last_seen` et les `event_ids` en preuve.
 
 **Étape 4 — la politique de décision (YAML).** C'est ici que l'organisation écrit *sa* règle du jeu, en clair et versionnée :
 
 ```yaml
 version: 1
-id: auto-block-high-web
-priority: 100              # plus grand = évalué d'abord
+id: auto-block-critical-web-attack
+priority: 200              # plus grand = évalué d'abord
 description: Blocage automatique des attaques web à fort score.
 when:
   finding.severity: [critical, high]
@@ -230,7 +236,7 @@ Sémantique : `when` est un ET entre les clés ; une liste est un OU d'égalité
 ```json
 {
   "decision": "auto",
-  "policy_id": "auto-block-high-web",
+  "policy_id": "auto-block-critical-web-attack",
   "playbook": "block-source-ip",
   "params": { "target": "labels.src_ip", "duration_seconds": 3600 },
   "reason": "severity=high risk=78.5 tags∈{web} tenant.mode=auto",
@@ -250,7 +256,7 @@ name: block-source-ip
 description: Bloque une IP source au niveau du connecteur WAF/pare-feu configuré.
 reversible: true
 dry_run_capable: true
-connectors: [cloudflare, aws-waf, modsecurity, nginx-local, null]
+connectors: [cloudflare, aws-waf, nginx-local, simulation]
 params:
   target: { type: ip, required: true, description: "IP ou CIDR à bloquer" }
   duration_seconds: { type: integer, default: 3600, min: 60, max: 604800 }
@@ -312,7 +318,7 @@ On retrouve, dans un seul enregistrement : qui, avec quel rôle, a fait quoi, su
 
 > **Encadré — limites par conception.**
 >
-> - **Aucune capacité offensive.** Pas de scan agressif, pas de brute force, pas de DoS, pas de hack-back, pas d'exploitation de tiers. Ce n'est pas une limite technique temporaire, c'est un choix de conception du produit.
+> - **Aucune capacité offensive.** Pas de scan agressif, pas de brute force, pas de DoS, pas de hack-back, pas d'exploitation de tiers. Ce n'est pas une limite technique temporaire, c'est un choix de conception du produit — et un **invariant vérifié** par script, par pre-commit et en CI.
 > - **Pas de contre-attaque.** Un outil défensif qui riposte devient un outil offensif non maîtrisé, avec un risque juridique et opérationnel majeur. Thot Secure bloque, isole, révoque — il ne « rend pas la pareille ».
 > - **`thotsecure probe` n'audite que vos propres cibles**, déclarées dans `THOT_TARGETS_FILE` (`./config/targets.yaml`), avec opt-in explicite. Il n'existe aucun mode « scan d'une cible arbitraire ».
 > - **Pas de verdict magique.** Le scoring est déterministe et explicable (`risk.base`, sévérité, confiance, criticité, borné 0–100) : pas de modèle opaque qui décide à votre place.
@@ -324,9 +330,9 @@ On retrouve, dans un seul enregistrement : qui, avec quel rôle, a fait quoi, su
 
 Un MVP honnête dit ce qu'il n'est pas encore.
 
-**SQLite par défaut.** `THOT_DB_URL=sqlite:///./data/thotsecure.db`. C'est un choix de MVP : zéro dépendance, démarrage immédiat, sauvegarde triviale, et suffisant pour un labo, une PME ou une démonstration. Les DDL PostgreSQL/TimescaleDB sont documentées dans le dépôt, mais **le support PostgreSQL/TimescaleDB de première classe reste roadmap** : ne déployez pas ce MVP comme base de données centrale d'un SOC multi-sites sans le tester vous-même à votre échelle.
+**SQLite par défaut.** `THOT_DB_URL=sqlite:///./data/thotsecure.db`. C'est un choix par défaut : zéro dépendance, démarrage immédiat, sauvegarde triviale, et suffisant pour un labo, une PME ou une démonstration. L'adaptateur **PostgreSQL/TimescaleDB est écrit** (`src/thotsecure/storage/postgres.py`, extra `thotsecure[postgres]`) et exécuté en CI contre un vrai serveur TimescaleDB, avec la **même suite de conformité** que SQLite — mais il n'a **pas été éprouvé à l'échelle de production** : ne le déployez pas comme base de données centrale d'un SOC multi-sites sans le tester vous-même à votre échelle.
 
-**Tout n'est pas encore branché sur du réel.** Les playbooks livrés (`block-source-ip` + `unblock-source-ip`, `rate-limit-source`, `quarantine-artifact`, `revoke-session`, `rotate-secret`, `isolate-host`, `patch-dependency`, `harden-endpoint`, `notify`, `open-ticket`) existent avec leur schéma et leur rollback, et **quatre connecteurs natifs sont écrits** : Cloudflare (IP Access Rules et limitation de débit), AWS WAF v2 (IPSet, signature SigV4 vérifiée sur les vecteurs de test officiels), Slack et GitHub Issues. Le relais Nginx local agit réellement sur la machine.
+**Tout n'est pas encore branché sur du réel.** **15 playbooks** sont livrés (`block-source-ip` + `unblock-source-ip`, `rate-limit-source` + `remove-rate-limit`, `quarantine-artifact` + `restore-artifact`, `revoke-session`, `rotate-secret`, `isolate-host` + `unisolate-host`, `patch-dependency`, `harden-endpoint`, `notify`, `open-ticket`, `close-ticket`) avec leur schéma et leur rollback, et **quatre connecteurs natifs sont écrits** : Cloudflare (IP Access Rules et ruleset de limitation de débit), AWS WAF v2 (IPSet, signature SigV4 vérifiée sur les vecteurs de test officiels AWS), Slack et GitHub Issues. Le relais Nginx local agit réellement sur la machine.
 
 **Ce qui manque, et qui est écrit noir sur blanc : aucun de ces connecteurs n'a été validé contre un compte réel.** Nous n'avons pas de compte Cloudflare ni AWS pour le faire, et c'est l'étape obligatoire avant de les activer chez vous — la procédure, les permissions minimales et la méthode de test en simulation sont documentées. Les EDR, Teams/Mattermost, Jira/GLPI et vos outils maison passent par la passerelle `http-webhook` signée. Tant qu'un nom logique n'est pas explicitement branché, il fonctionne en mode simulé : c'est le défaut, et il ne change pas tout seul.
 
@@ -334,11 +340,11 @@ Un MVP honnête dit ce qu'il n'est pas encore.
 
 **Pas de blockchain.** L'audit utilise une chaîne de hash locale, vérifiable hors ligne, sans consensus distribué. C'est plus simple, plus rapide, auditable sans dépendance externe — et cela ne protège pas contre un attaquant qui dispose d'un accès root et réécrit toute la chaîne. Cet article-là mérite d'être développé séparément : export SIEM, ancrage horodaté, sauvegardes hors ligne sont les contre-mesures, pas la magie.
 
-**Interface.** La console embarquée (Jinja2 + JS, **sans build Node**) est livrée et suffit à observer flux, findings, actions, audit et règles. Un dashboard React+TS est prévu dans l'arborescence cible, en option : **roadmap**.
+**Interface.** La console embarquée (Jinja2 + JS, **sans build Node**) est livrée et suffit à observer flux, findings, actions, audit et règles. Un **tableau de bord React optionnel** (React 19 + TypeScript + Vite, ESLint 10, Tailwind 4) est également livré dans `web/` : il se construit, et son job CI est bloquant.
 
 ## 8. Appel à contribution
 
-Le code du MVP v0.1.0 est publié sous **Apache-2.0**. Les tests s'exécutent sans dépendance externe :
+Le code du MVP v0.1.0 est publié sous **Apache-2.0** sur `https://github.com/thot-corp/thot-secure`, avec une release **v0.1.0** publiée (12 artefacts : wheel, sdist, SBOM CycloneDX et SPDX, tous signés Sigstore) et une documentation publiée sur `https://thot-corp.github.io/thot-secure/`. Les **396 tests** s'exécutent sans dépendance externe :
 
 ```console
 $ python -m unittest discover -s tests -t . -v
@@ -363,7 +369,7 @@ Thot Secure est développé sur du temps bénévole. Le projet accepte des dons 
 - **Bitcoin (BTC, réseau Bitcoin mainnet)** : `33cDzgvVe7m9P4X58pW3rsMKuxrRXFmPBR`
 - **Solana (SOL, réseau Solana mainnet)** : `95s8JxNzLbre9nopbdxakkc4dtNCzkzA2JUTDFQnM7Hi`
 
-Dons volontaires, aucune contrepartie attendue. Vérifiez toujours l'adresse depuis le dépôt officiel.
+Dons volontaires, **aucune contrepartie** : un don ne donne droit à rien — ni support, ni fonctionnalité, ni priorité. Vérifiez toujours l'adresse depuis le dépôt officiel — ce sont les seules adresses officielles.
 
 ⚠️ **Anti-arnaque** : seule la source officielle — le dépôt Git et le site du projet — fait foi. Le projet ne demande **jamais** de clé privée ni de phrase de récupération, et ne contactera jamais personne en message privé pour proposer un investissement, un jeton ou un support prioritaire en échange d'un paiement. Toute demande de ce type est une tentative de fraude.
 

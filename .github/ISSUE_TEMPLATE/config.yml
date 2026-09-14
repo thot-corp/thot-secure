@@ -13,7 +13,7 @@ contact_links:
     url: https://github.com/thot-corp/thot-secure/security/advisories/new
     about: >-
       Never disclose a vulnerability in a public issue. Use a private GitHub
-      Security Advisory; alternatively email security@thotsecure.dev. Read
+      Security Advisory. Read
       SECURITY.md for scope, response timelines and the PGP key.
 
   - name: 🛡️ Security policy (read before reporting)
@@ -30,7 +30,7 @@ contact_links:
       tracking — those have their own forms.
 
   - name: 📚 Documentation
-    url: https://thotsecure.dev/docs
+    url: https://thot-corp.github.io/thot-secure/
     about: >-
       Installation, the configuration reference for every THOT_* variable,
       deployment guides, the rule-writing guide and the API reference.
@@ -55,7 +55,7 @@ contact_links:
       project has no offensive capability.
 
   - name: ❤️ Support the project
-    url: https://thotsecure.dev/support
+    url: https://thot-corp.github.io/thot-secure/support/
     about: >-
       Voluntary donations with no counterpart, plus non-financial ways to help.
       Verify the donation addresses from the repository: they are also in

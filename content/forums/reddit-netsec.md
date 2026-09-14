@@ -56,7 +56,7 @@ Short, verifiable facts for the author to keep in mind while replying in comment
 - Roles: `viewer | analyst | responder | admin`. `viewer` = `read:events read:findings read:rules read:policies read:audit read:stats`; `analyst` adds `write:events write:findings`; `responder` adds `execute:actions approve:actions`; `admin` adds `admin:tenants admin:rules admin:keys admin:policies`.
 - Multi-tenancy: every object carries `tenant_id`; on `POST /api/v1/events` the `tenant_id` is forced from the API key, never taken from the body. Isolation has a dedicated CI test.
 - Core isolation: `thotsecure.core` depends only on the stdlib plus `pydantic`/`PyYAML`. FastAPI, Jinja2 and uvicorn belong to the API layer.
-- Honest MVP limits to state before anyone asks: SQLite is the default store; connectors are unconfigured by default and therefore run in **simulated** mode (a playbook returns a `rollback_token` and logs `simulated: true`); the event bus defaults to `memory`; detection is YAML rules plus a Sigma-lite translation subset, not a Sigma engine; `web/` (React+TS) is optional and the console that ships is the Jinja2 + JS one with no Node build.
+- Honest MVP limits to state before anyone asks: SQLite is the default store; connectors are unconfigured by default and therefore run in **simulated** mode (a playbook returns a `rollback_token` and logs `simulated: true`); the event bus defaults to `memory`; detection is YAML rules plus a Sigma-lite translation subset, not a Sigma engine; the PostgreSQL/TimescaleDB adapter exists and runs in CI against a real server with the same conformance suite as SQLite, but has not been exercised at production scale; `web/` (React+TS) is optional and the console that ships is the Jinja2 + JS one with no Node build.
 
 ---
 
@@ -74,7 +74,7 @@ Thot Secure is a defensive SOAR/CSPM in Python/FastAPI. The pipeline is: normali
 
 The four design bets, in the order they mattered to me:
 
-1. **Reversibility is an interface contract, not a best effort.** Every playbook carries `reversible: true` and a `rollback:` block, and `POST /api/v1/actions/{id}/rollback` must succeed as long as the rollback window hasn't expired. If an action can't be undone, it doesn't belong in a playbook.
+1. **Reversibility is an interface contract, not a best effort.** Every playbook carries a `rollback:` block and `reversible: true`, and `POST /api/v1/actions/{id}/rollback` must succeed as long as the rollback window hasn't expired. If an action can't be undone, it doesn't belong in a playbook — or it ships with `reversible: false`, which forces a human approval every time regardless of the tenant's autonomy mode. Two of the 15 shipped playbooks are in that second case, and the loader refuses a playbook that claims `reversible: true` without a rollback block.
 
 2. **A policy decides, not whoever clicks first.** Decisions are YAML policies evaluated by `priority`, with an explicit `when`/`then` and a `decision` of `auto`, `require_approval`, `notify_only` or `ignore`. If no policy matches, the outcome is `notify_only` — never `auto`. Total silence requires an explicit `ignore` policy, so "we forgot to write a rule" can't look like "we decided nothing was worth doing".
 
@@ -86,7 +86,7 @@ That last point is the one I care about most: the thing that stops a runaway aut
 
 **What v0.1.0 actually is, and isn't.** I'd rather list the limits than have them discovered later:
 
-- Storage is SQLite (`THOT_DB_URL=sqlite:///./data/thotsecure.db`). PostgreSQL/TimescaleDB DDL is documented, not the default path.
+- Storage is SQLite (`THOT_DB_URL=sqlite:///./data/thotsecure.db`). PostgreSQL/TimescaleDB has a written adapter that runs in CI against a real server, but it is not the default path and isn't proven at production scale.
 - Connectors are unconfigured on a fresh install, so they run in **simulated** mode: the playbook returns a `rollback_token` and logs `simulated: true`. Nothing touches your WAF until you wire it up. It's deliberate — install-before-credentials — but it also means "it blocked an IP for me" is not what a fresh v0.1.0 does.
 - The event bus defaults to in-process memory (`THOT_BUS=memory`); `sqlite` and `nats` are the alternatives.
 - Detection is YAML rules with a fixed operator set (`eq, ne, gt, gte, lt, lte, in, not_in, contains, icontains, startswith, endswith, regex, exists, cidr, len_gt, len_lt`) plus a Sigma-lite translation subset. It is not a Sigma engine and won't pretend to be.
@@ -109,7 +109,7 @@ Réponse à donner, en trois temps : ce que le marché fait déjà, ce que nous 
   - **Réversibilité** : le playbook contient un bloc `rollback:` et l'API expose `POST /api/v1/actions/{id}/rollback` ; l'échec du rollback tant que la fenêtre est ouverte est un défaut, pas une limite.
   - **Audit chaîné** : la chaîne de hash est une donnée du produit, vérifiable par `GET /api/v1/audit/verify`, et exportable (`jsonl|cef`), donc opposable hors du produit.
   - **Garde-fous non contournables par une politique** : `max_actions_per_hour`, cooldown par `(tenant, playbook, cible)`, refus absolu sur les cibles de l'`autonomy_allowlist`, priorité du `dry_run` global, `require_approval` hors périmètre déclaré. Un auteur de politique ne peut pas les désactiver en écrivant du YAML.
-- **Ce que nous n'avons pas, à dire sans détour** : pas des centaines d'intégrations, pas de place de marché, pas de SSO d'entreprise, quatre rôles RBAC seulement (`viewer|analyst|responder|admin`), pas de retour d'expérience à grande échelle, une seule base (SQLite) par défaut, des connecteurs en mode simulé tant qu'ils ne sont pas configurés. Si l'exigence du jour est la couverture d'intégrations, un SOAR commercial est le bon choix et nous ne sommes pas une alternative crédible.
+- **Ce que nous n'avons pas, à dire sans détour** : pas des centaines d'intégrations, pas de place de marché, pas de SSO d'entreprise, quatre rôles RBAC seulement (`viewer|analyst|responder|admin`), pas de retour d'expérience à grande échelle, SQLite par défaut (l'adaptateur PostgreSQL/TimescaleDB est écrit et tourne en CI, mais n'a pas été éprouvé à l'échelle de production), des connecteurs en mode simulé tant qu'ils ne sont pas configurés — et les quatre connecteurs natifs livrés n'ont jamais été validés contre un compte réel. Si l'exigence du jour est la couverture d'intégrations, un SOAR commercial est le bon choix et nous ne sommes pas une alternative crédible.
 
 À ne pas faire : répondre que nous sommes « différents » sans nommer la différence, ou lister des capacités non encore livrées sans les étiqueter « roadmap ».
 

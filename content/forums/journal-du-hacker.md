@@ -27,7 +27,7 @@ autopromotion: "AVERTISSEMENT — le Journal du Hacker est une plateforme de par
 | Point | Consigne |
 |---|---|
 | Créneau | Jour de semaine 09:00–12:00 heure de Paris (hypothèse non mesurée, à confirmer). |
-| Longueur | **150–300 mots**, cible 250. Le texte du §4 en fait environ 260 : c'est la version à publier, sans ajout. |
+| Longueur | **150–300 mots**, cible 250. Le texte du §4 en fait environ 280 : c'est la version à publier, sans ajout. |
 | Participation préalable | Compte avec un historique de soumissions ou de commentaires, si la plateforme l'exige. Sans historique, la soumission risque d'être ignorée ; dans ce cas, commencer par commenter d'autres soumissions pendant quelques jours. |
 | Étiquettes | À vérifier le jour J. Candidats plausibles : développement, sécurité, réseau, logiciel libre. Ne pas inventer d'étiquette. |
 | Présence | Répondre dans les 24 heures. Le volume de commentaires est faible ; une objection sans réponse reste visible longtemps. |
@@ -46,13 +46,13 @@ Les seuls éléments autorisés dans le texte publié :
 - Connecteur non configuré ⇒ mode simulé, jeton de rollback renvoyé, `simulated: true` journalisé : comportement par défaut du MVP (§7 du contrat).
 - Défauts orientés vers l'intérieur : SQLite par défaut (`THOT_DB_URL=sqlite:///./data/thotsecure.db`), bus `memory` par défaut, console Jinja2 + JS sans build Node (§9, §4.9 du contrat).
 - Aucun mécanisme de télémétrie n'apparaît dans le contrat d'interface → **constat de lecture, à confirmer par audit du code**, formulé comme tel.
-- Manques à citer : pas d'agent endpoint, connecteurs natifs livrés mais désactivés par défaut, quatre rôles RBAC, pas de corpus de règles éprouvé (§7, §9, §4 du contrat ; §10 pour les rôles).
+- Manques à citer : pas d'agent endpoint, bibliothèque livrée de 26 règles, 9 politiques et 15 playbooks, quatre connecteurs natifs livrés (`cloudflare`, `aws-waf`, `slack`, `github-issues`) mais aucun validé contre un compte réel, quatre rôles RBAC, pas de corpus de règles éprouvé (§7, §9, §4 du contrat ; §10 pour les rôles).
 
 Ce qui est interdit dans ce texte : tout chiffre non mesuré ; tout superlatif ; la formule « zéro télémétrie » présentée comme un engagement ; « fonctionne en air-gap » sans test hors ligne ; « souverain » sans définition ; toute fonctionnalité non livrée présentée au présent.
 
 ---
 
-# 4. TEXTE PUBLIÉ — à copier tel quel (FR), ≈ 260 mots
+# 4. TEXTE PUBLIÉ — à copier tel quel (FR), ≈ 280 mots
 
 > **Titre :** `Thot Secure 0.1.0 — SOAR défensif auto-hébergeable : actions réversibles, audit chaîné, dry-run par défaut`
 >
@@ -62,7 +62,7 @@ Ce qui est interdit dans ce texte : tout chiffre non mesuré ; tout superlatif ;
 >
 > **Texte :**
 
-Je suis l'auteur d'Thot Secure, publié en v0.1.0 sous Apache-2.0. C'est un SOAR/CSPM défensif en Python/FastAPI : des événements normalisés entrent, des règles YAML détectent, un score est calculé, une politique *policy-as-code* décide, un playbook agit — et chaque playbook porte un rollback.
+Je suis l'auteur d'Thot Secure, publié en v0.1.0 sous Apache-2.0. C'est un SOAR/CSPM défensif en Python/FastAPI : des événements normalisés entrent, des règles YAML détectent, un score est calculé, une politique *policy-as-code* décide, un playbook agit — et chaque playbook livré porte un rollback, sauf ceux explicitement marqués irréversibles, qui exigent alors une approbation humaine. La bibliothèque compte 26 règles, 9 politiques et 15 playbooks.
 
 Trois points m'ont occupé plus que le reste.
 
@@ -74,13 +74,13 @@ Les défauts sont fermés : `THOT_DRY_RUN=true` et `THOT_AUTONOMY=supervised`, q
 
 Sur l'auto-hébergement : les défauts pointent vers l'intérieur (SQLite, bus en mémoire, console Jinja2 sans chaîne de build Node, aucun CDN). Aucun mécanisme de télémétrie n'apparaît dans le contrat d'interface ; c'est un constat de lecture, à confirmer par audit du code, pas une garantie que je demande de croire sur parole.
 
-C'est un alpha et il manque des choses : pas d'agent endpoint, pas de corpus de règles éprouvé, PostgreSQL seulement documenté, quatre rôles RBAC. Dépôt : `https://github.com/thot-corp/thot-secure`
+C'est un alpha et il manque des choses : pas d'agent endpoint, pas de corpus de règles éprouvé, un adaptateur PostgreSQL/TimescaleDB écrit et exécuté en CI mais pas éprouvé à l'échelle de production, quatre rôles RBAC. Dépôt : `https://github.com/thot-corp/thot-secure`
 
 ---
 
 # 5. Bloc dons (FR) — non inclus dans le texte publié
 
-**Décision** : le texte publié ne mentionne pas les dons. Motif : le Journal du Hacker n'est pas un lieu de collecte, une sollicitation affaiblirait un texte qui repose entièrement sur des faits vérifiables, et un texte de 260 mots n'a pas la place d'accueillir un bloc de soutien sans que celui-ci devienne le sujet.
+**Décision** : le texte publié ne mentionne pas les dons. Motif : le Journal du Hacker n'est pas un lieu de collecte, une sollicitation affaiblirait un texte qui repose entièrement sur des faits vérifiables, et un texte de 280 mots n'a pas la place d'accueillir un bloc de soutien sans que celui-ci devienne le sujet.
 
 Si — et seulement si — la question est posée explicitement dans les commentaires, répondre **une fois**, sobrement, avec le bloc ci-dessous, sans le remettre dans la soumission. Les quatre éléments sont obligatoires.
 
@@ -105,9 +105,9 @@ Interdits : recopier ces adresses de mémoire (elles doivent être relues dans l
 |---|---|
 | « Encore un projet qui n'est qu'un dépôt vide. » | Reconnaître l'état alpha, citer la commande de tests (`python -m unittest discover -s tests -t . -v`) et le périmètre couvert par le contrat, sans prétendre que tout est terminé. Si des couches ne sont pas encore publiées, le dire. |
 | « "Sans télémétrie", c'est une affirmation ou une promesse ? » | C'est un constat de lecture du contrat d'interface : aucun mécanisme de télémétrie n'y apparaît. À confirmer par audit du code, et la vérification est bienvenue comme contribution. Ne pas transformer cela en garantie. |
-| « Pourquoi SQLite ? » | Défaut choisi pour qu'on puisse évaluer l'outil sans démarrer de service (une seule base fichier). PostgreSQL/TimescaleDB est documenté comme migration, pas testé par défaut. |
+| « Pourquoi SQLite ? » | Défaut choisi pour qu'on puisse évaluer l'outil sans démarrer de service (une seule base fichier). Un adaptateur PostgreSQL/TimescaleDB existe et tourne en CI contre un vrai serveur, mais ce n'est pas le chemin par défaut et il n'a pas été éprouvé à l'échelle de production. |
 | « Sans agent, à quoi ça sert ? » | Thot Secure consomme des événements normalisés via `POST /api/v1/events` ; la télémétrie hôte vient d'ailleurs. C'est un choix de périmètre, affiché comme tel. |
-| « Qui décide du projet ? » | Développement sous DCO, sans CLA, au moins une approbation de mainteneur avant fusion ; la règle d'absence totale de capacité offensive est tenue comme non négociable. Si le document de gouvernance n'est pas encore publié, l'admettre. |
+| « Qui décide du projet ? » | Développement sous DCO, sans CLA, au moins une approbation de mainteneur avant fusion ; la règle d'absence totale de capacité offensive est tenue comme non négociable. Le document de gouvernance (`GOVERNANCE.md`) est publié dans le dépôt et référencé depuis `CONTRIBUTING.md`. |
 | « Pourquoi pas du Rego ? » | Rego/OPA est pris en charge si `THOT_OPA_BIN` pointe vers un binaire présent ; le YAML est le défaut pour rester relisible en revue par un analyste. |
 | « Combien ça consomme ? » | Ne pas inventer. Donner une mesure réelle si elle a été faite, en la présentant comme ponctuelle, ou dire qu'elle n'a pas été mesurée. |
 

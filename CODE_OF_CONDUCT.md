@@ -60,7 +60,7 @@ representative at an online or offline event.
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
 reported to the community leaders responsible for enforcement at
-**conduct@thotsecure.dev**.
+a maintainer listed in [`MAINTAINERS.md`](MAINTAINERS.md), by direct message on GitHub.
 All complaints will be reviewed and investigated promptly and fairly.
 
 All community leaders are obligated to respect the privacy and security of the
@@ -68,7 +68,7 @@ reporter of any incident.
 
 For a conduct report that also involves a security weakness, use the channel
 described in [`SECURITY.md`](SECURITY.md) instead — or both, if you are unsure
-which applies. Reports sent to `conduct@thotsecure.dev` are received only by the
+which applies. Conduct reports are received only by the
 people listed as the enforcement contacts in
 [`MAINTAINERS.md`](MAINTAINERS.md); they are never discussed in a public issue,
 a pull request or a chat channel.

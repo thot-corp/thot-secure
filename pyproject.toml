@@ -89,13 +89,13 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://thotsecure.dev"
-Documentation = "https://thotsecure.dev/docs"
+Homepage = "https://thot-corp.github.io/thot-secure/"
+Documentation = "https://thot-corp.github.io/thot-secure/"
 Repository = "https://github.com/thot-corp/thot-secure"
 Changelog = "https://github.com/thot-corp/thot-secure/blob/main/CHANGELOG.md"
 Issues = "https://github.com/thot-corp/thot-secure/issues"
 Security = "https://github.com/thot-corp/thot-secure/security/advisories/new"
-Funding = "https://thotsecure.dev/support"
+Funding = "https://thot-corp.github.io/thot-secure/support/"
 
 [project.scripts]
 thotsecure = "thotsecure.cli:main"

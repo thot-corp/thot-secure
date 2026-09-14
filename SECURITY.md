@@ -39,14 +39,14 @@ single click.
 
 ### Alternative: email
 
-`security@thotsecure.dev` — encrypted to the project PGP key below.
+[GitHub Security Advisories](https://github.com/thot-corp/thot-secure/security/advisories/new) — **canal privé**, et le seul actif aujourd'hui. Une adresse e-mail dédiée sera publiée ici le jour où le domaine du projet existera réellement ; tant qu'il n'existe pas, n'envoyez **rien** par courriel à une adresse en `@thotsecure.dev`.
 
 Use email if you cannot use GitHub, if your report contains material you do not
 wish to upload, or if the GitHub advisory form is itself affected.
 
 ### What not to use
 
-Do not use `conduct@thotsecure.dev` for vulnerabilities (that address is for the
+Do not use the conduct channel for vulnerabilities (that channel is for the
 [Code of Conduct](CODE_OF_CONDUCT.md)), and do not open an issue titled
 "security bug" with details.
 
@@ -54,13 +54,13 @@ Do not use `conduct@thotsecure.dev` for vulnerabilities (that address is for the
 
 ## 3. PGP key
 
-Reports to `security@thotsecure.dev` may be encrypted. The project's reporting key
+A report may be encrypted. This is only useful once a dedicated mailbox exists; until then the GitHub advisory is the channel, and the project's reporting key
 is an Ed25519 (sign + certify) key with an encryption subkey, published here and
 in the repository's `.well-known` location once the website is live.
 
 | Property | Value |
 |---|---|
-| User ID | `Thot Secure Security Team <security@thotsecure.dev>` |
+| User ID | *(aucune clé publiée : le canal est GitHub Security Advisories)* |
 | Algorithm | Ed25519 (primary, certify + sign) with Curve25519 (X25519) encryption subkey |
 | Key ID (long) | `F05DB21C8E634D7A` |
 | Key ID (short) | `8E634D7A` |

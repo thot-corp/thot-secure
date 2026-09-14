@@ -28,11 +28,11 @@ autopromotion: "1 lien au total, en fin de thread uniquement ; disclosure d'aute
 
 ### Post 1 — hook factuel
 
-Longueur : **228/280 caractères**
+Longueur : **268/280 caractères**
 
 <!--post:1-->
 ```text
-Thot Secure v0.1.0 — a defensive SOAR/CSPM built the other way round: dry-run is the default (THOT_DRY_RUN=true), every action ships with a rollback, every decision lands in a hash-chained audit log. Apache-2.0, Python/FastAPI.
+Thot Secure v0.1.0 — a defensive SOAR/CSPM built the other way round: dry-run is the default (THOT_DRY_RUN=true), every playbook ships with a rollback unless it is explicitly irreversible, every decision lands in a hash-chained audit log. Apache-2.0, Python/FastAPI.
 ```
 
 ### Post 2 — le problème
@@ -46,7 +46,7 @@ The problem is not detection volume. It is automation you cannot audit and canno
 
 ### Post 3 — la décision
 
-Longueur : **214/280 caractères**
+Longueur : **216/280 caractères**
 
 <!--post:3-->
 ```text
@@ -73,7 +73,7 @@ Audit records are chained by hash: sha256(seq|ts|tenant|actor|role|action|target
 
 ### Post 6 — essayer + appel à contribution (seul lien du thread)
 
-Longueur : **233/280 caractères**
+Longueur : **243/280 caractères**
 
 <!--post:6-->
 ```text
@@ -86,7 +86,7 @@ Try it with no credentials: thotsecure init-db, thotsecure demo --tenant demo, t
 
 Angle différent : on attaque par la confiance accordée à l'automatisation, pas par l'ordre des garanties. À tester en remplacement du post 1, thread identique à partir du post 2.
 
-Longueur : **223/280 caractères**
+Longueur : **226/280 caractères**
 
 <!--post:7-->
 ```text
@@ -101,7 +101,7 @@ Most SOAR asks you to trust the automation first and prove it later. Thot Secure
 
 Angle différent : contribution et gouvernance plutôt qu'essai en 5 minutes. Conserve **l'unique lien** du thread — ne jamais publier cette variante en plus du post 6, seulement à sa place.
 
-Longueur : **206/280 caractères**
+Longueur : **210/280 caractères**
 
 <!--post:8-->
 ```text

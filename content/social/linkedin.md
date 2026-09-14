@@ -28,7 +28,7 @@ Faits techniques : tous vérifiables dans `docs/architecture/api-contract.md` (�
 
 ## Post principal (A)
 
-Longueur mesurée : **1268/1300 caractères** (compte brut, espaces, ponctuation, retours à la ligne et URL inclus).
+Longueur mesurée : **1258/1300 caractères** (compte brut, espaces, ponctuation, retours à la ligne et URL inclus).
 
 <!--post:1-->
 ```text
@@ -38,7 +38,7 @@ Thot Secure v0.1.0 (Apache-2.0, Python/FastAPI) y répond dans le produit, pas d
 
 1. Dry-run par défaut. THOT_DRY_RUN=true. Aucune action réelle sans levée explicite, globale ou par tenant.
 
-2. Réversibilité obligatoire. Chaque playbook livré embarque son rollback ; sans bloc rollback, il est rejeté au chargement. POST /actions/{id}/rollback défait l'action.
+2. Réversibilité obligatoire. Chaque playbook livré embarque son rollback ; un playbook irréversible exige une approbation humaine.
 
 3. Décision traçable. Politiques en YAML versionné : auto, require_approval, notify_only, ignore. Aucune politique ne matche → notify_only. Chaque action porte un policy_id et un audit_seq dans un journal chaîné par hash.
 
@@ -62,7 +62,7 @@ https://github.com/thot-corp/thot-secure
 
 Angle volontairement différent du post A : on ne parle plus de temps gagné, mais de capacité à **prouver** ce qui s'est passé. À tester en second, à 7 jours d'intervalle minimum.
 
-Longueur mesurée : **1037/1300 caractères**.
+Longueur mesurée : **1127/1300 caractères**.
 
 <!--post:2-->
 ```text
@@ -74,7 +74,7 @@ Concrètement : GET /api/v1/audit/verify renvoie {valid, records, broken_at}. En
 
 L'export se fait en jsonl ou cef vers votre SIEM, sans format propriétaire ni agent à installer.
 
-Le reste tient en deux garanties par défaut : dry_run actif (THOT_DRY_RUN=true) et rollback obligatoire sur chaque playbook livré.
+Le reste tient en deux garanties par défaut : dry_run actif (THOT_DRY_RUN=true) et rollback sur chaque playbook livré (sauf marquage irréversible explicite, qui impose une approbation humaine).
 
 Apache-2.0, Python/FastAPI, SQLite pour le MVP, console embarquée sans build Node.
 
@@ -89,17 +89,17 @@ https://github.com/thot-corp/thot-secure
 
 Pour un repost, une story LinkedIn « lien », ou une version mobile-first. Un seul bloc, pas de liste longue.
 
-Longueur mesurée : **580/600 caractères** (cible 400-600).
+Longueur mesurée : **595/600 caractères** (cible 400-600).
 
 <!--post:3-->
 ```text
 Le réflexe SOAR habituel : automatiser d'abord, espérer ensuite.
 
-Thot Secure v0.1.0 prend le chemin inverse : dry-run par défaut (THOT_DRY_RUN=true), rollback obligatoire sur chaque playbook, audit chaîné par hash vérifiable en une requête, isolation stricte par tenant.
+Thot Secure v0.1.0 prend le chemin inverse : dry-run par défaut (THOT_DRY_RUN=true), rollback sur chaque playbook livré (sauf irréversibles, qui exigent une approbation), audit chaîné par hash, isolation stricte par tenant.
 
 Les décisions sont du YAML versionné (auto, require_approval, notify_only, ignore) ; plafond horaire et cooldown ne se contournent pas.
 
-Pour mesurer avant d'automatiser : thotsecure demo --tenant demo déroule findings et actions en local, sans credentials.
+Pour mesurer avant d'automatiser : thotsecure demo --tenant demo déroule findings et actions en local.
 
 Apache-2.0 : https://github.com/thot-corp/thot-secure
 ```

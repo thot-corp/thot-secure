@@ -35,7 +35,7 @@ Alert volume is rarely the hard part of blue-team work. The hard part is automat
 
 ### Post 2 — l'approche
 
-Longueur : **283/500 caractères**
+Longueur : **286/500 caractères**
 
 <!--post:2-->
 ```text
@@ -62,7 +62,7 @@ then:
 
 ### Post 4 — les garde-fous, appliqués après la politique
 
-Longueur : **323/500 caractères**
+Longueur : **325/500 caractères**
 
 <!--post:4-->
 ```text
@@ -73,7 +73,7 @@ thotsecure actions plan --finding <id> --playbook block-source-ip
 
 ### Post 5 — la réversibilité et le mode simulé
 
-Longueur : **320/500 caractères**
+Longueur : **322/500 caractères**
 
 <!--post:5-->
 ```text
@@ -82,16 +82,16 @@ Every shipped playbook carries a rollback block; a playbook without one is rejec
 
 ### Post 6 — les limites assumées
 
-Longueur : **304/500 caractères**
+Longueur : **408/500 caractères**
 
 <!--post:6-->
 ```text
-Limits we are not hiding in v0.1.0: SQLite is the storage backend (PostgreSQL/TimescaleDB is roadmap), connectors stay simulated until configured, Rego needs an OPA binary present, patch-dependency opens a PR and never merges it, probe only audits targets you declared. Pre-1.0: schemas can still change.
+Limits we are not hiding in v0.1.0: SQLite is the default store and the PostgreSQL/TimescaleDB adapter, though tested in CI, is not proven at production scale; connectors stay simulated until configured, and the four native ones have never run against a real account; Rego needs an OPA binary, patch-dependency opens a ticket and never merges, probe only audits declared targets. Pre-1.0: schemas can change.
 ```
 
 ### Post 7 — appel à contribution + lien + hashtags
 
-Longueur : **340/500 caractères**
+Longueur : **344/500 caractères**
 
 <!--post:7-->
 ```text
@@ -109,7 +109,7 @@ https://github.com/thot-corp/thot-secure
 
 Angle différent : on montre la détection plutôt que la décision. Même longueur cible, à substituer au post 3, thread inchangé ailleurs.
 
-Longueur : **371/500 caractères**
+Longueur : **373/500 caractères**
 
 <!--post:8-->
 ```text
@@ -132,7 +132,7 @@ false_positives:
 
 Angle différent : entrer par l'audit et la preuve, pas par la charge d'alertes.
 
-Longueur : **253/500 caractères**
+Longueur : **256/500 caractères**
 
 <!--post:9-->
 ```text

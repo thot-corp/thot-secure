@@ -195,7 +195,7 @@ Le contrôle de continuité est ce qui détecte une suppression — beaucoup d'i
 $ thotsecure audit verify
 audit: 1284 enregistrements, chaîne valide (valid=true, broken_at=null)
 
-$ curl -s -H "X-API-Key: ao_…" https://thotsecure.local/api/v1/audit/verify
+$ curl -s -H "X-API-Key: thot_…" https://thotsecure.local/api/v1/audit/verify
 {"valid":true,"records":1284,"broken_at":null}
 ```
 
@@ -247,7 +247,7 @@ Contre-mesures, par ordre d'efficacité :
 
 1. **Exporter vers un système que l'administrateur d'Thot Secure ne contrôle pas.** `GET /api/v1/audit/export?format=jsonl|cef` produit un flux destiné à un SIEM. La mesure décisive est de l'exécuter en **push planifié**, et non en pull à la demande : une suppression locale suivie d'un export à la demande donnerait un résultat silencieusement propre.
 2. **Ancrer l'empreinte de tête.** Publier périodiquement `(seq_max, hash_max, horodatage)` hors de portée de l'attaquant — autorité d'horodatage, dépôt Git distinct, stockage WORM. *L'ancrage automatique n'est pas fourni en v0.1.0 : chantier identifié.*
-3. **Sauvegardes hors ligne** et stockage non réinscriptible pour les exports.4. **Séparer les privilèges.** Qui exploite la base ne devrait pas pouvoir la purger : `read:audit` est une capacité distincte dans le RBAC (`viewer | analyst | responder | admin`), et les clés API sont stockées hachées (`scrypt`), révocables, jamais en clair.
+3. **Sauvegardes hors ligne** et stockage non réinscriptible pour les exports.4. **Séparer les privilèges.** Qui exploite la base ne devrait pas pouvoir la purger : `read:audit` est une capacité distincte dans le RBAC (quatre rôles : `viewer | analyst | responder | admin`), et les clés API sont stockées hachées (`scrypt`), au format `thot_<identifiant>_<secret>`, révocables, jamais en clair. L'authentification se fait **par clés API uniquement** : pas de SSO/OIDC ni de comptes nominatifs.
 
 ### 5.2 La troncature de la queue ne casse pas la chaîne
 
@@ -292,13 +292,13 @@ Dix questions à poser à tout outil qui promet un « audit immuable » :
 
 ## 8. Contribuer
 
-**Tests d'audit.** `tests/test_audit_chain.py` doit couvrir chaîne valide, falsification (contenu modifié, hash recalculé, suppression au milieu) et export CEF, cas limites compris : journal vide, séquence trouée. Un test qui échoue volontairement pour documenter la troncature de queue vaut autant qu'un correctif.
+**Tests d'audit.** `tests/test_storage_conformance.py` doit couvrir chaîne valide, falsification (contenu modifié, hash recalculé, suppression au milieu) et export CEF, cas limites compris : journal vide, séquence trouée — complété par `tests/test_api.py` (métriques, `/api/v1/audit/verify`, export CEF) et `tests/test_smoke_e2e.py` (le cycle complet inscrit dans la chaîne). Un test qui échoue volontairement pour documenter la troncature de queue vaut autant qu'un correctif.
 
 **Ancrage horodaté.** Identifié, non implémenté : c'est l'apport qui transforme une chaîne « détecte la modification » en chaîne « détecte aussi l'effacement ».
 
 **Purge consciente de la chaîne.** Concevoir la suppression par segments ancrés, avec tests et documentation de conformité.
 
-`python -m unittest discover -s tests -t . -v` s'exécute sans dépendance externe ; le contrat d'interface fait foi. Et si vous avez déjà dû défendre un journal contesté en audit, votre retour sur les sections 5 et 6 vaut plus que n'importe quelle étoile GitHub : ouvrez une issue, décrivez le cas, dites ce qui a manqué.
+`python -m unittest discover -s tests -t . -v` exécute **396 tests** sans dépendance externe (70 ignorés sans serveur PostgreSQL) ; le contrat d'interface fait foi. Et si vous avez déjà dû défendre un journal contesté en audit, votre retour sur les sections 5 et 6 vaut plus que n'importe quelle étoile GitHub : ouvrez une issue, décrivez le cas, dites ce qui a manqué.
 
 ---
 
@@ -309,6 +309,6 @@ Thot Secure est un projet bénévole sous licence Apache-2.0. Les dons sont volo
 - **Bitcoin (BTC, réseau Bitcoin mainnet)** : `33cDzgvVe7m9P4X58pW3rsMKuxrRXFmPBR`
 - **Solana (SOL, réseau Solana mainnet)** : `95s8JxNzLbre9nopbdxakkc4dtNCzkzA2JUTDFQnM7Hi`
 
-Dons volontaires, aucune contrepartie attendue. Vérifiez toujours l'adresse depuis le dépôt officiel.
+Dons volontaires, **aucune contrepartie** : un don ne donne droit à rien — ni support, ni fonctionnalité, ni priorité. Vérifiez toujours l'adresse depuis le dépôt officiel : ce sont les seules adresses officielles.
 
 ⚠️ **Anti-arnaque** : seule la source officielle — dépôt Git + site du projet — fait foi. Le projet ne demande **jamais** de clé privée ni de phrase de récupération, et n'offre aucun support prioritaire ni avantage contre un paiement. Toute sollicitation de ce type est frauduleuse.

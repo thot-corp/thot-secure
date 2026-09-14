@@ -50,7 +50,7 @@ def create_app(settings: Settings | None = None, *, service: Service | None = No
         ),
         version=__version__,
         license_info={"name": __license__, "url": "https://www.apache.org/licenses/LICENSE-2.0"},
-        contact={"name": "Thot Secure", "url": "https://thotsecure.dev"},
+        contact={"name": "Thot Secure", "url": "https://thot-corp.github.io/thot-secure/"},
         openapi_tags=[
             {"name": "santé", "description": "Sondes, version, métriques Prometheus."},
             {"name": "tenants", "description": "Tenants, clés API, périmètre déclaré."},

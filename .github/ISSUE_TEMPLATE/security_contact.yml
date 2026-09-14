@@ -24,7 +24,7 @@ body:
         one place, and you are credited in the published advisory.
 
         **Option 2 — email, encrypted.**
-        `security@thotsecure.dev`, using the project PGP key published in
+        the private advisory linked above. There is no e-mail address:
         [`SECURITY.md`](https://github.com/thot-corp/thot-secure/blob/main/SECURITY.md).
         Use this if you cannot use GitHub, or if the advisory form itself is
         affected.
@@ -59,7 +59,7 @@ body:
           use the *False positive report* form.
         - A **functional defect** that does not affect a security guarantee: use
           the *Bug report* form.
-        - A **Code of Conduct** matter goes to `conduct@thotsecure.dev`, not here and
+        - A **Code of Conduct** matter goes to a maintainer listed in `MAINTAINERS.md`
           not to the security address.
 
         Once you have read the above, complete the fields below so this issue can
@@ -89,7 +89,7 @@ body:
           required: true
         - label: I have **not** included, and will not include, vulnerability details, reproduction steps, payloads, affected versions with an exploit path, or proof-of-concept code in this public issue.
           required: true
-        - label: I will report the technical details through GitHub Security Advisories or by email to security@thotsecure.dev.
+        - label: I will report the technical details through GitHub Security Advisories (https://github.com/thot-corp/thot-secure/security/advisories/new) and not in a public issue.
           required: true
         - label: Any testing I performed was against systems I own or am authorized to test, and I did not access another tenant's data or degrade anyone's service.
           required: true

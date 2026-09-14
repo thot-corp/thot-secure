@@ -41,21 +41,21 @@ Ne rien affirmer qui ne figure pas ici, et ne pas citer cette section dans le po
 
 | Affirmation | Source contractuelle |
 |---|---|
-| Base de données : SQLite par défaut, `THOT_DB_URL=sqlite:///./data/thotsecure.db` ; PostgreSQL/TimescaleDB seulement documenté | §9 ; §9 (colonne défaut et rôle) |
+| Base de données : SQLite par défaut, `THOT_DB_URL=sqlite:///./data/thotsecure.db` ; adaptateur PostgreSQL/TimescaleDB écrit et exécuté en CI contre un vrai serveur, mais non éprouvé à l'échelle de production | §9 ; `src/thotsecure/storage/postgres.py` |
 | Bus d'événements : `THOT_BUS=memory` par défaut, alternatives `memory \| sqlite \| nats`, `THOT_NATS_URL=nats://127.0.0.1:4222` | §9 ; §2 (`bus/`) |
 | Le cœur `thotsecure.core` ne dépend que de la stdlib + `pydantic`/`PyYAML` ; FastAPI, Jinja2 et uvicorn sont des dépendances de la couche API | §1 invariants (5) ; §2 |
 | Console embarquée en Jinja2 + JS, **aucun build Node requis** ; le dashboard React+TS (`web/`) est optionnel | §4.9 ; §2 |
 | Écoute : `THOT_HOST=0.0.0.0`, `THOT_PORT=8080` | §9 |
 | TLS : `THOT_TLS_ENABLED=false` par défaut, HTTPS direct sinon reverse-proxy ; le chiffrement au repos repose sur `THOT_SECRET_KEY` + disque chiffré documenté | §9 ; §10 |
 | Rétention : `THOT_RETENTION_DAYS=30` (purge des événements) | §9 |
-| Connecteur non configuré ⇒ mode simulé (`null` / `simulation`) : retourne un `rollback_token`, journalise `simulated: true` ; **c'est le comportement par défaut du MVP** | §7 |
+| Connecteur non configuré ⇒ mode simulé (`simulation`) : retourne un `rollback_token`, journalise `simulated: true` ; **c'est le comportement par défaut du MVP** | §7 ; `src/thotsecure/actions/registry.py` (`DEFAULT_CONNECTORS`) |
 | Clé API d'amorçage `THOT_BOOTSTRAP_API_KEY=thot_BOOTSTRAP_changemebeforefirstuse`, à changer (⚠️) ; `THOT_SECRET_KEY` est généré par défaut avec un avertissement | §9 |
 | Clés API stockées hachées (`scrypt`), jamais en clair | §10 |
 | Garde-fou anti-abus sur l'ingestion : `THOT_RATE_LIMIT_PER_MIN=600`, taille de corps limitée, pas d'`eval` de template utilisateur, regex de règle compilées avec un délai d'exécution maximal | §9 ; §10 |
 | Observabilité locale : `GET /metrics` (exposition Prometheus, réseau interne), `GET /healthz`, `GET /readyz` (vérifie DB + bus + règles → `200` ou `503`), `GET /version` | §4.1 |
 | Cibles déclarées : `THOT_TARGETS_FILE=./config/targets.yaml` — le périmètre autorisé par tenant ; `probe` n'audite **que** des cibles déclarées possédées par le tenant, opt-in explicite | §9 ; §10 |
 | Défauts de sûreté : `THOT_DRY_RUN=true`, `THOT_AUTONOMY=supervised` | §9 ; §1 invariants (1) |
-| Déploiement : `deploy/` contient Dockerfile, compose, k8s, helm, terraform, ansible | §2 |
+| Déploiement : `deploy/` contient k8s, helm, terraform, ansible, grafana, prometheus ; le `Dockerfile` et les fichiers compose sont à la racine du dépôt | §2 ; constaté sur disque |
 
 **Point de vigilance à ne pas transformer en slogan — l'air-gap et la télémétrie.** Le contrat ne décrit **aucun** mécanisme de télémétrie, de remontée d'usage, de compte en ligne ou d'appel à un service tiers. C'est un constat de lecture du contrat, pas une garantie produit : le post doit être formulé comme « aucun mécanisme de télémétrie n'apparaît dans le contrat d'interface ; à confirmer par audit du code avant publication ». Deux formulations à bannir : « zéro télémétrie » présenté comme un engagement contractuel, et « fonctionne en air-gap » présenté comme testé. Un air-gap réel suppose des dépendances installables hors ligne et l'absence de point de sortie réseau : c'est à **prouver** par la checklist du §4 avant de l'écrire.
 
@@ -77,11 +77,11 @@ But : pouvoir écrire une phrase du post sans la surinterpréter. Chaque case do
 **B. Preuve d'absence de sortie réseau**
 - [ ] Capture du trafic sortant de l'hôte pendant un cycle complet (démarrage, ingestion, détection, action en mode simulé, vérification d'audit) : aucune connexion sortante inattendue. Méthode à choisir selon l'environnement (pare-feu local en refus par défaut, journalisation des connexions, ou machine sans passerelle) — l'important est de documenter **la méthode** employée, pas seulement le résultat.
 - [ ] Recherche dans le code de tout mécanisme de remontée : occurrences de télémétrie, d'analytics, d'envoi automatique de rapports d'erreur, d'appel à un service d'identité. Noter les occurrences trouvées, y compris bénignes.
-- [ ] Vérifier que les seuls appels sortants possibles sont ceux explicitement configurés : connecteurs (`cloudflare`, `aws-waf`, `modsecurity`, `nginx-local`, `null`), webhooks de notification, et `THOT_NATS_URL` si `THOT_BUS=nats`.
+- [ ] Vérifier que les seuls appels sortants possibles sont ceux explicitement configurés : connecteurs (`simulation`, `nginx-local`, `local-quarantine`, `local-ticket`, `http-webhook`, plus les quatre natifs `cloudflare`, `aws-waf`, `slack`, `github-issues`), webhooks de notification, et `THOT_NATS_URL` si `THOT_BUS=nats`.
 - [ ] Vérifier que le mode simulé n'émet aucune requête vers le service tiers simulé (c'est le point qui rend la promesse « installable avant credentials » vraie ou fausse).
 
 **C. Reproduction du parcours d'installation**
-- [ ] `docker compose up` (ou la cible `compose-up` du `Makefile`) depuis un clone propre : **vérifier d'abord qu'un fichier compose existe bien dans `deploy/` le jour de la publication** — le contrat prévoit cette arborescence, il faut la constater sur disque.
+- [ ] `docker compose up` (ou la cible `compose-up` du `Makefile`) depuis un clone propre : le fichier `docker-compose.yml` existe à la racine du dépôt et la cible `compose-up` du `Makefile` le référence — vérifier qu'il est bien présent et à jour le jour de la publication.
 - [ ] Note du temps de démarrage observé et de la consommation mémoire — sans en faire un chiffre public, seulement pour répondre aux questions.
 - [ ] Persistance : le fichier `./data/thotsecure.db` survit-il à un redémarrage du conteneur ? Le volume est-il correctement monté ?
 - [ ] Rétention : `THOT_RETENTION_DAYS=30` purge-t-il effectivement les événements anciens lors d'un test accéléré ?
@@ -119,7 +119,7 @@ I'm the author. Thot Secure is a defensive SOAR/CSPM (event collection → YAML 
 
 **The part that matters for self-hosting: it's safe to install before you have any credentials.** A connector that isn't configured runs in **simulated** mode — the playbook returns a rollback token and the audit record is flagged `simulated: true`. That's the default behaviour of the MVP, not a degraded fallback. You can install it, ingest your own logs, watch findings appear, watch the decision engine pick a playbook, and *not* let it touch a firewall until you deliberately configure a connector. And it ships with `THOT_DRY_RUN=true` and `THOT_AUTONOMY=supervised` as the defaults.
 
-**On network egress — stated precisely, because it's the claim people care about here.** No telemetry mechanism appears in Thot Secure's interface contract. That is a statement about the contract, not a warranty: it needs confirming by reading the code before you rely on it, and the honest way to present it is "I need to confirm this by audit before publication". What I can say concretely is that the defaults point inward — SQLite, in-memory bus, server-rendered UI with no CDN — and that outbound traffic is something you opt into: a connector (Cloudflare, AWS WAF, ModSecurity, nginx-local, or `null`), a notification webhook, or NATS if you set `THOT_BUS=nats`. Before posting this I'm going through a network-verification pass: install with no outbound access, capture egress during a full cycle, and check that simulated mode makes zero calls to the simulated third party. I'd rather understate this than have someone find an unexpected connection.
+**On network egress — stated precisely, because it's the claim people care about here.** No telemetry mechanism appears in Thot Secure's interface contract. That is a statement about the contract, not a warranty: it needs confirming by reading the code before you rely on it, and the honest way to present it is "I need to confirm this by audit before publication". What I can say concretely is that the defaults point inward — SQLite, in-memory bus, server-rendered UI with no CDN — and that outbound traffic is something you opt into: a connector (`simulation`, `nginx-local`, `local-quarantine`, `local-ticket`, `http-webhook`, or one of the four native drivers `cloudflare`, `aws-waf`, `slack`, `github-issues`), a notification webhook, or NATS if you set `THOT_BUS=nats`. Before posting this I'm going through a network-verification pass: install with no outbound access, capture egress during a full cycle, and check that simulated mode makes zero calls to the simulated third party. I'd rather understate this than have someone find an unexpected connection.
 
 **Two things to change before you expose it**, straight from the docs and worth repeating: `THOT_BOOTSTRAP_API_KEY` defaults to `thot_BOOTSTRAP_changemebeforefirstuse` and must be replaced, and `THOT_SECRET_KEY` is auto-generated with a warning — set it yourself. Note that the API surface is also public by design in places: `GET /metrics` and `GET /readyz` are unauthenticated, so keep them on an internal network.
 
@@ -133,7 +133,7 @@ Install steps, the compose file and the config reference are in the repo. If you
 
 | Question probable | Réponse courte et vérifiée |
 |---|---|
-| « Pourquoi pas Postgres ? » | SQLite est le défaut de la v0.1.0 (`THOT_DB_URL=sqlite:///./data/thotsecure.db`) ; le DDL PostgreSQL/TimescaleDB est documenté, pas le chemin par défaut. Pour un usage mono-nœud, SQLite tient ; pour du multi-écrivain, ce sera Postgres, et c'est annoncé comme tel. |
+| « Pourquoi pas Postgres ? » | SQLite est le défaut de la v0.1.0 (`THOT_DB_URL=sqlite:///./data/thotsecure.db`). Un adaptateur PostgreSQL/TimescaleDB est écrit et tourne en CI contre un vrai serveur TimescaleDB avec la même suite de conformité que SQLite, mais ce n'est pas le chemin par défaut et il n'a pas été éprouvé à l'échelle de production. Pour un usage mono-nœud, SQLite tient ; pour du multi-écrivain, ce sera Postgres, et c'est annoncé comme tel. |
 | « Ça sort sur Internet ou pas ? » | Réponse honnête : aucun mécanisme de télémétrie n'apparaît dans le contrat ; la vérification par audit du code est en cours et le résultat sera publié. Les seules sorties prévues sont les connecteurs configurés, les webhooks de notification et NATS si `THOT_BUS=nats`. Ne pas dépasser cette formulation. |
 | « Combien de RAM / CPU ? » | Ne pas inventer de chiffre. Répondre avec la mesure faite sur la machine de test, en la présentant comme une mesure ponctuelle non représentative, ou dire qu'on ne l'a pas mesuré. |
 | « Ça marche dans un conteneur non-root ? » | À vérifier dans l'image le jour J. Si ce n'est pas vérifié, le dire. |
@@ -152,7 +152,7 @@ Install steps, the compose file and the config reference are in the repo. If you
 - [ ] La formulation sur la télémétrie est bien un constat de lecture, suivie de l'engagement d'audit — jamais un slogan.
 - [ ] Aucune mention de don, de financement ou de page de soutien dans le post.
 - [ ] Un seul lien (le dépôt) dans tout le post.
-- [ ] Un fichier compose existe effectivement dans `deploy/` et la commande de démarrage a été testée telle qu'elle sera écrite.
+- [ ] Un fichier compose existe à la racine (`docker-compose.yml`) et la commande de démarrage a été testée telle qu'elle sera écrite.
 - [ ] Les règles du sous-reddit sur l'auto-promotion et les sollicitations ont été relues le jour J.
 - [ ] `THOT_BOOTSTRAP_API_KEY` et `THOT_SECRET_KEY` sont bien présentés comme des points à changer avant exposition.
 - [ ] Le caractère alpha est écrit noir sur blanc.

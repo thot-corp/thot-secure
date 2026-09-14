@@ -43,7 +43,7 @@ date_redaction: "2026-02-14"
   aux URL, pas de lien affilié.
 - **Les règles de chaque canal sont relues le jour même de la publication** : elles changent, et
   « je ne savais pas » n'est pas une défense.
-- Le projet est **défensif** : `DRY_RUN=true` par défaut, `THOT_AUTONOMY=supervised` par défaut,
+- Le projet est **défensif** : `THOT_DRY_RUN=true` par défaut, `THOT_AUTONOMY=supervised` par défaut,
   **zéro capacité offensive**. Les posts ne doivent jamais employer le vocabulaire de l'attaque
   (« hack », « exploit », « offensive ») : ce serait faux et ça attirerait le mauvais public.
 
@@ -129,8 +129,8 @@ la release, la vidéo et le lancement. Ne pas la doubler avec autre chose.
 
 | Semaine | Canal | Format | Objectif | Indicateur | Effort (h) | Dépendances / livrables |
 |---|---|---|---|---|---|---|
-| S5 | GitHub | 2 issues « bonne première contribution » sur des connecteurs, avec périmètre fermé | Transformer l'intérêt en PR réelle | ≥ 1 PR externe ouverte sur un connecteur | 3 | Dépend du mécanisme de connecteurs (contrat §7) et du **mode simulé par défaut** : c'est l'argument massue — on peut développer un connecteur sans credentials |
-| S5 | Blog du projet | Article : anatomie d'un connecteur, du mode simulé au mode réel | Prouver qu'on peut contribuer sans risque | Article publié, ≥ 1 connecteur externe en cours | 6 | Livrable : nouveau fichier dans `content/blog/` (n° 05). Dépend des connecteurs listés au contrat §7 : `cloudflare`, `aws-waf`, `modsecurity`, `nginx-local`, `null` |
+| S5 | GitHub | 2 issues « bonne première contribution » sur des connecteurs, avec périmètre fermé | Transformer l'intérêt en PR réelle | ≥ 1 PR externe ouverte sur un connecteur | 3 | Dépend du mécanisme de connecteurs (contrat §7) et du **mode simulé par défaut** : c'est l'argument massue — on peut développer un connecteur sans credentials, puisque `simulation` reste le pilote de tous les noms logiques tant que `config/connectors.yaml` ne les branche pas |
+| S5 | Blog du projet | Article : anatomie d'un connecteur, du mode simulé au mode réel | Prouver qu'on peut contribuer sans risque | Article publié, ≥ 1 connecteur externe en cours | 6 | Livrable : nouveau fichier dans `content/blog/` (n° 05). **Pilotes réellement livrés** : `simulation` (défaut partout), `nginx-local`, `local-quarantine`, `local-ticket`, `http-webhook` et quatre natifs — `cloudflare`, `aws-waf`, `slack`, `github-issues`. `modsecurity` et `null` figurent au contrat §7 comme cibles d'un playbook, **pas** comme pilotes livrés : ne pas les présenter comme disponibles. **Aucun connecteur natif n'a été validé contre un compte réel** |
 | S5 | Newsletter | Envoi n° 02 : mi-parcours, ce qui a changé, appel à connecteurs | Réactiver la liste avec du concret | ≥ 1 réponse de lecteur, ≥ 1 clic sur l'issue « bonne première contribution » | 3 | Livrable : nouveau fichier dans `content/newsletter/` (n° 02). Si la liste est < 50 abonnés : **suspendre le format**, voir §4 |
 | S5 | Vidéo | Vidéo courte (60 s) : « un connecteur en mode simulé, sans credentials » | Démontrer la sécurité du branchement | Vidéo publiée, ≥ 10 vues qualifiées (durée moyenne > 50 %) | 2 | Dépend de `content/video/01-demo-script.md` (§10, version 60 s) : réutiliser les plans dry-run |
 | S5 | Reddit | Post : « comment on teste un SOAR sans lui donner les clés » | Trouver l'audience SRE/ops, pas seulement sécurité | ≥ 5 commentaires, ≥ 1 essai déclaré | 3 | Dépend de l'historique de participation sur le sub visé |

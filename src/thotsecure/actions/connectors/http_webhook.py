@@ -134,7 +134,7 @@ class HttpWebhookConnector(Connector):
         body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
         headers = {
             "Content-Type": "application/json",
-            "User-Agent": "ThotSecure/0.1.0 (+https://thotsecure.dev)",
+            "User-Agent": "ThotSecure/0.1.0 (+https://thot-corp.github.io/thot-secure/)",
             "X-Thot-Secure-Operation": str(payload.get("operation", "")),
             **self.extra_headers,
         }

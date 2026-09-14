@@ -31,18 +31,18 @@ type: software
 
 authors:
   - name: "The Thot Secure Authors"
-    website: "https://thotsecure.dev"
+    website: "https://thot-corp.github.io/thot-secure/"
     alias: "thotsecure"
 
 contact:
   - name: "Thot Secure Maintainers"
-    email: "maintainers@thotsecure.dev"
-    website: "https://thotsecure.dev"
+    email: "niang951@gmail.com"
+    website: "https://thot-corp.github.io/thot-secure/"
     # The authoritative roster is MAINTAINERS.md in the repository.
 
 repository-code: "https://github.com/thot-corp/thot-secure"
 repository-artifact: "https://github.com/thot-corp/thot-secure/releases"
-url: "https://thotsecure.dev"
+url: "https://thot-corp.github.io/thot-secure/"
 
 license: "Apache-2.0"
 license-url: "https://github.com/thot-corp/thot-secure/blob/main/LICENSE"

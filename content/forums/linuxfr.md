@@ -53,7 +53,7 @@ Tout ce qui suit provient du contrat d'interface (`docs/architecture/api-contrac
 | Interdiction des capacités offensives traitée comme invariant constitutionnel du projet | `CONTRIBUTING.md` du dépôt ; §1 et §10 du contrat |
 | Tests en `unittest` exécutables sans dépendance externe ; commande `python -m unittest discover -s tests -t . -v` ; `pytest` fonctionne aussi et tourne en CI | §11 du contrat |
 | Couverture de tests prévue : config, stockage et isolation tenant, chaîne d'audit, bus, moteur de règles, scoring, décision, actions/rollback, collecteurs, API, rapports, CLI | §11 du contrat |
-| Base SQLite par défaut : `THOT_DB_URL=sqlite:///./data/thotsecure.db` ; PostgreSQL/TimescaleDB documenté seulement | §9 du contrat |
+| Base SQLite par défaut : `THOT_DB_URL=sqlite:///./data/thotsecure.db` ; adaptateur PostgreSQL/TimescaleDB écrit et exécuté en CI contre un vrai serveur TimescaleDB, mais non éprouvé à l'échelle de production | §9 du contrat ; `src/thotsecure/storage/postgres.py` et job CI `postgres` |
 | Bus d'événements `memory` (défaut) `|` `sqlite` `|` `nats` | §9 et §2 du contrat |
 | Le cœur `thotsecure.core` ne dépend que de la stdlib + `pydantic`/`PyYAML` ; FastAPI, Jinja2, uvicorn sont dans la couche API | §1 invariants du contrat |
 | Console embarquée en Jinja2 + JS, **aucun build Node requis** ; dashboard React+TS optionnel dans `web/` | §4.9 et §2 du contrat |
@@ -61,7 +61,7 @@ Tout ce qui suit provient du contrat d'interface (`docs/architecture/api-contrac
 | CLI `thotsecure` avec `--json` sur toutes les commandes ; codes de sortie `0` succès, `1` erreur, `2` usage, `3` vérification négative | §8 du contrat |
 | Audit : journal append-only chaîné par hash ; vérification `GET /api/v1/audit/verify` ; export `GET /api/v1/audit/export?format=jsonl|cef` | §3.5, §4.7, §10 du contrat |
 | Format des règles, des politiques et des playbooks : YAML, dans `rules/`, `policies/`, `playbooks/` | §5, §6, §7, §2 du contrat |
-| Arborescence cible : `sdks/{python,typescript,go}/`, `deploy/` (Dockerfile, compose, k8s, helm, terraform, ansible), `docs/` MkDocs Material | §2 du contrat — **arborescence cible : à traiter comme telle** |
+| Arborescence : `sdks/{python,typescript,go}/`, `deploy/` (Dockerfile, compose, k8s, helm, terraform, ansible), `docs/` MkDocs Material | §2 du contrat — **constatée sur disque**, mais non éprouvée en production pour l'ensemble |
 | Défauts de sûreté : `THOT_DRY_RUN=true`, `THOT_AUTONOMY=supervised` ; dry-run global prioritaire sur toute politique | §9, §1, §6 du contrat |
 | Connecteur non configuré ⇒ mode simulé, retourne un `rollback_token`, journalise `simulated: true` ; comportement par défaut du MVP | §7 du contrat |
 | Rétention : `THOT_RETENTION_DAYS=30` | §9 du contrat |
@@ -70,7 +70,7 @@ Tout ce qui suit provient du contrat d'interface (`docs/architecture/api-contrac
 **Deux points de prudence à ne pas transformer en argument de vente**
 
 1. **Air-gap et télémétrie.** Aucun mécanisme de télémétrie n'apparaît dans le contrat d'interface. C'est un constat de lecture du contrat, à confirmer par un audit du code avant de l'écrire publiquement. Le journal doit donc dire « aucun mécanisme de télémétrie n'apparaît dans le contrat d'interface ; à confirmer par lecture du code », et non « sans télémétrie » comme s'il s'agissait d'un engagement vérifié. De même, ne pas écrire « fonctionne en air-gap » sans l'avoir testé hors ligne.
-2. **Arborescence cible.** `sdks/`, `deploy/`, `docs/` sont décrits dans le contrat comme l'arborescence cible. Le journal ne doit pas laisser croire que tout est livré : si le contenu n'est pas constaté sur disque le jour de la publication, la phrase correspondante est retirée ou explicitement marquée « prévu ».
+2. **Arborescence.** `sdks/`, `deploy/` et `docs/` existent sur disque. Le journal ne doit pas pour autant laisser croire que chacun de ces chemins a été éprouvé en production : si un élément n'a pas été testé le jour de la publication, la phrase correspondante est retirée ou explicitement nuancée.
 
 ---
 
@@ -80,7 +80,7 @@ Tout ce qui suit provient du contrat d'interface (`docs/architecture/api-contrac
 >
 > **Accroche (à copier telle quelle) :**
 
-Thot Secure est un SOAR/CSPM défensif en Python/FastAPI, sous Apache-2.0, publié en v0.1.0 (alpha). Je suis l'auteur du projet. Il collecte des événements, détecte avec des règles YAML, score, décide à partir de politiques *policy-as-code* et exécute des playbooks — chacun accompagné d'un rollback. Le journal d'audit est chaîné par hachage et vérifiable hors ligne. Le dry-run est actif par défaut. Ce journal décrit les compromis assumés et, surtout, ce qui n'est pas encore fait.
+Thot Secure est un SOAR/CSPM défensif en Python/FastAPI, sous Apache-2.0, publié en v0.1.0 (alpha). Je suis l'auteur du projet. Il collecte des événements, détecte avec des règles YAML, score, décide à partir de politiques *policy-as-code* et exécute des playbooks — livrés avec un rollback, sauf ceux explicitement marqués irréversibles, qui exigent alors une approbation humaine. Le journal d'audit est chaîné par hachage et vérifiable hors ligne. Le dry-run est actif par défaut. Ce journal décrit les compromis assumés et, surtout, ce qui n'est pas encore fait.
 
 ---
 
@@ -94,11 +94,11 @@ Il existe beaucoup d'outils qui détectent, et beaucoup d'outils qui automatisen
 
 ## Ce que fait la v0.1.0
 
-La chaîne est : un **événement** normalisé entre par une API (`POST /api/v1/events`), une **règle YAML** le fait correspondre à un **finding** porteur d'un score de risque et d'une confiance, une **politique** décide, un **playbook** agit. Chaque étape est un objet persisté : une décision n'est pas implicite dans un finding.
+La chaîne est : un **événement** normalisé entre par une API (`POST /api/v1/events`), une **règle YAML** le fait correspondre à un **finding** porteur d'un score de risque et d'une confiance, une **politique** décide, un **playbook** agit. Chaque étape est un objet persisté : une décision n'est pas implicite dans un finding. La bibliothèque livrée compte 26 règles de détection, 9 politiques et 15 playbooks.
 
 Quatre choix structurent le reste :
 
-1. **Toute action est réversible.** Un playbook déclare `reversible: true` et un bloc `rollback:` ; `POST /api/v1/actions/{id}/rollback` doit réussir tant que la fenêtre de rollback n'a pas expiré. Une action qu'on ne peut pas annuler n'a pas sa place dans un playbook.
+1. **Toute action est réversible.** Un playbook déclare `reversible: true` et un bloc `rollback:` ; `POST /api/v1/actions/{id}/rollback` doit réussir tant que la fenêtre de rollback n'a pas expiré. Une action qu'on ne peut pas annuler n'a pas sa place dans un playbook — ou elle y est marquée `reversible: false`, ce qui impose une approbation humaine à chaque exécution, quel que soit le mode d'autonomie du tenant.
 2. **La décision est un artefact versionné.** Des politiques YAML ordonnées par `priority` produisent l'une de quatre décisions : `auto`, `require_approval`, `notify_only`, `ignore`. Si aucune politique ne correspond, le résultat est `notify_only` — jamais `auto`. Le silence total exige une politique `ignore` explicite : on ne peut donc pas confondre « règle oubliée » et « décision de ne rien faire ».
 3. **Le journal d'audit est chaîné et vérifiable sur place.** Chaque enregistrement s'engage sur le précédent par un hachage, et `GET /api/v1/audit/verify` répond `{"valid":true,"records":n,"broken_at":null}`. L'export se fait en `jsonl` ou `cef` vers un SIEM.
 4. **Des garde-fous qu'une politique ne peut pas désactiver.** `THOT_DRY_RUN=true` et `THOT_AUTONOMY=supervised` par défaut ; le dry-run global l'emporte sur toute politique ; plafond d'actions horaires par tenant ; délai de refroidissement par couple (tenant, playbook, cible) ; refus absolu d'agir sur une cible de la liste de protection du tenant. Une cible hors périmètre déclaré devient une demande d'approbation, pas une exécution.
@@ -109,7 +109,7 @@ Sur l'audit : une chaîne de hachages prouve la cohérence interne et détecte t
 
 Sur les dépendances : le cœur (`thotsecure.core`) ne dépend que de la bibliothèque standard plus `pydantic` et `PyYAML`. FastAPI, uvicorn et Jinja2 sont dans la couche API. La conséquence pratique est qu'on peut lire et tester le cœur comme une bibliothèque, et faire tourner quelque chose sans chaîne de build Node : la console embarquée est du Jinja2 avec du JavaScript ordinaire.
 
-Sur la base de données : SQLite est le défaut (`sqlite:///./data/thotsecure.db`) et c'est délibéré — l'outil doit pouvoir être évalué sur un portable sans service à démarrer. Le DDL PostgreSQL/TimescaleDB est documenté mais n'est pas le chemin par défaut. Pour du multi-nœuds, c'est une migration à faire, pas quelque chose que le code gère pour vous.
+Sur la base de données : SQLite est le défaut (`sqlite:///./data/thotsecure.db`) et c'est délibéré — l'outil doit pouvoir être évalué sur un portable sans service à démarrer. Un adaptateur PostgreSQL/TimescaleDB est écrit et tourne en CI contre un vrai serveur, avec la même suite de conformité que SQLite ; il n'est pas le chemin par défaut et n'a pas été éprouvé à l'échelle de production. Pour du multi-nœuds, c'est une migration à faire, pas quelque chose que le code gère pour vous.
 
 Sur les connecteurs : non configurés, ils fonctionnent en **mode simulé** — le playbook renvoie un jeton de rollback et l'enregistrement d'audit porte `simulated: true`. C'est le comportement par défaut du MVP, et il est volontaire : on peut installer l'outil et observer la chaîne de décision avant de lui donner le moindre identifiant de pare-feu. La contrepartie, qu'il faut dire, est qu'une installation neuve simule au lieu de bloquer.
 
@@ -123,8 +123,8 @@ Sur le réseau : aucun mécanisme de télémétrie n'apparaît dans le contrat d
 - **Pas d'agent endpoint.** Thot Secure consomme des événements normalisés ; la télémétrie hôte doit venir d'ailleurs. C'est un choix de périmètre, pas une feuille de route cachée.
 - **Pas de corpus de règles éprouvé.** Les règles livrées ne sont pas ajustées à votre environnement, et les envoyer directement en mode `auto` est précisément l'erreur que les défauts cherchent à empêcher.
 - **RBAC grossier** : quatre rôles (`viewer`, `analyst`, `responder`, `admin`). Un vrai déploiement multi-tenant voudra plus fin.
-- **PostgreSQL non testé par défaut**, connecteurs en simulation, pas de place de marché d'intégrations, pas de support éditeur.
-- **Gouvernance à écrire publiquement.** Le développement se fait sous DCO, sans CLA, avec au moins une approbation de mainteneur avant fusion, et une règle tenue comme constitutionnelle : aucune capacité offensive (pas d'exploit, pas de scan agressif, pas de brute force, pas de hack-back). Si vous constatez que le document de gouvernance n'est pas encore dans le dépôt public, dites-le : c'est une lacune, pas un détail.
+- **Adaptateur PostgreSQL/TimescaleDB non éprouvé à l'échelle de production**, connecteurs en simulation, aucun connecteur natif validé contre un compte réel, pas de place de marché d'intégrations, pas de support éditeur.
+- **Gouvernance écrite et publiée.** Le développement se fait sous DCO, sans CLA, avec au moins une approbation de mainteneur avant fusion, et une règle tenue comme constitutionnelle : aucune capacité offensive (pas d'exploit, pas de scan agressif, pas de brute force, pas de hack-back). Le document de gouvernance (`GOVERNANCE.md`) est présent dans le dépôt public et référencé depuis `CONTRIBUTING.md`.
 
 ## Reproductibilité
 
@@ -138,7 +138,7 @@ python -m unittest discover -s tests -t . -v
 
 ## Absence de verrouillage
 
-Les règles, les politiques et les playbooks sont des fichiers YAML dans le dépôt ; l'API est décrite par un schéma OpenAPI 3.1 généré, et l'interface REST est versionnée sous `/api/v1` ; la CLI accepte `--json` sur toutes les commandes, avec des codes de sortie documentés (`0` succès, `1` erreur, `2` usage, `3` vérification négative — par exemple une chaîne d'audit corrompue) ; le journal d'audit s'exporte en deux formats standards. Le contrat prévoit par ailleurs des clients Python, TypeScript et Go ainsi qu'un déploiement Docker, Compose, Kubernetes, Helm, Terraform et Ansible : c'est l'arborescence cible du contrat, à ne pas confondre avec ce qui est déjà livré.
+Les règles, les politiques et les playbooks sont des fichiers YAML dans le dépôt ; l'API est décrite par un schéma OpenAPI 3.1 généré, et l'interface REST est versionnée sous `/api/v1` ; la CLI accepte `--json` sur toutes les commandes, avec des codes de sortie documentés (`0` succès, `1` erreur, `2` usage, `3` vérification négative — par exemple une chaîne d'audit corrompue) ; le journal d'audit s'exporte en deux formats standards. Le dépôt contient aussi des clients Python, TypeScript et Go (`sdks/`) ainsi qu'un déploiement Docker, Compose, Kubernetes, Helm, Terraform et Ansible (`deploy/`) : ces éléments sont présents sur disque, mais tous n'ont pas été éprouvés en production, et je préfère le dire que le laisser supposer.
 
 ## Comment participer
 
@@ -169,7 +169,7 @@ Le plus utile aujourd'hui n'est pas du code : c'est de signaler ce qui casse à 
 
 > **Titre :** `Thot Secure 0.1.0, SOAR défensif sous Apache-2.0 : actions réversibles et journal d'audit chaîné`
 >
-> **Accroche :** Thot Secure est un SOAR/CSPM défensif en Python/FastAPI, publié en v0.1.0 sous Apache-2.0. Règles de détection YAML, décision *policy-as-code*, playbooks toujours accompagnés d'un rollback, journal d'audit chaîné par hachage et vérifiable localement. Dry-run actif par défaut. Alpha, avec des limites explicites.
+> **Accroche :** Thot Secure est un SOAR/CSPM défensif en Python/FastAPI, publié en v0.1.0 sous Apache-2.0. Règles de détection YAML, décision *policy-as-code*, playbooks livrés avec un rollback (sauf marquage irréversible explicite, qui impose une approbation humaine), journal d'audit chaîné par hachage et vérifiable localement. Dry-run actif par défaut. Alpha, avec des limites explicites.
 >
 > **Corps :** reprendre le §5 en retirant les titres de section et en condensant les paragraphes « Où sont les compromis » et « Ce qui manque », pour viser 500 à 600 mots. Points à conserver impérativement : statut alpha, SQLite par défaut, connecteurs en mode simulé, absence (ou présence, selon vérification) d'agents endpoint, commande exacte des tests, et la déclaration de qualité d'auteur.
 >
@@ -185,9 +185,9 @@ Le plus utile aujourd'hui n'est pas du code : c'est de signaler ce qui casse à 
 | « Est-ce que ça téléphone à la maison ? » | Reprendre la formulation du journal : aucun mécanisme de télémétrie n'apparaît dans le contrat d'interface, à confirmer par lecture du code ; les défauts pointent vers l'intérieur ; les sorties réseau sont censées être explicites (connecteur configuré, webhook, NATS). Inviter à vérifier plutôt que demander de croire. |
 | « Encore un outil qui n'existe qu'à moitié. » | Reconnaître : oui, c'est un alpha, la liste de ce qui manque est dans le journal et elle est franche. Ne pas défendre l'inachevé, ne pas promettre de dates. |
 | « Pourquoi pas du Rego par défaut ? » | Rego/OPA est pris en charge si `THOT_OPA_BIN` pointe vers un binaire présent. Le YAML est le défaut parce qu'une politique de sécurité doit rester relisible par un analyste en revue de code. Compromis assumé : moins expressif. |
-| « SQLite, ce n'est pas sérieux. » | Assumé et documenté : c'est le défaut pour qu'on puisse évaluer l'outil sans démarrer un service ; PostgreSQL/TimescaleDB est documenté comme migration, pas comme défaut. Pour du multi-nœuds, c'est un travail à faire. |
+| « SQLite, ce n'est pas sérieux. » | Assumé et documenté : c'est le défaut pour qu'on puisse évaluer l'outil sans démarrer un service. Un adaptateur PostgreSQL/TimescaleDB est écrit et tourne en CI contre un vrai serveur TimescaleDB avec la même suite de conformité que SQLite — mais il n'est pas le défaut et il n'a pas été éprouvé à l'échelle de production. Pour du multi-nœuds, c'est un travail à faire. |
 | « Y a-t-il des binaires, ou faut-il tout compiler ? » | Réponse à vérifier dans le dépôt le jour J (image conteneur, distribution Python, présence de dépendances hors ligne). Si ce n'est pas vérifié, le dire. |
-| « Qui décide du projet ? » | DCO sans CLA, une approbation de mainteneur avant fusion, document de gouvernance référencé depuis `CONTRIBUTING.md`, et un invariant non négociable sur l'absence de capacité offensive. Si le document n'est pas encore publié, le dire franchement — c'est une lacune, et la reconnaître est meilleur que de la contourner. |
+| « Qui décide du projet ? » | DCO sans CLA, une approbation de mainteneur avant fusion, et un invariant non négociable sur l'absence de capacité offensive. Le document de gouvernance `GOVERNANCE.md` est publié dans le dépôt et référencé depuis `CONTRIBUTING.md`. |
 | « Pourquoi pas Wazuh / Shuffle / Sigma ? » | Même réponse qu'ailleurs, et en français : ces outils font bien ce qu'ils font ; Thot Secure ne collecte pas de télémétrie endpoint, traduit un sous-ensemble Sigma sans prétendre le remplacer, et porte un axe différent — décision déclarative, réversibilité dans le modèle de données, audit vérifiable. La composition est le cas d'usage attendu, pas la substitution. |
 
 ---
@@ -198,7 +198,7 @@ Le plus utile aujourd'hui n'est pas du code : c'est de signaler ce qui casse à 
 - [ ] Chaque affirmation du journal est vérifiée contre le contrat ou le dépôt ; les éléments relevant de l'arborescence cible sont marqués comme prévus, pas comme livrés.
 - [ ] La formulation sur la télémétrie et le réseau est un constat de lecture suivi d'un appel à vérification, jamais un slogan.
 - [ ] La commande de tests a été exécutée par l'auteur, et le résultat réel est connu.
-- [ ] Le document de gouvernance est présent dans le dépôt public, ou son absence est assumée dans le texte.
+- [ ] Le document de gouvernance est présent dans le dépôt public (`GOVERNANCE.md`, référencé depuis `CONTRIBUTING.md`) — vérifié.
 - [ ] Aucun chiffre non mesuré ; tout chiffre d'exemple porte la mention « ordre de grandeur à remplacer » ou est supprimé.
 - [ ] Aucun vocabulaire commercial ni superlatif marketing.
 - [ ] Les dons ne figurent **pas** dans le journal ni dans la dépêche ; le bloc du §6 est prêt à être collé en réponse, une seule fois, si le sujet est soulevé.

@@ -35,7 +35,7 @@ from ...core.logging_setup import get_logger
 log = get_logger("actions.connector.http")
 
 #: User-Agent identifiant le produit : un administrateur doit pouvoir reconnaître nos appels.
-USER_AGENT = "ThotSecure/0.1.0 (+https://thotsecure.dev)"
+USER_AGENT = "ThotSecure/0.1.0 (+https://thot-corp.github.io/thot-secure/)"
 
 DEFAULT_TIMEOUT = 10.0
 

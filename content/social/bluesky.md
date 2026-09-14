@@ -28,7 +28,7 @@ Angle imposé : **la garantie de réversibilité + le dry-run par défaut + l'au
 
 ### Post 1 — le point de départ
 
-Longueur : **171/300 caractères**
+Longueur : **172/300 caractères**
 
 <!--post:1-->
 ```text
@@ -37,16 +37,16 @@ Thot Secure v0.1.0: a defensive SOAR/CSPM, Apache-2.0. Dry-run is the default �
 
 ### Post 2 — la réversibilité
 
-Longueur : **225/300 caractères**
+Longueur : **270/300 caractères**
 
 <!--post:2-->
 ```text
-Reversibility is not optional here. Every shipped playbook carries a rollback block; a playbook without one is rejected at load time. thotsecure actions rollback <id> undoes an executed action while its rollback window is open.
+Reversibility is not optional here. Every shipped playbook carries a rollback block unless it is explicitly marked irreversible — and then it needs human approval every time. thotsecure actions rollback <id> undoes an executed action while its rollback window is open.
 ```
 
 ### Post 3 — la décision
 
-Longueur : **198/300 caractères**
+Longueur : **200/300 caractères**
 
 <!--post:3-->
 ```text
@@ -55,7 +55,7 @@ Decisions are policy-as-code: auto, require_approval, notify_only, ignore. No ma
 
 ### Post 4 — la preuve
 
-Longueur : **213/300 caractères**
+Longueur : **217/300 caractères**
 
 <!--post:4-->
 ```text
@@ -64,7 +64,7 @@ Audit records are chained: seq, ts, actor, role, action, target, before, after, 
 
 ### Post 5 — essayer + lien unique
 
-Longueur : **189/300 caractères**
+Longueur : **199/300 caractères**
 
 <!--post:5-->
 ```text
@@ -77,7 +77,7 @@ Five minutes, no credentials: thotsecure init-db, thotsecure demo --tenant demo,
 
 Angle différent : on part de la question « comment annuler », pas de la liste des garanties. Thread identique à partir du post 2.
 
-Longueur : **197/300 caractères**
+Longueur : **200/300 caractères**
 
 <!--post:6-->
 ```text
@@ -99,7 +99,7 @@ Every state change is appended to a hash-chained log: actor, role, action, befor
 
 Angle différent : contribution plutôt qu'essai immédiat. Conserve **l'unique lien** — remplacer le post 5, ne jamais l'ajouter.
 
-Longueur : **210/300 caractères**
+Longueur : **214/300 caractères**
 
 <!--post:8-->
 ```text

@@ -25,7 +25,7 @@ from ..scoring.risk import risk_band
 
 TOOL_NAME = "Thot Secure"
 TOOL_VERSION = "0.1.0"
-TOOL_URL = "https://thotsecure.dev"
+TOOL_URL = "https://thot-corp.github.io/thot-secure/"
 
 #: Correspondance sévérité → niveau SARIF.
 SARIF_LEVELS: dict[str, str] = {

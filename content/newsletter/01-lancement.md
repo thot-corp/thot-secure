@@ -40,12 +40,12 @@ La plupart des outils de réponse automatisée répondent à la première et lai
 ## Ce qui est livré dans v0.1.0
 
 - **API REST** `/api/v1` (FastAPI), WebSocket `/api/v1/ws/stream`, métriques Prometheus, OpenAPI 3.1.
-- **Console embarquée** (Jinja2 + JS, aucun build Node) : flux live, findings, actions, audit, règles.
+- **Console embarquée** (Jinja2 + JS, aucun build Node) : flux live, findings, actions, audit, règles — et un **tableau de bord React optionnel** (`web/`), dont le job CI est bloquant.
 - **CLI `thotsecure`**, `--json` partout, codes de sortie `0` succès, `1` erreur, `2` usage, `3` vérification négative.
 - **Quatre garanties** : dry-run par défaut (`THOT_DRY_RUN=true`), rollback obligatoire sur chaque playbook, audit append-only chaîné par hash, isolation multi-tenant testée en CI.
-- **Détection** : règles YAML, seuils d'agrégation, compatibilité Sigma-lite ; une règle invalide est rejetée sans casser le moteur.
-- **Décision** : politiques YAML versionnées, garde-fous non contournables (plafond horaire, cooldown par cible, cibles protégées, `dry_run` global prioritaire), `notify_only` par défaut.
-- **Playbooks livrés** : `block-source-ip` et `unblock-source-ip`, `rate-limit-source`, `quarantine-artifact`, `revoke-session`, `rotate-secret`, `isolate-host`, `patch-dependency` (ouvre une PR, jamais de merge auto), `harden-endpoint`, `notify`, `open-ticket`.
+- **Détection** : **26 règles** YAML livrées (dont 5 pour les anomalies), seuils d'agrégation, compatibilité Sigma sur un sous-ensemble documenté ; une règle invalide est rejetée sans casser le moteur. Un détecteur statistique (EWMA + z-score) analyse une entité à la fois et reste **désactivé par défaut** (`THOT_ANOMALY_ENABLED=false`).
+- **Décision** : **9 politiques** YAML versionnées, garde-fous non contournables (plafond horaire, cooldown par cible, cibles protégées, `dry_run` global prioritaire), `notify_only` par défaut.
+- **Playbooks livrés** : **15 playbooks**, dont `block-source-ip` et `unblock-source-ip`, `rate-limit-source` et `remove-rate-limit`, `quarantine-artifact` et `restore-artifact`, `revoke-session`, `rotate-secret`, `isolate-host` et `unisolate-host`, `patch-dependency` (ouvre une PR, jamais de merge auto), `harden-endpoint`, `notify`, `open-ticket`, `close-ticket`.
 - **Rapports** `md|html|json|sarif` (SARIF 2.1.0) et export d'audit `jsonl|cef` vers votre SIEM.
 - **Connecteurs non configurés** ⇒ mode simulé : `rollback_token` retourné, `simulated: true` journalisé — branchable avant d'avoir la moindre credential.
 
@@ -68,7 +68,7 @@ thotsecure audit verify
 thotsecure ingest --tenant acme --file events.jsonl
 ```
 
-Console : `thotsecure serve`, puis `http://127.0.0.1:8080`. Tests, sans réseau ni service externe : `python -m unittest discover -s tests -t . -v`.
+Console : `thotsecure serve`, puis `http://127.0.0.1:8080`. Tests, sans réseau ni service externe : `python -m unittest discover -s tests -t . -v` (**396 tests**, 70 ignorés sans serveur PostgreSQL).
 
 ## Comment contribuer
 
@@ -78,16 +78,15 @@ DCO, sans CLA : vous gardez le copyright, un `Signed-off-by` par commit (`git co
 2. **Écrire un connecteur de playbook avec son rollback.** Sans rollback, le playbook est refusé ; non configuré, il doit fonctionner en mode simulé et journaliser `simulated: true`.
 3. **Traduire la documentation ou la console.** Sources dans `docs/` et `src/thotsecure/ui/templates/` ; la console fonctionne sans build Node et doit le rester.
 
-## Roadmap
+## Livré mais non éprouvé, et roadmap
 
-Tout ce qui suit est **roadmap** : non livré en v0.1.0, aucune date promise.
+Ce qui suit est soit **livré mais explicitement non validé**, soit **roadmap** (non livré en v0.1.0, aucune date promise). La distinction est faite ligne par ligne.
 
-- **PostgreSQL / TimescaleDB** : le MVP est sur SQLite.
-- **Connecteurs réels** (Cloudflare, AWS WAF, ModSecurity, nginx local), hors mode simulé.
-- **Davantage de collecteurs**, limités aux cibles déclarées.
-- **Mode Rego / OPA** durci (`THOT_OPA_BIN`).
-- **Dashboard React** (`web/`) : le MVP livre la console embarquée, sans Node.
-- **SDK TypeScript et Go** : le SDK Python est livré.
+- **Livré, non éprouvé — PostgreSQL / TimescaleDB** : l'adaptateur est écrit et exécuté en CI contre un vrai serveur TimescaleDB, avec la même suite de conformité que SQLite ; SQLite reste le défaut. Il n'a pas été éprouvé à l'échelle de production.
+- **Livré, non validé contre un compte réel — connecteurs natifs** : Cloudflare, AWS WAF v2, Slack et GitHub Issues sont écrits, et **aucun n'a été validé contre un compte réel** — c'est l'étape obligatoire avant de les activer. ModSecurity et le reste passent par la passerelle `http-webhook` signée.
+- **Roadmap — davantage de collecteurs**, limités aux cibles déclarées.
+- **Roadmap — mode Rego / OPA** durci (`THOT_OPA_BIN`).
+- **Roadmap — SDK TypeScript et Go** : le SDK Python est livré.
 
 ## Soutien
 
@@ -96,7 +95,7 @@ Thot Secure est maintenu par des bénévoles. Les dons sont volontaires et sans 
 - **Bitcoin (BTC, réseau Bitcoin mainnet)** : `33cDzgvVe7m9P4X58pW3rsMKuxrRXFmPBR`
 - **Solana (SOL, réseau Solana mainnet)** : `95s8JxNzLbre9nopbdxakkc4dtNCzkzA2JUTDFQnM7Hi`
 
-Dons volontaires, aucune contrepartie attendue. Vérifiez toujours l'adresse depuis le dépôt officiel.
+Dons volontaires, **aucune contrepartie** : un don ne donne droit à rien — ni support, ni fonctionnalité, ni priorité. Vérifiez toujours l'adresse depuis le dépôt officiel : ce sont les seules adresses officielles, et toute autre adresse est une arnaque.
 
 Seule la source officielle — dépôt Git + site du projet — fait foi ; le projet ne demande jamais de clé privée ni de phrase de récupération.
 

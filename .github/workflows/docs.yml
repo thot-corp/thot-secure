@@ -4,7 +4,7 @@
 # API contract are read as often as they are run, and `docs/` is written in
 # French because that is the language the people who deploy Thot Secure read. So the
 # site is built on every change and published at https://thotsecure.github.io/thotsecure/
-# (redirected to https://thotsecure.dev once the rename lands).
+# (the project publishes at this URL; a dedicated domain will replace it if one ever exists).
 #
 # Design constraints:
 #   * `mkdocs build --strict` turns every MkDocs warning — a missing navigation

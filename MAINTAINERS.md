@@ -26,10 +26,10 @@ people named in §3 and §4.
 
 | Purpose | Contact | Received by |
 |---|---|---|
-| Vulnerability reports | `security@thotsecure.dev` + [GitHub Security Advisories](https://github.com/thot-corp/thot-secure/security/advisories/new) | All security maintainers (§3) |
-| Code of Conduct reports | `conduct@thotsecure.dev` | Enforcement contacts listed in §6 |
-| General maintainer contact | `maintainers@thotsecure.dev` | All active maintainers |
-| Donations / support page | `support@thotsecure.dev` | Support duty (no counterpart offered) |
+| Vulnerability reports | [GitHub Security Advisories](https://github.com/thot-corp/thot-secure/security/advisories/new) — **seul canal** | All security maintainers (§3) |
+| Code of Conduct reports | [Discussions](https://github.com/thot-corp/thot-secure/discussions) (créer une discussion privée avec un mainteneur) | Enforcement contacts listed in §6 |
+| General maintainer contact | [Issues](https://github.com/thot-corp/thot-secure/issues) or a Discussion | All active maintainers |
+| Donations / support page | `docs/support.md` du dépôt | Support duty (no counterpart offered) |
 
 Never send a vulnerability report to a public issue, discussion, or chat.
 See [`SECURITY.md`](SECURITY.md).
@@ -119,7 +119,7 @@ longer than that is a bug in the triage process, not in the reporter.
 
 ## 6. Code of Conduct enforcement contacts
 
-Reports sent to `conduct@thotsecure.dev` are received **only** by the people
+Conduct reports are received **only** by the people
 listed here. They are not discussed in public, and they are not shared with the
 maintainer group as a whole without the reporter's consent.
 

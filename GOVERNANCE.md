@@ -139,7 +139,7 @@ granted only to maintainers who hold the security or release duty.
 
 ### 2.5 Security maintainer
 
-A maintainer holding the security duty: receives `security@thotsecure.dev`,
+A maintainer holding the security duty: triages the private GitHub Security Advisories,
 handles private advisories, assigns severity and CVSS vectors, requests CVEs,
 coordinates disclosure and writes the advisory. At least **two** maintainers
 must hold this duty at any time so that a report is never blocked on one
@@ -383,7 +383,7 @@ the merits.
    respected member of the wider security community — to mediate. The mediator
    publishes a recommendation; the maintainers act on it by vote.
 6. **Conduct matters** leave this ladder and go to the Code of Conduct process
-   with `conduct@thotsecure.dev`. Conduct is never decided by a technical vote.
+   by direct message on GitHub. Conduct is never decided by a technical vote.
 
 **Principles that apply throughout:**
 

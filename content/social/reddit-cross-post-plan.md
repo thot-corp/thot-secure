@@ -52,21 +52,21 @@ Objectif : faire relire le projet par cinq ou six communautés **différentes**,
 
 ## 3. Subreddits retenus, angle et fichier de texte
 
-Les textes de chaque subreddit sont préparés dans `content/forums/`. **Vérifier que le fichier existe et correspond bien au subreddit avant de publier** : un angle écrit pour `r/devops` publié sur `r/netsec` sera retiré.
+Les textes de chaque subreddit sont préparés dans `content/forums/`. **Vérifier que le fichier existe et correspond bien au subreddit avant de publier** : un angle écrit pour `r/selfhosted` publié sur `r/netsec` sera retiré.
 
-> **À vérifier au moment de publier :** le répertoire `content/forums/` est produit par le lot éditorial « forums ». Au moment de la rédaction de ce plan, ce répertoire n'existe pas encore dans l'arbre de travail. Si le fichier correspondant est absent, **ne pas publier** : écrire le texte pour ce subreddit d'abord, à partir du contrat d'interface gelé.
+> **État réel du lot éditorial — à vérifier le jour de la publication :** le répertoire `content/forums/` contient aujourd'hui sept fichiers, et les noms de fichiers du tableau ci-dessous ne correspondent **pas** tous à un fichier existant. Les textes réellement écrits sont : `hacker-news.md`, `journal-du-hacker.md`, `linuxfr.md`, `lobsters.md`, `reddit-netsec.md`, `reddit-rssi-fr.md`, `reddit-selfhosted.md`. Aucun texte n'existe pour `r/blueteamsec`, `r/devops`, `r/MSP`, `r/opensource`, `r/Python`, `r/cybersecurity` ni `r/homelab`. Si le fichier correspondant est absent, **ne pas publier** : écrire le texte pour ce subreddit d'abord, à partir du contrat d'interface gelé.
 
 | # | Subreddit | Pourquoi ce sub | Angle (différent des autres) | Fichier de texte | Priorité |
 |---|---|---|---|---|---|
-| 1 | `r/blueteamsec` | Cœur de cible : détection, réponse à incident, blueteam. Public qui lit le YAML et juge la conception. | Les décisions de conception : policy-as-code, réversibilité obligatoire, audit chaîné. Demander un avis critique sur les garde-fous. | `content/forums/blueteamsec.md` | **1** |
-| 2 | `r/selfhosted` | Public qui installe pour de vrai, hors cloud, et déteste les dépendances lourdes. | Auto-hébergement : SQLite, console embarquée sans build Node, `docker compose`, aucune credential requise pour démarrer (connecteurs simulés). | `content/forums/selfhosted.md` | **2** |
-| 3 | `r/netsec` | Le sub le plus exigeant en sécurité. Y figurer crédibilise — ou coule — le projet. | Post de type outil : le modèle de menace, ce qui est prouvé (chaîne de hash, isolation tenant testée en CI), ce qui ne l'est pas. | `content/forums/netsec.md` | **3** |
-| 4 | `r/devops` | Public policy-as-code / CI : YAML versionné, automatisation vérifiable. | Politiques YAML en revue de code, CLI scriptable (`--json` partout), codes de sortie `0/1/2/3` exploitables dans un pipeline. | `content/forums/devops.md` | **4** |
-| 5 | `r/MSP` | Le cas d'usage multi-tenant est directement le leur. | Isolation par tenant : une clé API par client, RBAC `viewer/analyst/responder/admin`, plafond d'actions par tenant. | `content/forums/msp.md` | **5** |
-| 6 | `r/opensource` | Public gouvernance / contribution, pas sécurité. | Apache-2.0, DCO sans CLA, gouvernance écrite, `good first issue` calibrés à environ un jour de travail. | `content/forums/opensource.md` | **6** |
-| 7 | `r/Python` | Public qui juge le code, pas la sécurité. | Le core (`thotsecure.core`) ne dépend que de la stdlib + pydantic/PyYAML ; suite `unittest` exécutable sans réseau. | `content/forums/python.md` | **7** |
-| 8 | `r/cybersecurity` | Volume élevé, mais scepticisme élevé : public large. | Bilan honnête : ce qui marche en v0.1.0, ce qui ne marche pas, la roadmap assumée. | `content/forums/cybersecurity.md` | **8** |
-| 9 | `r/homelab` | Optionnel, audience plus large et moins spécialisée. | Démo locale sur un serveur personnel : `thotsecure demo --tenant demo`, une seule base SQLite. | `content/forums/homelab.md` | 9 (optionnel) |
+| 1 | `r/blueteamsec` | Cœur de cible : détection, réponse à incident, blueteam. Public qui lit le YAML et juge la conception. | Les décisions de conception : policy-as-code, réversibilité obligatoire, audit chaîné. Demander un avis critique sur les garde-fous. | **à écrire** (pas encore de fichier) | **1** |
+| 2 | `r/selfhosted` | Public qui installe pour de vrai, hors cloud, et déteste les dépendances lourdes. | Auto-hébergement : SQLite, console embarquée sans build Node, `docker compose`, aucune credential requise pour démarrer (connecteurs simulés). | `content/forums/reddit-selfhosted.md` | **2** |
+| 3 | `r/netsec` | Le sub le plus exigeant en sécurité. Y figurer crédibilise — ou coule — le projet. | Post de type outil : le modèle de menace, ce qui est prouvé (chaîne de hash, isolation tenant testée en CI), ce qui ne l'est pas. | `content/forums/reddit-netsec.md` | **3** |
+| 4 | `r/devops` | Public policy-as-code / CI : YAML versionné, automatisation vérifiable. | Politiques YAML en revue de code, CLI scriptable (`--json` partout), codes de sortie `0/1/2/3` exploitables dans un pipeline. | **à écrire** (pas encore de fichier) | **4** |
+| 5 | `r/MSP` | Le cas d'usage multi-tenant est directement le leur. | Isolation par tenant : une clé API par client, RBAC `viewer/analyst/responder/admin`, plafond d'actions par tenant. | **à écrire** (pas encore de fichier) | **5** |
+| 6 | `r/opensource` | Public gouvernance / contribution, pas sécurité. | Apache-2.0, DCO sans CLA, gouvernance écrite, `good first issue` calibrés à environ un jour de travail. | **à écrire** (pas encore de fichier) | **6** |
+| 7 | `r/Python` | Public qui juge le code, pas la sécurité. | Le core (`thotsecure.core`) ne dépend que de la stdlib + pydantic/PyYAML ; suite `unittest` exécutable sans réseau. | **à écrire** (pas encore de fichier) | **7** |
+| 8 | `r/cybersecurity` | Volume élevé, mais scepticisme élevé : public large. | Bilan honnête : ce qui marche en v0.1.0, ce qui ne marche pas, la roadmap assumée. | **à écrire** (pas encore de fichier) | **8** |
+| 9 | `r/homelab` | Optionnel, audience plus large et moins spécialisée. | Démo locale sur un serveur personnel : `thotsecure demo --tenant demo`, une seule base SQLite. | **à écrire** (pas encore de fichier) | 9 (optionnel) |
 
 **Subreddits écartés volontairement :**
 
@@ -115,7 +115,7 @@ Règles d'espacement complémentaires :
 - [ ] Aucune adresse de don, aucun lien de financement, aucune demande de vote ou d'étoile.
 - [ ] Aucun chiffre d'impact non mesuré : pas de « -70 % de MTTR », pas de benchmark inventé.
 - [ ] Les limites de v0.1.0 sont écrites noir sur blanc dans le post (SQLite, connecteurs simulés, Rego si binaire OPA, `patch-dependency` n'auto-merge jamais, `probe` limité aux cibles déclarées).
-- [ ] Ce qui est **roadmap** est étiqueté « roadmap » explicitement (PostgreSQL/TimescaleDB, connecteurs réels, collecteurs supplémentaires, dashboard React, SDK TypeScript/Go).
+- [ ] Ce qui est **roadmap** est étiqueté « roadmap » explicitement (validation des connecteurs natifs contre un compte réel, collecteurs supplémentaires, industrialisation à l'échelle). Le reste est livré et ne doit **pas** être présenté comme à venir : l'adaptateur PostgreSQL/TimescaleDB, le tableau de bord React et les SDK Python/TypeScript/Go existent déjà dans l'arbre.
 - [ ] Je suis disponible pendant les 4 heures qui suivent pour répondre aux commentaires.
 - [ ] Aucune publication n'a eu lieu dans un autre subreddit depuis moins de 72 heures.
 - [ ] Si le subreddit exige un message préalable aux modérateurs, il est envoyé et j'attends leur accord.
@@ -136,6 +136,8 @@ Ces éléments sont vérifiables dans `docs/architecture/api-contract.md` et peu
 - Décisions `auto|require_approval|notify_only|ignore` ; aucune politique qui matche ⇒ `notify_only`.
 - Garde-fous non contournables : plafond horaire par tenant (défaut 20), cooldown par `(tenant, playbook, cible)`, cibles protégées de l'`autonomy_allowlist` jamais touchées, `dry_run` global prioritaire, cible hors périmètre ⇒ `require_approval`.
 - Audit chaîné par hash, `GET /api/v1/audit/verify` ⇒ `{"valid","records","broken_at"}`, export `jsonl|cef`.
+- Bibliothèque livrée : 26 règles de détection, 9 politiques, 15 playbooks — tous réversibles sauf mention explicite `reversible: false`, qui impose une approbation humaine systématique.
+- Connecteurs : `simulation` par défaut partout, `nginx-local`, `local-quarantine`, `local-ticket`, `http-webhook`, plus quatre natifs livrés (`cloudflare`, `aws-waf`, `slack`, `github-issues`) — aucun n'a été validé contre un compte réel.
 - CLI : codes de sortie `0`/`1`/`2`/`3` (3 = vérification négative), `--json` sur toutes les commandes, `thotsecure demo --tenant demo`, `thotsecure doctor`.
 - Tests : `python -m unittest discover -s tests -t . -v`, sans réseau ni service externe.
 - Licence Apache-2.0 ; DCO sans CLA.

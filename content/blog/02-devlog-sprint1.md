@@ -21,7 +21,7 @@ Premier sprint du MVP v0.1.0 d'Thot Secure terminé. Voici l'état réel, y comp
 
 ## Ce qui est construit
 
-Le contrat d'interface est gelé pour le sprint, et le code s'y conforme : normalisation d'événements, moteur de règles YAML (avec les opérateurs listés au §5 et une compatibilité partielle Sigma-lite), scoring de risque borné 0–100, moteur de décision *policy-as-code*, gate d'approbation, playbooks avec rollback, journal d'audit chaîné, API `/api/v1`, console embarquée sans build Node, et la CLI `thotsecure`.
+Le contrat d'interface est gelé pour le sprint, et le code s'y conforme : normalisation d'événements, moteur de règles YAML (avec les opérateurs listés au §5 et une compatibilité Sigma sur un **sous-ensemble documenté**, avec refus explicite de ce qui ne peut pas être traduit), scoring de risque borné 0–100, moteur de décision *policy-as-code*, gate d'approbation, playbooks avec rollback, journal d'audit chaîné, API `/api/v1`, console embarquée sans build Node, tableau de bord React optionnel, et la CLI `thotsecure`.
 
 Concrètement, le parcours complet fonctionne : je pose un fichier `events.jsonl`, j'ingère, un finding sort, une politique tranche, une action passe en `pending_approval`, je l'approuve, je l'exécute, je l'annule, et `thotsecure audit verify` me dit que la chaîne est intacte. C'est la démonstration que je voulais pouvoir faire avant d'écrire une ligne de communication.
 
@@ -51,8 +51,8 @@ Thot Secure 0.1.0 — diagnostic
 [ok]   env=dev  dry_run=true  autonomy=supervised
 [ok]   base: sqlite:///./data/thotsecure.db (schéma à jour)
 [ok]   bus: memory
-[ok]   règles: 42 chargées depuis ./rules (0 invalide)
-[warn] politiques: 6 chargées — priorité max 100 (auto-block-high-web)
+[ok]   règles: 26 chargées depuis ./rules (0 invalide)
+[warn] politiques: 9 chargées — priorité max 200 (auto-block-critical-web-attack)
 [warn] connecteurs: aucun configuré → playbooks en mode simulé (simulated: true)
 [ok]   chaîne d'audit: 1284 enregistrements, valide
 [warn] THOT_SECRET_KEY non défini (clé générée) — à fixer avant prod
@@ -65,25 +65,26 @@ Thot Secure 0.1.0 — diagnostic
 $ thotsecure findings list --tenant acme --severity high --min-risk 70
 ID        SÉVÉRITÉ  RISQUE  RÈGLE        TITRE                                          STATUT
 f1c2a9d0  high       78.5   AO-WEB-001   Tentative d'injection SQL depuis 203.0.113.9   open
-f4b7e112  high       72.1   AO-WEB-004   User-Agent de scan offensif sur /wp-login    acked
+f4b7e112  high       72.1   AO-WEB-006   Balayage automatisé de la surface web (user-agent)   acked
 2 findings (limite 100) — tenant acme
 ```
 
 ## Métriques du sprint
 
-⚠️ **Les chiffres ci-dessous sont des ordres de grandeur destinés à montrer le format, pas des mesures.** Remplacez-les par vos valeurs réelles avant publication ; ne publiez jamais un chiffre que vous ne pouvez pas justifier.
+⚠️ **Les chiffres ci-dessous sont ceux de la bibliothèque réellement livrée**, vérifiables dans le dépôt (`rules/`, `policies/`, `playbooks/`, `tests/`). Ne publiez jamais un chiffre que vous ne pouvez pas justifier.
 
-| Indicateur | Valeur (à remplacer) |
+| Indicateur | Valeur |
 |---|---|
-| Fichiers de test (`unittest`, compatibles pytest) | 12 |
-| Règles de détection livrées | ~40 |
-| Politiques d'exemple | 6 |
-| Playbooks livrés | 9 (+ inverses) |
-| Endpoints `/api/v1` implémentés | ~30 |
+| Fichiers de test (`unittest`, compatibles pytest) | 16 |
+| Tests exécutables sans dépendance externe | 396 (70 ignorés sans serveur PostgreSQL) |
+| Règles de détection livrées | 26 (dont 5 pour les anomalies) |
+| Politiques de décision | 9 |
+| Playbooks livrés | 15 |
+| Connecteurs natifs livrés | 4 (Cloudflare, AWS WAF v2, Slack, GitHub Issues) |
 | Bugs trouvés par les tests d'audit | 2 (canonicalisation, cooldown) |
 
 ## La suite
 
-Priorités du prochain sprint : d'abord les tests manquants sur le rollback et l'idempotence (`idempotency_key`), ensuite un premier connecteur réel avec son inverse, puis l'ancrage horodaté de l'empreinte de tête d'audit. Le support PostgreSQL/TimescaleDB de première classe et les SDK TypeScript/Go restent **roadmap** : je préfère le dire maintenant plutôt que de le laisser deviner.
+Priorités du prochain sprint : d'abord les tests manquants sur le rollback et l'idempotence (`idempotency_key`), ensuite un premier connecteur réel validé contre un compte réel, puis l'ancrage horodaté de l'empreinte de tête d'audit. Le support PostgreSQL/TimescaleDB est désormais **écrit et exécuté en CI** contre un vrai serveur TimescaleDB, avec la même suite de conformité que SQLite — mais il n'a pas été éprouvé à l'échelle de production, et cela reste à faire. Les SDK TypeScript/Go, eux, restent **roadmap** : je préfère le dire maintenant plutôt que de le laisser deviner.
 
 Si vous voulez aider : les issues « bonne première contribution » couvrent l'écriture de règles avec faux positifs documentés, un connecteur avec rollback, et la traduction. Le contrat d'interface fait foi — et si vous le trouvez faux ou incomplet, c'est exactement le genre de remarque que je veux recevoir avant d'avoir écrit dix mille lignes dessus.
