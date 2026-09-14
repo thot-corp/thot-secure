@@ -378,7 +378,10 @@ jobs:
         if: hashFiles('web/package.json') != ''
         uses: actions/setup-node@v7
         with:
-          node-version: "20"
+          # Node 22, pas 20 : `vitest@5` declare `^22.12.0 || ^24.0.0 || >=26.0.0`.
+          # Le job passait avec Node 20 mais la suite de tests du tableau de bord ne
+          # pouvait pas s'y executer correctement — l'avertissement EBADENGINE le disait.
+          node-version: "22"
 
       - name: Cache npm
         if: hashFiles('web/package-lock.json') != ''
