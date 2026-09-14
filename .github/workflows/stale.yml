@@ -63,7 +63,7 @@ jobs:
       pull-requests: write
     steps:
       - name: Mark and close stale items
-        uses: actions/stale@v10
+        uses: actions/stale@v11
         with:
           # --- Timings ---------------------------------------------------------
           days-before-stale: 60
