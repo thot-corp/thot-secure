@@ -142,7 +142,7 @@ jobs:
 
       # --- Provenance attestation --------------------------------------------
       - name: Attest build provenance for the SBOMs
-        uses: actions/attest-build-provenance@v1
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: |
             thotsecure-${{ steps.version.outputs.version }}.spdx.json
