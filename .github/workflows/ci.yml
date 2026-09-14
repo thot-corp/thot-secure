@@ -441,7 +441,7 @@ jobs:
 
       - name: Build image (root Dockerfile), no push
         if: hashFiles('Dockerfile') != ''
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./Dockerfile
@@ -453,7 +453,7 @@ jobs:
 
       - name: Build image (deploy/Dockerfile), no push
         if: hashFiles('Dockerfile') == '' && hashFiles('deploy/Dockerfile') != ''
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./deploy/Dockerfile

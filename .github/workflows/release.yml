@@ -647,7 +647,7 @@ jobs:
 
       - name: Build and push the image
         if: steps.dockerfile.outputs.found == 'true'
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ${{ steps.dockerfile.outputs.path }}
