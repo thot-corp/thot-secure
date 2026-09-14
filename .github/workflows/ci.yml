@@ -394,26 +394,39 @@ jobs:
         shell: bash
         working-directory: web
         run: |
-          if [ -f package-lock.json ]; then
-            npm ci
-          else
-            echo "::warning::web/package-lock.json is absent — falling back to npm install. Commit the lockfile to get reproducible, cached installs, and then this job can be made blocking."
-            npm install --no-audit --no-fund
+          # `npm ci` uniquement, et c'est un choix : il refuse d'installer si `package.json` et
+          # `package-lock.json` ont divergé, ce qui est exactement la garantie recherchée pour
+          # une installation reproductible. Le repli `npm install` a été retiré.
+          #
+          # Il a servi une fois, et il a coûté cher : le verrou datait d'avant la migration du
+          # tableau de bord, donc `npm ci` échouait — la bonne réaction était de **regénérer le
+          # verrou**, pas de désarmer le contrôle. Remplacer `npm ci` par `npm install` aurait
+          # fait disparaître le symptôme en supprimant la reproductibilité.
+          if [ ! -f package-lock.json ]; then
+            echo "::error::web/package-lock.json est absent. Régénérez-le (npm install dans web/) et committez-le : sans lui, aucune installation n'est reproductible."
+            exit 1
           fi
+          npm ci
 
       - name: typecheck
-        # Tolerated while the lockfile is absent. Remove `continue-on-error` once
-        # web/package-lock.json is committed and the build is reproducible.
+        # Bloquant : le tableau de bord doit compiler. Il ne compilait pas (`TS2459` sur
+        # `EmptyState`), et un `continue-on-error` aurait masqué ce fait.
         if: hashFiles('web/package.json') != ''
-        continue-on-error: true
         working-directory: web
         run: npm run typecheck --if-present
 
       - name: build
         if: hashFiles('web/package.json') != ''
-        continue-on-error: true
         working-directory: web
         run: npm run build --if-present
+
+      - name: lint
+        # Bloquant également, avec `--max-warnings 0` (défini dans web/package.json) : les règles
+        # du compilateur React ont signalé quatre motifs réels — remises à zéro dans des effets,
+        # `Date.now()` pendant le rendu — qui sont corrigés, pas désactivés.
+        if: hashFiles('web/package.json') != ''
+        working-directory: web
+        run: npm run lint --if-present
 
       - name: Upload build output
         if: always() && hashFiles('web/dist/**') != ''
