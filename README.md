@@ -14,6 +14,12 @@ Collecte continue · détection par règles YAML · scoring de risque explicable
 [![100% défensif](https://img.shields.io/badge/100%25-d%C3%A9fensif-success.svg)](#-ce-que-thot-secure-ne-fait-jamais)
 [![Dry-run par défaut](https://img.shields.io/badge/dry--run-actif%20par%20d%C3%A9faut-success.svg)](#-les-quatre-garanties)
 
+**English** — Thot Secure is an open-source, **defensive** SOAR/CSPM: continuous collection, YAML
+detection rules, explainable risk scoring, policy-as-code decisions, **reversible** playbooks and a
+**hash-chained** audit log. Dry-run by default, and every action ships with a rollback.
+[Documentation](https://thot-corp.github.io/thot-secure/) ·
+[Release v0.1.0](https://github.com/thot-corp/thot-secure/releases/tag/v0.1.0) ·
+[Source](https://github.com/thot-corp/thot-secure)
 [Documentation](docs/index.md) · [Démarrage rapide](docs/quickstart.md) · [Architecture](docs/architecture/overview.md) · [Contrat d'API](docs/architecture/api-contract.md) · [Soutenir le projet](#-soutenir-le-projet)
 
 </div>
