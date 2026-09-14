@@ -128,9 +128,11 @@ export function AuthProvider(props: AuthProviderProps): ReactElement {
 
   const [apiKey, setApiKey] = useState<string | null>(() => readStoredApiKey());
   const [whoami, setWhoami] = useState<WhoAmI | null>(null);
-  const [status, setStatus] = useState<AuthStatus>(() =>
-    readStoredApiKey() ? 'loading' : 'anonymous',
-  );
+  // Le statut n'est plus un état écrit depuis un effet, mais une **dérivation** : il dépend
+  // de la clé API, de la requête en cours et de son résultat. `resolvedRequestKey` retient pour
+  // quelle requête on a une réponse — c'est la seule information que le rendu ne peut pas
+  // calculer lui-même.
+  const [resolvedRequestKey, setResolvedRequestKey] = useState<string | null>(null);
   const [error, setError] = useState<ThotSecureError | null>(null);
   const [viewTenantId, setViewTenantIdState] = useState<string | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
@@ -138,16 +140,26 @@ export function AuthProvider(props: AuthProviderProps): ReactElement {
   // Sans clé API, l'état d'authentification est **déduit**, pas synchronisé : la remise à
   // zéro se fait donc pendant le rendu (patron « ajuster un état quand une prop change »), et
   // seul l'appel au client — un système externe — reste dans l'effet.
-  const [lastApiKey, setLastApiKey] = useState(apiKey);
-  if (apiKey !== lastApiKey) {
-    setLastApiKey(apiKey);
+  const requestKey = `${apiKey ?? ''}|${reloadToken}`;
+  const [lastRequestKey, setLastRequestKey] = useState(requestKey);
+  if (requestKey !== lastRequestKey) {
+    setLastRequestKey(requestKey);
+    // Un changement de clé ou un rechargement repart d'un état propre : l'erreur précédente ne
+    // doit pas s'afficher pendant que la nouvelle requête est en cours.
+    setError(null);
     if (!apiKey) {
       setWhoami(null);
-      setError(null);
       setViewTenantIdState(null);
-      setStatus('anonymous');
     }
   }
+
+  const status: AuthStatus = !apiKey
+    ? 'anonymous'
+    : resolvedRequestKey === requestKey
+      ? error
+        ? 'error'
+        : 'authenticated'
+      : 'loading';
 
   useEffect(() => {
     if (!apiKey) {
@@ -157,8 +169,6 @@ export function AuthProvider(props: AuthProviderProps): ReactElement {
 
     const controller = new AbortController();
     let cancelled = false;
-    setStatus('loading');
-    setError(null);
     // Le périmètre reste inconnu jusqu'à la réponse de `whoami`.
     client.setCredentials(apiKey, null);
 
@@ -171,21 +181,21 @@ export function AuthProvider(props: AuthProviderProps): ReactElement {
         setViewTenantIdState((previous) =>
           previous && previous === me.tenant_id ? previous : me.tenant_id,
         );
-        setStatus('authenticated');
+        setResolvedRequestKey(requestKey);
       })
       .catch((cause: unknown) => {
         if (cancelled || isAbortError(cause)) return;
         client.setCredentials(apiKey, null);
         setWhoami(null);
         setError(toThotSecureError(cause));
-        setStatus('error');
+        setResolvedRequestKey(requestKey);
       });
 
     return () => {
       cancelled = true;
       controller.abort();
     };
-  }, [apiKey, client, reloadToken]);
+  }, [apiKey, client, reloadToken, requestKey]);
 
   const signIn = useCallback(
     (nextApiKey: string) => {
@@ -208,8 +218,9 @@ export function AuthProvider(props: AuthProviderProps): ReactElement {
     setWhoami(null);
     setViewTenantIdState(null);
     setError(null);
+    // setApiKey(null) suffit : le statut est dérivé de la clé, donc il repasse tout seul à
+    // 'anonymous'. Il n'y a plus d'état de statut à remettre à jour.
     setApiKey(null);
-    setStatus('anonymous');
   }, [client, queryClient]);
 
   const refresh = useCallback(() => setReloadToken((token) => token + 1), []);
