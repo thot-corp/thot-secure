@@ -631,7 +631,7 @@ jobs:
       - name: Extract image metadata
         if: steps.dockerfile.outputs.found == 'true'
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository }}
           tags: |
