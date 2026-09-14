@@ -52,7 +52,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
           # security-and-quality is broader than the default security suite: for a
@@ -64,6 +64,6 @@ jobs:
         # Results are uploaded to GitHub code scanning with a per-language
         # category, so the alerts of each language are tracked separately and a
         # pull request shows only the diff it introduced.
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
         with:
           category: "/language:${{ matrix.language }}"
