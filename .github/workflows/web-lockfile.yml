@@ -32,12 +32,28 @@ jobs:
         with:
           node-version: "20"
 
+      - name: What versions actually exist upstream
+        # Exécuté AVANT toute installation : quand `npm install` échoue sur un conflit de
+        # dépendances pair, il ne rapporte évidemment aucune version — alors que c'est
+        # exactement l'information nécessaire pour épingler la bonne.
+        run: |
+          echo "=====BEGIN-UPSTREAM====="
+          for pkg in eslint eslint-plugin-react-hooks eslint-plugin-react-refresh @eslint/js typescript-eslint globals tailwindcss @tailwindcss/postcss; do
+            printf '%s -> ' "$pkg"
+            npm view "$pkg" version 2>/dev/null || echo "(introuvable)"
+          done
+          echo "--- pairs eslint-plugin-react-hooks ---"
+          npm view eslint-plugin-react-hooks peerDependencies --json 2>/dev/null || true
+          echo "--- pairs eslint-plugin-react-refresh ---"
+          npm view eslint-plugin-react-refresh peerDependencies --json 2>/dev/null || true
+          echo "=====END-UPSTREAM====="
+
       - name: Install (creates the lockfile)
         working-directory: web
+        continue-on-error: true
         run: |
           npm install --no-audit --no-fund
-          echo "lockfileVersion: $(node -e "console.log(require('./package-lock.json').lockfileVersion)")"
-          echo "paquets verrouilles: $(node -e "console.log(Object.keys(require('./package-lock.json').packages || {}).length)")"
+          echo "lockfileVersion: $(node -e "console.log(require('./package-lock.json').lockfileVersion)" 2>/dev/null || echo indisponible)"
           echo "=====BEGIN-VERSIONS====="
           npm ls --depth=0 || true
           echo "=====END-VERSIONS====="

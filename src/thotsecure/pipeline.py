@@ -173,7 +173,9 @@ class Pipeline:
                 outcome.actions.extend(result.actions)
 
             outcome.findings = [finding for finding, _ in states.values()]
-            outcome.decisions = [decision for _, decision in states.values() if decision is not None]
+            outcome.decisions = [
+                decision for _, decision in states.values() if decision is not None
+            ]
             for finding, decision in states.values():
                 outcome.result.findings.append(
                     {
