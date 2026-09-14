@@ -2,6 +2,7 @@ import clsx from 'clsx';
 
 import { SEVERITY_BADGE_CLASSES, SEVERITY_LABELS } from '@/lib/format';
 import type { Severity } from '@/lib/types';
+import type { JSX } from 'react';
 
 export interface SeverityBadgeProps {
   severity: Severity | null | undefined;

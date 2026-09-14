@@ -7,6 +7,7 @@
 import { PoliciesPanel } from '@/components/PoliciesPanel';
 import { RulesPanel } from '@/components/RulesPanel';
 import { PageHeader } from '@/components/ui';
+import type { JSX } from 'react';
 
 export function RulesPage(): JSX.Element {
   return (

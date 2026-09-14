@@ -15,6 +15,7 @@
  */
 import clsx from 'clsx';
 import { useEffect, useId, useState } from 'react';
+import type { JSX } from 'react';
 import type {
   ButtonHTMLAttributes,
   InputHTMLAttributes,
@@ -27,6 +28,15 @@ import { EmptyState } from './EmptyState';
 import { errorMessage } from '@/lib/api';
 import { CAPABILITY_LABELS } from '@/lib/capabilities';
 import type { Capability } from '@/lib/types';
+
+// Ré-export explicite : `@/components/ui` est le point d'entrée des composants d'interface, et
+// `DashboardPage` y importe `EmptyState`. Sans cette ligne, le module l'importait pour son
+// propre usage sans le réexporter, et `tsc` refusait la compilation :
+//   error TS2459: Module '"@/components/ui"' declares 'EmptyState' locally, but it is not exported.
+// Conséquence : le tableau de bord ne compilait pas du tout, et le job « Web dashboard » ne
+// pouvait pas être bloquant.
+export { EmptyState } from './EmptyState';
+export type { EmptyStateProps } from './EmptyState';
 
 /* -------------------------------------------------------------------------- */
 /* Panneau                                                                     */

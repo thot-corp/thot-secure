@@ -38,6 +38,9 @@ jobs:
           npm install --no-audit --no-fund
           echo "lockfileVersion: $(node -e "console.log(require('./package-lock.json').lockfileVersion)")"
           echo "paquets verrouilles: $(node -e "console.log(Object.keys(require('./package-lock.json').packages || {}).length)")"
+          echo "=====BEGIN-VERSIONS====="
+          npm ls --depth=0 || true
+          echo "=====END-VERSIONS====="
 
       - name: Report the state of the dashboard
         working-directory: web
@@ -56,7 +59,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout -b chore/web-lockfile
-          git add web/package-lock.json
-          git commit -m "build(web): verrou de dependances (branche jetable)" || echo "aucun changement"
-          git push --force origin chore/web-lockfile
+          git checkout -b chore/web-migration
+          git add web/package.json web/package-lock.json
+          git commit -m "build(web): dependances resolues et verrouillees (branche jetable)" || echo "aucun changement"
+          git push --force origin chore/web-migration

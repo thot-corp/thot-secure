@@ -11,6 +11,7 @@
  *   indépendamment (défense en profondeur, contrat §10).
  */
 import type { ReactNode } from 'react';
+import type { JSX } from 'react';
 import { Navigate, Outlet, Route, Routes } from 'react-router-dom';
 
 import { AppShell } from '@/components/AppShell';

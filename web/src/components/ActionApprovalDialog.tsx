@@ -15,6 +15,7 @@
  */
 import clsx from 'clsx';
 import { useEffect, useState } from 'react';
+import type { JSX } from 'react';
 
 import { Button, Checkbox, CodeBlock, Field, InlineNotice, KeyValueList } from './ui';
 import type { KeyValueItem } from './ui';

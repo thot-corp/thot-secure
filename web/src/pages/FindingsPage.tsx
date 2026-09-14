@@ -7,6 +7,7 @@
  * mettre d'identifiant de tenant ni de clé dans l'URL.
  */
 import { useCallback } from 'react';
+import type { JSX } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { FindingDetail } from '@/components/FindingDetail';

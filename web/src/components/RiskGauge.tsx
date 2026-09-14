@@ -2,6 +2,7 @@ import clsx from 'clsx';
 import { PolarAngleAxis, RadialBar, RadialBarChart } from 'recharts';
 
 import { clampScore, formatScore, riskColor } from '@/lib/format';
+import type { JSX } from 'react';
 
 export interface RiskGaugeProps {
   /** Score de risque 0–100 (contrat §3.2). */

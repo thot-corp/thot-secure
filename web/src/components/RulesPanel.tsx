@@ -18,6 +18,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import clsx from 'clsx';
 import { useMemo, useState } from 'react';
+import type { JSX } from 'react';
 
 import { EmptyState } from './EmptyState';
 import { SeverityBadge } from './SeverityBadge';
@@ -93,7 +94,10 @@ export function RulesPanel(props: RulesPanelProps): JSX.Element {
     },
   });
 
-  const rules = listQuery.data?.items ?? [];
+  // Tableau stable entre deux rendus : sans ce `useMemo`, le repli `[]`
+  // construirait un nouveau tableau à chaque rendu, et les `useMemo` qui en dépendent
+  // se recalculeraient tous autant de fois.
+  const rules = useMemo(() => listQuery.data?.items ?? [], [listQuery.data]);
   const total = listQuery.data?.total ?? null;
 
   const filtered = useMemo(() => {

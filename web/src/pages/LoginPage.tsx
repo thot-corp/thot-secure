@@ -15,6 +15,7 @@
  */
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
+import type { JSX } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { Button, InlineNotice, Panel, TextInput } from '@/components/ui';

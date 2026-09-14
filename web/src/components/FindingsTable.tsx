@@ -16,6 +16,7 @@
 import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
 import { useMemo, useState } from 'react';
+import type { JSX } from 'react';
 
 import { usePeriod } from './AppShell';
 import { EmptyState } from './EmptyState';
@@ -118,7 +119,10 @@ export function FindingsTable(props: FindingsTableProps): JSX.Element {
     enabled: canRead,
   });
 
-  const items = query.data?.items ?? [];
+  // Tableau stable entre deux rendus : sans ce `useMemo`, le repli `[]`
+  // construirait un nouveau tableau à chaque rendu, et les `useMemo` qui en dépendent
+  // se recalculeraient tous autant de fois.
+  const items = useMemo(() => query.data?.items ?? [], [query.data]);
   const total = query.data?.total ?? null;
   const nextCursor = query.data?.next_cursor ?? null;
   const hasNext = typeof nextCursor === 'string' && nextCursor !== '';

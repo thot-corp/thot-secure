@@ -17,6 +17,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import clsx from 'clsx';
 import { createContext, useCallback, useContext, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
+import type { JSX } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 
 import { AutonomyBanner } from './AutonomyBanner';

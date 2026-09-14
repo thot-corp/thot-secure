@@ -20,6 +20,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import clsx from 'clsx';
 import { useMemo, useState } from 'react';
+import type { JSX } from 'react';
 import { Link } from 'react-router-dom';
 
 import { EmptyState } from './EmptyState';

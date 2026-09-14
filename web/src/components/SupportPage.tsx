@@ -19,6 +19,7 @@
  */
 import clsx from 'clsx';
 import { useState } from 'react';
+import type { JSX } from 'react';
 
 import { Button, InlineNotice, Panel } from './ui';
 

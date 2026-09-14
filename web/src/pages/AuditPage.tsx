@@ -3,6 +3,7 @@
  */
 import { AuditLog } from '@/components/AuditLog';
 import { PageHeader } from '@/components/ui';
+import type { JSX } from 'react';
 
 export function AuditPage(): JSX.Element {
   return (

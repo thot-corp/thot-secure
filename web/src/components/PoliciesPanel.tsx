@@ -16,6 +16,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import clsx from 'clsx';
 import { useMemo, useState } from 'react';
+import type { JSX } from 'react';
 
 import { EmptyState } from './EmptyState';
 import {
@@ -62,7 +63,10 @@ export function PoliciesPanel(props: PoliciesPanelProps): JSX.Element {
     },
   });
 
-  const policies = query.data?.items ?? [];
+  // Tableau stable entre deux rendus : sans ce `useMemo`, le repli `[]`
+  // construirait un nouveau tableau à chaque rendu, et les `useMemo` qui en dépendent
+  // se recalculeraient tous autant de fois.
+  const policies = useMemo(() => query.data?.items ?? [], [query.data]);
 
   const ordered = useMemo(
     () => [...policies].sort((left, right) => right.priority - left.priority),

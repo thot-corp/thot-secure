@@ -1,5 +1,6 @@
 import clsx from 'clsx';
 import type { ReactNode } from 'react';
+import type { JSX } from 'react';
 
 export interface EmptyStateProps {
   title: string;

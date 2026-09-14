@@ -15,6 +15,7 @@
  */
 import { SupportPage as SupportContent } from '@/components/SupportPage';
 import { PageHeader } from '@/components/ui';
+import type { JSX } from 'react';
 
 export function SupportPage(): JSX.Element {
   return (

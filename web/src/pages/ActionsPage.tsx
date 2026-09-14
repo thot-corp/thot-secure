@@ -11,6 +11,7 @@ import { ActionsTable } from '@/components/ActionsTable';
 import { AutonomyBanner } from '@/components/AutonomyBanner';
 import { PageHeader, Panel } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
+import type { JSX } from 'react';
 
 const LIFECYCLE: readonly { status: string; meaning: string }[] = [
   { status: 'planned', meaning: 'Planifiée sans effet de bord (`POST /actions/plan`).' },

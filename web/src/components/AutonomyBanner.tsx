@@ -6,6 +6,7 @@ import {
   AUTONOMY_LABELS,
 } from '@/lib/format';
 import type { AutonomyMode } from '@/lib/types';
+import type { JSX } from 'react';
 
 export interface AutonomyBannerProps {
   mode: AutonomyMode;

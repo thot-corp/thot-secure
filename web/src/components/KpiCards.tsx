@@ -12,6 +12,7 @@
  */
 import clsx from 'clsx';
 import type { ReactNode } from 'react';
+import type { JSX } from 'react';
 
 import { Button, DistributionBar, ErrorNotice, InlineNotice, LoadingBlock, Panel } from './ui';
 import type { BarSegment } from './ui';

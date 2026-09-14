@@ -25,6 +25,7 @@ import {
 } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { FINDING_STATUS_CLASSES, FINDING_STATUS_LABELS, formatNumber, formatRelative, formatScore } from '@/lib/format';
+import type { JSX } from 'react';
 
 export function DashboardPage(): JSX.Element {
   const { client, queryScope, can, tenantId, autonomy, dryRun } = useAuth();

@@ -19,6 +19,7 @@
 import clsx from 'clsx';
 import { createContext, useCallback, useContext, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
+import type { JSX } from 'react';
 
 import { EmptyState } from './EmptyState';
 import { Button, CodeBlock, StatusPill } from './ui';
