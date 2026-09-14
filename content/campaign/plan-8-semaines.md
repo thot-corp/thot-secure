@@ -7,7 +7,7 @@ mot_cle_principal: "SOAR défensif open source"
 longueur: "8 semaines (S1 à S8)"
 public_cible: "ingénieurs sécurité et SRE, mainteneurs open source, RSSI de PME/ETSI, devs Python, communautés FR de cybersécurité"
 produit: "Thot Secure MVP v0.1.0 — SOAR/CSPM défensif, Python/FastAPI, multi-tenant, Apache-2.0, GitHub"
-source_de_verite: "D:\\niang\\Documents\\thotsecure\\docs\\architecture\\api-contract.md (contrat gelé, v0.1.0)"
+source_de_verite: "docs/architecture/api-contract.md du dépôt (contrat gelé, v0.1.0)"
 jalons: ["S1 release 0.1.0 + Show HN", "S4 ouverture aux règles communautaires", "S7 release 0.2 (si réellement publiée)", "S8 bilan et décision"]
 kpi_principal: "contributions externes mergées (PR) et essais réussis déclarés — voir content/campaign/metriques.md"
 statut: "prêt à exécuter (aucune section à rédiger)"

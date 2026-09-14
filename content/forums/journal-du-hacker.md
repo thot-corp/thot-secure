@@ -46,7 +46,7 @@ Les seuls éléments autorisés dans le texte publié :
 - Connecteur non configuré ⇒ mode simulé, jeton de rollback renvoyé, `simulated: true` journalisé : comportement par défaut du MVP (§7 du contrat).
 - Défauts orientés vers l'intérieur : SQLite par défaut (`THOT_DB_URL=sqlite:///./data/thotsecure.db`), bus `memory` par défaut, console Jinja2 + JS sans build Node (§9, §4.9 du contrat).
 - Aucun mécanisme de télémétrie n'apparaît dans le contrat d'interface → **constat de lecture, à confirmer par audit du code**, formulé comme tel.
-- Manques à citer : pas d'agent endpoint, connecteurs en simulation, PostgreSQL seulement documenté, quatre rôles RBAC, pas de corpus de règles éprouvé (§7, §9, §4 du contrat ; §10 pour les rôles).
+- Manques à citer : pas d'agent endpoint, connecteurs natifs livrés mais désactivés par défaut, quatre rôles RBAC, pas de corpus de règles éprouvé (§7, §9, §4 du contrat ; §10 pour les rôles).
 
 Ce qui est interdit dans ce texte : tout chiffre non mesuré ; tout superlatif ; la formule « zéro télémétrie » présentée comme un engagement ; « fonctionne en air-gap » sans test hors ligne ; « souverain » sans définition ; toute fonctionnalité non livrée présentée au présent.
 
