@@ -75,7 +75,7 @@ jobs:
       - name: Upload SARIF as a workflow artifact
         # Kept as an artifact as well as uploaded to code scanning, so the raw
         # result can be inspected when code scanning is unavailable.
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: scorecard-sarif
           path: scorecard-results.sarif
