@@ -15,7 +15,7 @@
 # Installation :  python -m pip install -r requirements-docs.txt
 
 # Thème et extensions (fournit aussi les plugins `search` et `tags` utilisés par mkdocs.yml).
-mkdocs-material==9.5.*
+mkdocs-material==9.7.*
 
 # Minification des pages générées (`plugins: minify` dans mkdocs.yml).
 # Requis explicitement : ce plugin n'est pas fourni par mkdocs-material.
