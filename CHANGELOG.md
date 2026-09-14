@@ -613,6 +613,36 @@ detection at all.
   The reported symptom itself (`count=7` for 200 events) was **not** reproducible: the stored
   count was 200 both before and after this change, and the new test asserts it.
 
+- **The optional React dashboard now builds, and its job is blocking.** Getting it green took
+  three distinct migrational changes, because none of the version bumps was a bump:
+
+  - **React 19** (`react`, `react-dom`, `@types/react`, `@types/react-dom` must move together —
+    `react-dom` had been left on 18 while `react` was on 19, and npm refuses, rightly, to resolve
+    that tree). `@types/react` 19 removes the global `JSX` namespace, so the 54 `JSX.Element`
+    annotations across 25 files import the type from `react` instead.
+  - **ESLint 10** no longer reads the eslintrc format and rejects `--ext`; `web/eslint.config.js`
+    replaces `.eslintrc.cjs`, with the same rules, one by one. `eslint-plugin-react-hooks` 7
+    applies the React Compiler rules, which flagged four genuine patterns — form resets inside
+    effects and `Date.now()` during render — all **fixed rather than disabled**: the resets now
+    happen during render (the documented "adjust state when a prop changes" pattern) and the
+    clock is a small render clock that also refreshes the "expired" badge on its own.
+  - **Tailwind 4** moved its PostCSS plugin to `@tailwindcss/postcss` and dropped the
+    `@tailwind …` directives; `@config` now references `tailwind.config.ts` explicitly, without
+    which the whole SOC theme would have been silently ignored.
+
+  Two real defects surfaced on the way: `EmptyState` was not re-exported by `@/components/ui`
+  although `DashboardPage` imports it (`TS2459` — the dashboard did not compile at all), and five
+  `?? []` fallbacks rebuilt an array on every render, which `react-hooks/exhaustive-deps`
+  correctly rejected.
+
+- **`web/package-lock.json` is committed, and `npm ci` is mandatory.** The lockfile was missing,
+  so the job ran a non-reproducible `npm install` and could not be blocking. When the lockfile
+  arrived, it was stale — `npm ci` failed on the drift, which is exactly its job. Regenerating it
+  (330 packages, generated on a Node 20 runner) was the fix; replacing `npm ci` with `npm install`
+  would have removed the symptom and the guarantee with it. The `continue-on-error` on typecheck,
+  build and lint is gone: a green light that tolerates a failure is worth nothing, and it is what
+  let a dashboard that did not compile stay unnoticed.
+
 ### Security
 
 - **Safe defaults**: `THOT_DRY_RUN=true` and `THOT_AUTONOMY=supervised`
