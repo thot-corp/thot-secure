@@ -156,7 +156,7 @@ jobs:
         # La vérification de la documentation reste stricte (`mkdocs build --strict`), et
         # l'absence de Pages ne l'affaiblit pas : elle empêche seulement la publication.
         continue-on-error: true
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
         with:
           # Active « GitHub Actions » comme source si ce n'est pas déjà fait. Peut échouer
           # selon les réglages du dépôt ou de l'organisation : c'est prévu, on l'annonce.
