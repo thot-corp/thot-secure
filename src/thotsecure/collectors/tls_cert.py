@@ -226,6 +226,10 @@ class TlsCertCollector(Collector):
     def _verify_chain(host: str, port: int, timeout: float) -> str | None:
         """Vérification stricte en parallèle : retourne la raison de l'échec, ou ``None``."""
         context = ssl.create_default_context()
+        if hasattr(context, "minimum_version") and hasattr(ssl, "TLSVersion"):
+            context.minimum_version = ssl.TLSVersion.TLSv1_2
+        else:
+            context.options |= ssl.OP_NO_TLSv1 | ssl.OP_NO_TLSv1_1
         try:
             with (
                 socket.create_connection((host, port), timeout=timeout) as raw,
